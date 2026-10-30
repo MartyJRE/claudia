@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/MartyJRE/claudia/internal/claude"
@@ -81,7 +82,11 @@ func Start(sp Spec) (string, error) {
 		home, _ := os.UserHomeDir()
 		bin = filepath.Join(home, ".local", "bin", "claude")
 	}
-	argv := append([]string{bin}, sp.Args...)
+	argv := []string{bin}
+	if slices.Contains(config.Get().RemoteControl, sp.Profile.Name) {
+		argv = append(argv, "--remote-control", sp.Name)
+	}
+	argv = append(argv, sp.Args...)
 	env := []string{"CLAUDE_CONFIG_DIR=" + sp.Profile.Dir}
 	return tmux.NewWindow(SessionName(sp.Dir), windowName(sp.Name), sp.Dir, env, argv)
 }

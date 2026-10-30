@@ -557,7 +557,7 @@ func (m *Model) subtitle() string {
 		if m.teamJira {
 			s = "team sprint"
 		}
-		s += " · by " + sortNames[m.jiraPrefs.Sort]
+		s += " · " + groupNames[m.jiraPrefs.Group] + " · by " + sortNames[m.jiraPrefs.Sort]
 		if n := len(m.jiraPrefs.Hidden); n > 0 {
 			s += fmt.Sprintf(" · %d statuses hidden", n)
 		}
@@ -611,7 +611,7 @@ func (m *Model) help() [][2]string {
 	case vMine:
 		return [][2]string{{"enter", "session"}, {"v", "threads"}, {"f", "fix threads"}, {"o", "open"}, {"J", "ticket"}, {"B", "rebase"}, {"p", "pipeline"}, {"s", "seen"}}
 	case vJira:
-		return [][2]string{{"enter", "sessions"}, {"c", "claude (fits the state)"}, {"b", "summary"}, {"m", "move"}, {"f", "statuses"}, {"s", "sort"}, {"e", "copy brief"}, {"i", "images"}, {"o", "open"}}
+		return [][2]string{{"space", "fold"}, {"v", "layout"}, {"enter", "sessions"}, {"c", "claude (fits the state)"}, {"b", "summary"}, {"m", "move"}, {"f", "statuses"}, {"s", "sort"}, {"e", "copy brief"}, {"i", "images"}, {"o", "open"}}
 	case vMentions:
 		return [][2]string{{"enter", "open"}, {"x", "dismiss"}, {"J", "ticket"}, {"c", "draft reply"}}
 	case vConfluence:
@@ -629,7 +629,7 @@ func (m *Model) count() int {
 	case vReview, vMine:
 		return len(m.vis.mrs)
 	case vJira:
-		return len(m.vis.issues)
+		return len(m.vis.jira)
 	case vMentions:
 		return len(m.vis.mentions)
 	case vConfluence:
@@ -644,7 +644,7 @@ type visible struct {
 	inbox    []inboxItem
 	sessions []row
 	mrs      []mrRow
-	issues   []atlassian.Issue
+	jira     []jrow
 	mentions []mention
 	pages    []atlassian.Page
 	usage    []usageRow
@@ -664,7 +664,7 @@ func (m *Model) refilter() {
 	m.vis.inbox = m.filterInbox(match)
 	m.vis.sessions = m.filterSessions(match)
 	m.vis.mrs = m.filterMRs(match)
-	m.vis.issues = m.filterIssues(match)
+	m.vis.jira = m.buildJira(m.jiraIssues(match), len(terms) > 0)
 	m.vis.mentions = m.filterMentions(match)
 	m.vis.pages = m.filterPages(match)
 	m.vis.usage = m.usageRows()

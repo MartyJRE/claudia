@@ -16,7 +16,7 @@ import (
 )
 
 var jiraCols = []col{
-	{"KEY", 10, 0},
+	{"KEY", 20, 0},
 	{"SUMMARY", 0, 0},
 	{"TYPE", 9, 110},
 	{"STATUS", 22, 0},
@@ -38,7 +38,9 @@ func statusText(is atlassian.Issue) string {
 	return lipgloss.NewStyle().Foreground(c).Render(is.Status)
 }
 
-func (m *Model) filterIssues(match func(...string) bool) []atlassian.Issue {
+// jiraIssues is the current list (mine or the team's) minus done and hidden
+// statuses, matched against the filter.
+func (m *Model) jiraIssues(match func(...string) bool) []atlassian.Issue {
 	src := m.jira.Sprint
 	if m.teamJira {
 		src = m.jira.Team
@@ -51,28 +53,31 @@ func (m *Model) filterIssues(match func(...string) bool) []atlassian.Issue {
 		if slices.Contains(m.jiraPrefs.Hidden, is.Status) {
 			continue
 		}
-		if match(is.Key, is.Summary, is.Status, is.Assignee, typeName(is.Type)) {
+		if match(is.Key, is.Summary, is.Status, is.Assignee, typeName(is.Type), is.Parent, is.ParentSummary) {
 			out = append(out, is)
 		}
 	}
+	return out
+}
+
+// issueOrder sorts siblings; Jira already returns them by rank.
+func (m *Model) issueOrder() func(a, b atlassian.Issue) int {
 	order := map[string]int{"indeterminate": 0, "new": 1, "done": 2}
 	switch m.jiraPrefs.Sort {
-	case sortRank:
-		slices.SortStableFunc(out, func(a, b atlassian.Issue) int { return order[a.Category] - order[b.Category] })
 	case sortStatus:
 		// Workflow order is unknown, so group by category, then by status name.
-		slices.SortStableFunc(out, func(a, b atlassian.Issue) int {
+		return func(a, b atlassian.Issue) int {
 			if d := order[a.Category] - order[b.Category]; d != 0 {
 				return d
 			}
 			return strings.Compare(a.Status, b.Status)
-		})
+		}
 	case sortUpdated:
-		slices.SortStableFunc(out, func(a, b atlassian.Issue) int { return b.Updated.Compare(a.Updated) })
+		return func(a, b atlassian.Issue) int { return b.Updated.Compare(a.Updated) }
 	case sortKey:
-		slices.SortStableFunc(out, func(a, b atlassian.Issue) int { return keyNum(b.Key) - keyNum(a.Key) })
+		return func(a, b atlassian.Issue) int { return keyNum(b.Key) - keyNum(a.Key) }
 	}
-	return out
+	return func(a, b atlassian.Issue) int { return order[a.Category] - order[b.Category] }
 }
 
 const (
@@ -86,8 +91,10 @@ const (
 var sortNames = [nSorts]string{"rank", "status", "recently updated", "newest key"}
 
 type jiraPrefs struct {
-	Hidden []string `json:"hidden_statuses"`
-	Sort   int      `json:"sort"`
+	Hidden    []string `json:"hidden_statuses"`
+	Sort      int      `json:"sort"`
+	Group     int      `json:"group"`
+	Collapsed []string `json:"collapsed"`
 }
 
 func loadJiraPrefs() jiraPrefs {
@@ -180,8 +187,10 @@ func (m *Model) gotoTicket(key string) (tea.Model, tea.Cmd) {
 		}
 		m.view, m.teamJira = vJira, team
 		m.filter.SetValue("")
+		m.unfoldTo(key)
+		m.saveJiraPrefs()
 		m.refilter()
-		if i := slices.IndexFunc(m.vis.issues, func(is atlassian.Issue) bool { return is.Key == key }); i >= 0 {
+		if i := slices.IndexFunc(m.vis.jira, func(r jrow) bool { return !r.header() && r.issue.Key == key }); i >= 0 {
 			m.cur[vJira].pos = i
 			return m, nil
 		}
@@ -194,7 +203,7 @@ func (m *Model) gotoTicket(key string) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) listJira(h int) string {
-	rows := m.vis.issues
+	rows := m.vis.jira
 	empty := "nothing in your sprint — d shows done, a the team"
 	if m.atl == nil {
 		empty = m.atlErr.Error()
@@ -202,17 +211,17 @@ func (m *Model) listJira(h int) string {
 		empty = spinner[m.frame%len(spinner)] + " asking Jira…"
 	}
 	return m.table(jiraCols, len(rows), &m.cur[vJira], h, func(i int, sel bool) []string {
-		is := rows[i]
-		st := sText
-		if sel {
-			st = sBold
+		r := rows[i]
+		if r.header() {
+			return []string{m.jiraKeyCell(r), m.jiraSummaryCell(r, sel)}
 		}
-		if is.Category == "done" {
-			st = sDim
+		is := r.issue
+		if r.context {
+			return []string{m.jiraKeyCell(r), m.jiraSummaryCell(r, sel), sDim.Render(typeName(is.Type)), sDim.Render(is.Status)}
 		}
 		return []string{
-			sTicket.Render(is.Key),
-			st.Render(is.Summary),
+			m.jiraKeyCell(r),
+			m.jiraSummaryCell(r, sel),
 			sDim.Render(typeName(is.Type)),
 			statusText(is),
 			sDim.Render(is.Assignee),
@@ -261,13 +270,16 @@ func (m *Model) issueSessions(key string) string {
 
 func (m *Model) currentIssue() (atlassian.Issue, bool) {
 	c := m.cur[vJira].pos
-	if c < 0 || c >= len(m.vis.issues) {
+	if c < 0 || c >= len(m.vis.jira) || m.vis.jira[c].header() {
 		return atlassian.Issue{}, false
 	}
-	return m.vis.issues[c], true
+	return m.vis.jira[c].issue, true
 }
 
 func (m *Model) detailJira() string {
+	if c := m.cur[vJira].pos; c >= 0 && c < len(m.vis.jira) && m.vis.jira[c].header() {
+		return m.detailSprint(m.vis.jira[c])
+	}
 	is, ok := m.currentIssue()
 	if !ok {
 		return m.panel(nil)
@@ -317,6 +329,21 @@ func (m *Model) keyJira(k string) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "f":
 		m.chooseStatuses()
+		return m, nil
+	case " ":
+		m.toggleFold()
+		return m, nil
+	case "-":
+		m.foldAll(true)
+		return m, nil
+	case "+", "=":
+		m.foldAll(false)
+		return m, nil
+	case "v":
+		m.jiraPrefs.Group = (m.jiraPrefs.Group + 1) % nGroups
+		m.saveJiraPrefs()
+		m.refilter()
+		m.setFlash("layout: "+groupNames[m.jiraPrefs.Group], false)
 		return m, nil
 	}
 	is, ok := m.currentIssue()
@@ -408,4 +435,28 @@ func (m *Model) showTransitions(msg transitionsMsg) {
 			return refreshMsg(srcJira)
 		}
 	})
+}
+
+// detailSprint sums up a sprint header: tickets by state.
+func (m *Model) detailSprint(r jrow) string {
+	src := m.jira.Sprint
+	if m.teamJira {
+		src = m.jira.Team
+	}
+	byCat := map[string]int{}
+	for _, is := range src {
+		if is.Sprint != nil && is.Sprint.Name == r.sprint || is.Sprint == nil && r.sprint == "No sprint" {
+			byCat[is.Category]++
+		}
+	}
+	lines := []string{sBold.Render(r.sprint)}
+	if r.state != "" {
+		lines[0] += sDim.Render("  ·  " + r.state)
+	}
+	lines = append(lines, fmt.Sprintf("%s  %s  %s",
+		lipgloss.NewStyle().Foreground(white).Render(fmt.Sprintf("%d to do", byCat["new"])),
+		lipgloss.NewStyle().Foreground(blue).Render(fmt.Sprintf("%d in progress", byCat["indeterminate"])),
+		sOK.Render(fmt.Sprintf("%d done", byCat["done"]))))
+	lines = append(lines, sDim.Render("space folds · - folds all · + opens all · v switches layout"))
+	return m.panel(lines)
 }

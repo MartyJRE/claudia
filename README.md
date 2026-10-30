@@ -105,6 +105,7 @@ Run `claudia` to open it in its own tmux session.
 - `work_dir` is the folder under `code_root` whose repos are listed first and
   started with the `work` profile (`work_profile` to pick another); other repos
   use `personal` if it exists.
+- `remote_control`: profiles whose sessions start with Remote Control, e.g. `["work"]`.
 - `review_prompt` and `analysis_prompt` let you point at your own skills; the
   defaults are plain prompts.
 

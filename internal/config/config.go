@@ -34,6 +34,9 @@ type Config struct {
 	// WorkProfile is the profile for repos under WorkDir; defaults to "work"
 	// when such a profile exists.
 	WorkProfile string `json:"work_profile"`
+	// RemoteControl lists the profiles whose sessions start with Remote Control,
+	// e.g. ["work"].
+	RemoteControl []string `json:"remote_control"`
 	// ReviewPrompt starts a review session; {urls} is replaced by the MR links,
 	// e.g. "/review-mr {urls}" to use a review skill.
 	ReviewPrompt string `json:"review_prompt"`

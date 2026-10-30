@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/MartyJRE/claudia/internal/config"
@@ -19,6 +20,9 @@ type Client struct {
 	email string
 	token string
 	http  *http.Client
+
+	sprintOnce sync.Once
+	sprintID   string
 }
 
 var ErrNoCredentials = errors.New("set ATLASSIAN_EMAIL and ATLASSIAN_API_TOKEN")
