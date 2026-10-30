@@ -18,6 +18,7 @@ import (
 const (
 	upChecking = iota
 	upBuilding
+	upWatcher
 	upDone
 )
 
@@ -71,7 +72,11 @@ func (m *Model) updateMsg(msg tea.Msg) tea.Cmd {
 		}()
 		return waitStream(ch)
 	case upLogMsg:
-		u.log = append(u.log, string(msg))
+		// Fetching straight from git adds a "get …: found meta tag" line per
+		// dependency; the downloads and package names say enough.
+		if l := string(msg); !strings.HasPrefix(l, "get ") {
+			u.log = append(u.log, l)
+		}
 		return waitStream(u.stream)
 	case upDoneMsg:
 		if msg.err != nil {
@@ -143,7 +148,7 @@ func (m *Model) viewUpdate() string {
 	}
 	b = append(b, step(upChecking, "checking GitHub for the latest version")+ver)
 	b = append(b, step(upBuilding, "downloading and building"))
-	b = append(b, step(upBuilding, "restarting the background watcher"))
+	b = append(b, step(upWatcher, "restarting the background watcher"))
 	restart := "restarting claudia"
 	if u.stage == upDone {
 		left := max(0, int(time.Until(u.restarts).Seconds()+0.99))

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"syscall"
 	"time"
 
@@ -66,7 +67,11 @@ func main() {
 			}
 		}
 		fmt.Println("downloading and building…")
-		if err := update.Install(func(l string) { fmt.Println("  " + l) }); err != nil {
+		if err := update.Install(func(l string) {
+			if !strings.HasPrefix(l, "get ") {
+				fmt.Println("  " + l)
+			}
+		}); err != nil {
 			fail(err)
 		}
 		watch.Stop()
