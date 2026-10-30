@@ -1,9 +1,27 @@
-# claudia
+<p align="center">
+  <img src="assets/logo.png" width="128" alt="claudia logo">
+</p>
 
-A terminal cockpit for working with Claude Code. One full-screen TUI shows who is
-waiting on you (review requests, Jira and Confluence mentions, review threads on
-your MRs, Claude sessions that need input), your merge requests, your Jira sprint
-and your Claude usage, and jumps you into the right Claude Code session.
+<h1 align="center">claudia</h1>
+
+<p align="center">
+  <b>A terminal cockpit for Claude Code.</b><br>
+  Who's waiting on you, your merge requests, your sprint and every Claude session, in one TUI.
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/go-1.24+-61afef?style=flat-square&logo=go&logoColor=white" alt="Go 1.24+">
+  <img src="https://img.shields.io/badge/macOS-tmux-c678dd?style=flat-square&logo=apple&logoColor=white" alt="macOS + tmux">
+  <img src="https://img.shields.io/badge/GitLab%20·%20Jira%20·%20Confluence-98c379?style=flat-square" alt="GitLab, Jira, Confluence">
+</p>
+
+<p align="center">
+  <img src="assets/preview.svg" width="860" alt="claudia's Inbox: everyone waiting on you, oldest first">
+</p>
+
+claudia lists review requests, Jira and Confluence mentions, review threads on
+your MRs and Claude sessions that need input, oldest first, and jumps you into the
+right Claude Code session for each: a review, a drafted reply, the fixes.
 
 Claude itself always runs as the real `claude` CLI in tmux windows, so nothing
 of Claude Code is reimplemented or lost. claudia only finds, starts, resumes and
