@@ -216,7 +216,8 @@ func (m *Model) sessionHeaderCells(r srow) []string {
 	if r.waiting > 0 {
 		counts += sDim.Render(" · ") + lipgloss.NewStyle().Foreground(yellow).Bold(true).Render(fmt.Sprintf("%d needs you", r.waiting))
 	}
-	return []string{sAccent.Render(indent + glyph), title + counts}
+	// Spans the row, starting where the SESSION column starts.
+	return []string{strings.Repeat(" ", sessionCols[0].w+1) + sDim.Render(indent) + sAccent.Render(glyph) + title + counts}
 }
 
 func (m *Model) toggleSessionFold() {
@@ -258,4 +259,12 @@ func (m *Model) foldAllSessions(fold bool) {
 	}
 	m.saveSessionPrefs()
 	m.refilter()
+}
+
+// sessionIndent lines a session up under its group's name, one level deeper.
+func sessionIndent(r srow) string {
+	if r.depth == 0 {
+		return ""
+	}
+	return strings.Repeat("  ", r.depth) + "  "
 }

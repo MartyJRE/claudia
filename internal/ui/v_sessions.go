@@ -65,7 +65,7 @@ func (m *Model) listSessionsTable(h int) string {
 		r := rows[i].sess
 		return []string{
 			m.status(r),
-			sDim.Render(strings.Repeat("  ", max(0, rows[i].depth-1))) + sessionTitle(r, sel),
+			sessionIndent(rows[i]) + sessionTitle(r, sel),
 			sText.Render(project(r.Dir())),
 			sBranch.Render(branch(r)),
 			sTicket.Render(m.ix.sessionTicket[r.ID]),

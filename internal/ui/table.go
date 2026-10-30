@@ -78,7 +78,12 @@ func (m *Model) table(cols []col, n int, cur *cursor, h int, cell func(i int, se
 	b.WriteString("   " + joinCells(ws, titles))
 	for i := cur.offset; i < min(n, cur.offset+rows); i++ {
 		sel := i == cur.pos
-		line := joinCells(ws, cell(i, sel))
+		cells := cell(i, sel)
+		line := joinCells(ws, cells)
+		if len(cells) == 1 {
+			// A single cell is a group header spanning the whole row.
+			line = fit(cells[0], m.width-4)
+		}
 		b.WriteString("\n")
 		if sel {
 			b.WriteString(sBar.Render(" ▌ ") + sCursor.Width(m.width-3).Render(line))
