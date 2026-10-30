@@ -44,6 +44,19 @@ switches between those sessions.
 a drafted reply for a mention, fixes for review threads, an analysis for a new
 ticket. Every view lists its keys in the footer.
 
+## Claude can drive it too
+
+Every session claudia starts or resumes is told about `claudia ctl`, so you can
+ask Claude "is this merged yet?" and it checks, answers, clears the item from
+your inbox and switches you back to claudia:
+
+```sh
+claudia ctl here            # this session's MRs, ticket and inbox items, as JSON
+claudia ctl inbox           # the whole inbox
+claudia ctl dismiss --here  # snooze this session's inbox items until they change
+claudia ctl home [--close]  # back to claudia; --close also ends the session
+```
+
 ## Requirements
 
 - macOS, tmux, Go 1.24+

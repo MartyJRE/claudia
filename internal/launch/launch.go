@@ -24,14 +24,28 @@ type Spec struct {
 }
 
 func Resume(s claude.Session) Spec {
-	return Spec{Dir: s.Dir(), Profile: s.Profile, Name: s.Name(), Args: []string{"--resume", s.ID}}
+	return Spec{Dir: s.Dir(), Profile: s.Profile, Name: s.Name(), Args: append([]string{"--resume", s.ID}, hint()...)}
+}
+
+// hint tells the session it can operate claudia itself.
+func hint() []string {
+	self, err := os.Executable()
+	if err != nil {
+		self = "claudia"
+	}
+	return []string{"--append-system-prompt", fmt.Sprintf(
+		"This session runs in tmux, started from claudia, the user's terminal dashboard. "+
+			"`%[1]s ctl here` prints, as JSON, what this session is about: its MRs, its Jira ticket and the claudia inbox items waiting on the user for it. "+
+			"When the user asks whether the thing is done or closed, check it (glab, Jira) and answer. "+
+			"When it's handled, or the user wants to go back to claudia, run `%[1]s ctl dismiss --here` to clear its inbox items and `%[1]s ctl home` to switch the terminal back to claudia "+
+			"(`%[1]s ctl home --close` also ends this session; only use it when the user asks to close it). `%[1]s ctl help` lists the rest.", self)}
 }
 
 // New starts a fresh session with a known id, so claudia can pair it with an MR or
 // ticket before Claude writes anything.
 func New(dir string, p claude.Profile, name, prompt string) (Spec, string) {
 	id := uuid()
-	args := []string{"--session-id", id, "-n", name}
+	args := append([]string{"--session-id", id, "-n", name}, hint()...)
 	if prompt != "" {
 		args = append(args, prompt)
 	}

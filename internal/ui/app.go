@@ -83,6 +83,7 @@ type Model struct {
 	seen         seenStore
 	seenExisted  bool
 	dismissed    dismissed
+	dismissedAt  time.Time
 	restore      []restoreItem
 
 	busy      [nSources]bool
@@ -205,6 +206,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !m.sessLoading {
 			m.sessLoading = true
 			cmds = append(cmds, m.loadSessions())
+		}
+		if m.reloadDismissed() {
+			m.refilter()
 		}
 		cmds = append(cmds, m.refreshStale(), m.maybeUsage(), tick())
 		if m.flash != "" && time.Since(m.flashAt) > 5*time.Second {

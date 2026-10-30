@@ -22,6 +22,12 @@ func main() {
 		}
 		return
 	}
+	if len(args) > 0 && args[0] == "ctl" {
+		if err := ctl(args[1:]); err != nil {
+			fail(err)
+		}
+		return
+	}
 	if len(args) > 0 && args[0] == "watch" {
 		if err := watch.Run(); err != nil {
 			fail(err)

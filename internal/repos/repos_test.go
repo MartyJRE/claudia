@@ -8,8 +8,8 @@ import (
 func TestProjectFromURL(t *testing.T) {
 	for in, want := range map[string]string{
 		"git@gitlab.example.com:acme/backend/payments.git": "acme/backend/payments",
-		"https://gitlab.example.com/acme/infra.git":                  "acme/infra",
-		"ssh://git@gitlab.com:2222/me/x.git":                               "me/x",
+		"https://gitlab.example.com/acme/infra.git":        "acme/infra",
+		"ssh://git@gitlab.com:2222/me/x.git":               "me/x",
 	} {
 		if got := ProjectFromURL(in); got != want {
 			t.Errorf("%s: got %q want %q", in, got, want)
