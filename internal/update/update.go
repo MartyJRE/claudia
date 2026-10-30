@@ -4,11 +4,15 @@
 package update
 
 import (
+	"bufio"
+	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"os/exec"
 	"runtime/debug"
+	"slices"
 	"strings"
 	"time"
 
@@ -90,11 +94,94 @@ func Available() bool {
 	return !strings.HasPrefix(s.Latest, cur)
 }
 
-// Install fetches and installs the latest claudia, straight from GitHub so a
-// just-pushed commit doesn't wait for the module proxy.
-func Install(out io.Writer) error {
-	cmd := exec.Command("go", "install", module+"@latest")
+type Commit struct {
+	SHA     string
+	Subject string
+}
+
+// Plan says what an update brings: the latest commit and the commits between
+// this build and it. For a local build (no known commit) it lists the latest few.
+type Plan struct {
+	Current string
+	Latest  string
+	Commits []Commit
+}
+
+func Fetch() (Plan, error) {
+	var p Plan
+	cur, known := Current()
+	p.Current = cur
+	url := "https://api.github.com/repos/MartyJRE/claudia/commits?per_page=5"
+	if known {
+		url = "https://api.github.com/repos/MartyJRE/claudia/compare/" + cur + "...main"
+	}
+	c := &http.Client{Timeout: 10 * time.Second}
+	resp, err := c.Get(url)
+	if err != nil {
+		return p, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return p, fmt.Errorf("GitHub answered %s", resp.Status)
+	}
+	type gc struct {
+		SHA    string `json:"sha"`
+		Commit struct {
+			Message string `json:"message"`
+		} `json:"commit"`
+	}
+	var list []gc
+	if known {
+		var cmp struct {
+			Commits []gc `json:"commits"`
+		}
+		err = json.NewDecoder(resp.Body).Decode(&cmp)
+		list = cmp.Commits
+	} else {
+		err = json.NewDecoder(resp.Body).Decode(&list)
+	}
+	if err != nil {
+		return p, err
+	}
+	for _, g := range list {
+		subject, _, _ := strings.Cut(g.Commit.Message, "\n")
+		p.Commits = append(p.Commits, Commit{SHA: g.SHA[:7], Subject: subject})
+	}
+	if known {
+		if n := len(p.Commits); n > 0 {
+			p.Latest = p.Commits[n-1].SHA
+		} else {
+			p.Latest = cur[:7]
+		}
+		// The compare API lists oldest first; newest first reads better.
+		slices.Reverse(p.Commits)
+	} else if len(p.Commits) > 0 {
+		p.Latest = p.Commits[0].SHA
+	}
+	return p, nil
+}
+
+// Install fetches and builds the latest claudia straight from GitHub, so a
+// just-pushed commit doesn't wait for the module proxy. Each line of go's
+// output goes to line as it happens.
+func Install(line func(string)) error {
+	cmd := exec.Command("go", "install", "-v", module+"@latest")
 	cmd.Env = append(os.Environ(), "GOPROXY=direct")
-	cmd.Stdout, cmd.Stderr = out, out
-	return cmd.Run()
+	pr, pw := io.Pipe()
+	cmd.Stdout, cmd.Stderr = pw, pw
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	done := make(chan struct{})
+	go func() {
+		sc := bufio.NewScanner(pr)
+		for sc.Scan() {
+			line(sc.Text())
+		}
+		close(done)
+	}()
+	err := cmd.Wait()
+	pw.Close()
+	<-done
+	return err
 }

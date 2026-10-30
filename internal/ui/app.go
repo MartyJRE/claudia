@@ -2,7 +2,6 @@ package ui
 
 import (
 	"fmt"
-	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -122,6 +121,7 @@ type Model struct {
 	chooser   *chooser
 	prompt    *promptBox
 	reader    *reader
+	upd       *updateView
 
 	confirmKey string
 	confirmAt  time.Time
@@ -286,13 +286,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.setFlash(msg.err.Error(), true)
 		}
 		return m, m.refreshVault()
-	case updatedMsg:
-		if msg.err != nil {
-			m.setFlash("update failed: "+msg.err.Error(), true)
-			return m, nil
+	case upPlanMsg, upLogMsg, upDoneMsg, upRestartMsg:
+		if m.upd != nil {
+			return m, m.updateMsg(msg)
 		}
-		m.Result.Restart = true
-		return m, tea.Quit
+		return m, nil
 	case mrLoadedMsg:
 		if msg.err != nil {
 			m.setFlash(msg.err.Error(), true)
@@ -302,6 +300,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.reviewWithClaude(msg.mr)
 	case tea.KeyMsg:
 		switch {
+		case m.upd != nil:
+			return m.updateKeys(msg)
 		case m.reader != nil:
 			return m.updateReader(msg)
 		case m.prompt != nil:
@@ -379,7 +379,7 @@ func (m *Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "@":
 		return m.openAssistant()
 	case "ctrl+u":
-		return m, m.runUpdate()
+		return m, m.startUpdate()
 	case "u":
 		return m, m.askLink()
 	case "N":
@@ -443,6 +443,9 @@ func (m *Model) confirm(key, prompt string) bool {
 func (m *Model) View() string {
 	if m.width == 0 {
 		return ""
+	}
+	if m.upd != nil {
+		return m.viewUpdate()
 	}
 	if m.reader != nil {
 		return m.viewReader()
@@ -910,15 +913,3 @@ func age(t time.Time) string {
 }
 
 func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
-
-type updatedMsg struct{ err error }
-
-// runUpdate installs the latest claudia in the foreground, then restarts into it.
-func (m *Model) runUpdate() tea.Cmd {
-	self, err := os.Executable()
-	if err != nil {
-		m.setFlash(err.Error(), true)
-		return nil
-	}
-	return tea.ExecProcess(exec.Command(self, "update"), func(err error) tea.Msg { return updatedMsg{err} })
-}

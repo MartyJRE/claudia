@@ -53,11 +53,24 @@ func main() {
 		return
 	}
 	if len(args) > 0 && args[0] == "update" {
-		if err := update.Install(os.Stdout); err != nil {
+		p, err := update.Fetch()
+		switch {
+		case err != nil:
+			fmt.Println("couldn't ask GitHub what's new:", err)
+		case len(p.Commits) == 0:
+			fmt.Println("already up to date; reinstalling", p.Latest)
+		default:
+			fmt.Printf("updating to %s, what's new:\n", p.Latest)
+			for _, c := range p.Commits {
+				fmt.Printf("  %s  %s\n", c.SHA, c.Subject)
+			}
+		}
+		fmt.Println("downloading and building…")
+		if err := update.Install(func(l string) { fmt.Println("  " + l) }); err != nil {
 			fail(err)
 		}
 		watch.Stop()
-		fmt.Println("updated; restart claudia to use it (ctrl+u inside claudia does that for you)")
+		fmt.Println("done; restart claudia to use it (ctrl+u inside claudia restarts by itself)")
 		return
 	}
 	if len(args) > 0 && args[0] == "setup" {
