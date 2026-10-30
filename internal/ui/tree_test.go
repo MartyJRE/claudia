@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/MartyJRE/claudia/internal/atlassian"
+	"github.com/MartyJRE/claudia/internal/claude"
+	"github.com/MartyJRE/claudia/internal/repos"
 )
 
 func TestJiraTree(t *testing.T) {
@@ -49,5 +51,38 @@ func TestJiraTree(t *testing.T) {
 	}
 	if got := render(m.buildJira(issues, true)); !strings.Contains(got, "ABC-3") {
 		t.Errorf("filtering must unfold: %s", got)
+	}
+}
+
+func TestSessionTree(t *testing.T) {
+	sess := func(id, dir, status string) row {
+		r := row{Session: claude.Session{ID: id, Transcript: &claude.Transcript{Cwd: dir}}}
+		if status != "" {
+			r.Live = &claude.Live{SessionID: id, Status: claude.Status(status)}
+		}
+		return r
+	}
+	rows := []row{sess("a", "/c/pay", ""), sess("b", "/c/bill", "waiting"), sess("c", "/c/pay/sub", "busy")}
+	m := &Model{repos: []repos.Repo{{Dir: "/c/pay"}, {Dir: "/c/bill"}}}
+	m.ix.sessionTicket = map[string]string{"a": "ABC-2", "c": "ABC-2"}
+	m.ix.issues = map[string]atlassian.Issue{"ABC-2": {Key: "ABC-2", Summary: "story", Parent: "ABC-1"}, "ABC-1": {Key: "ABC-1", Summary: "epic", Level: 1}}
+	render := func(rs []srow) string {
+		var b []string
+		for _, r := range rs {
+			if r.isSess {
+				b = append(b, strings.Repeat(" ", r.depth)+r.sess.ID)
+			} else {
+				b = append(b, strings.Repeat(" ", r.depth)+"#"+r.title)
+			}
+		}
+		return strings.Join(b, "|")
+	}
+	// The repo with a session waiting for you comes first.
+	if got, want := render(m.buildSessions(rows, false)), "#bill| b|#pay| a| c"; got != want {
+		t.Errorf("by repo: got %s want %s", got, want)
+	}
+	m.sessPrefs.Group = sessByTicket
+	if got, want := render(m.buildSessions(rows, false)), "#No ticket| b|#epic| #story|  a|  c"; got != want {
+		t.Errorf("by ticket: got %s want %s", got, want)
 	}
 }

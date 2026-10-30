@@ -93,6 +93,7 @@ type Model struct {
 	vaultLoading bool
 	vaultAt      time.Time
 	notesPrefs   notesPrefs
+	sessPrefs    sessionPrefs
 	brief        brief.Brief
 	briefAt      time.Time
 	briefPending time.Time
@@ -139,6 +140,7 @@ func New(opts Options) *Model {
 		jiraPrefs:  loadJiraPrefs(),
 		vault:      newVault(),
 		notesPrefs: loadNotesPrefs(),
+		sessPrefs:  loadSessionPrefs(),
 		view:       vSessions,
 		links:      links.Load(),
 		filter:     f,
@@ -621,10 +623,11 @@ func (m *Model) subtitle() string {
 		}
 		return sDim.Render(s) + "  " + sKey.Render("x") + sDim.Render(" snooze until it changes  ") + sKey.Render("a") + sDim.Render(" show snoozed")
 	case vSessions:
+		g := " · " + sessGroupNames[m.sessPrefs.Group]
 		if m.allSessions {
-			return sDim.Render("all sessions, last 7 days") + "  " + sKey.Render("a") + sDim.Render(" live only")
+			return sDim.Render("all sessions, last 7 days"+g) + "  " + sKey.Render("a") + sDim.Render(" live only")
 		}
-		return sDim.Render("live sessions") + "  " + sKey.Render("a") + sDim.Render(" show closed too")
+		return sDim.Render("live sessions"+g) + "  " + sKey.Render("a") + sDim.Render(" show closed too")
 	case vReview:
 		if m.showAll {
 			return sDim.Render("all review requests") + "  " + sKey.Render("a") + sDim.Render(" hide approved")
@@ -689,7 +692,7 @@ func (m *Model) help() [][2]string {
 	case vInbox:
 		return [][2]string{{"enter", "open"}, {"R", "brief"}, {"r", "review with claude"}, {"v", "threads"}, {"A", "approve"}, {"B", "rebase"}, {"x", "snooze"}, {"J", "ticket"}, {"c", "claude does what fits"}}
 	case vSessions:
-		return [][2]string{{"enter", "jump"}, {"R", "resume"}, {"J", "ticket"}, {"t", "set ticket"}, {"o", "MR"}, {"X", "restore"}}
+		return [][2]string{{"enter", "jump"}, {"space", "fold"}, {"v", "group"}, {"R", "resume"}, {"J", "ticket"}, {"t", "set ticket"}, {"o", "MR"}, {"X", "restore"}}
 	case vReview:
 		return [][2]string{{"enter", "review with claude"}, {"o", "open"}, {"J", "ticket"}, {"B", "rebase"}, {"A", "approve"}, {"s", "seen"}, {"c", "sessions"}}
 	case vMine:
@@ -729,7 +732,7 @@ func (m *Model) count() int {
 type visible struct {
 	inbox    []inboxItem
 	notes    []nrow
-	sessions []row
+	sessions []srow
 	mrs      []mrRow
 	jira     []jrow
 	mentions []mention
@@ -750,7 +753,7 @@ func (m *Model) refilter() {
 	}
 	m.vis.inbox = m.filterInbox(match)
 	m.vis.notes = m.filterNotes(match, len(terms) > 0)
-	m.vis.sessions = m.filterSessions(match)
+	m.vis.sessions = m.buildSessions(m.filterSessions(match), len(terms) > 0)
 	m.vis.mrs = m.filterMRs(match)
 	m.vis.jira = m.buildJira(m.jiraIssues(match), len(terms) > 0)
 	m.vis.mentions = m.filterMentions(match)

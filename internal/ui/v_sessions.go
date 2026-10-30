@@ -59,10 +59,13 @@ func (m *Model) listSessionsTable(h int) string {
 	}
 	rows := m.vis.sessions
 	return m.table(sessionCols, len(rows), &m.cur[vSessions], h, func(i int, sel bool) []string {
-		r := rows[i]
+		if !rows[i].isSess {
+			return m.sessionHeaderCells(rows[i])
+		}
+		r := rows[i].sess
 		return []string{
 			m.status(r),
-			sessionTitle(r, sel),
+			sDim.Render(strings.Repeat("  ", max(0, rows[i].depth-1))) + sessionTitle(r, sel),
 			sText.Render(project(r.Dir())),
 			sBranch.Render(branch(r)),
 			sTicket.Render(m.ix.sessionTicket[r.ID]),
@@ -138,10 +141,10 @@ func modelName(id string) (string, string) {
 
 func (m *Model) currentSession() (row, bool) {
 	c := m.cur[vSessions].pos
-	if c < 0 || c >= len(m.vis.sessions) {
+	if c < 0 || c >= len(m.vis.sessions) || !m.vis.sessions[c].isSess {
 		return row{}, false
 	}
-	return m.vis.sessions[c], true
+	return m.vis.sessions[c].sess, true
 }
 
 func (m *Model) detailSession() string {
@@ -212,10 +215,29 @@ func (m *Model) mrRef(u string) string {
 
 func (m *Model) keySessions(k string) (tea.Model, tea.Cmd) {
 	switch k {
+	case " ":
+		m.toggleSessionFold()
+		return m, nil
+	case "-":
+		m.foldAllSessions(true)
+		return m, nil
+	case "+", "=":
+		m.foldAllSessions(false)
+		return m, nil
+	case "v":
+		m.sessPrefs.Group = (m.sessPrefs.Group + 1) % nSessGroups
+		m.saveSessionPrefs()
+		m.refilter()
+		m.setFlash("sessions "+sessGroupNames[m.sessPrefs.Group], false)
+		return m, nil
 	case "a":
 		m.allSessions = !m.allSessions
 		m.refilter()
 	case "enter":
+		if c := m.cur[vSessions].pos; c >= 0 && c < len(m.vis.sessions) && !m.vis.sessions[c].isSess {
+			m.toggleSessionFold()
+			return m, nil
+		}
 		return m.jumpSession()
 	case "R":
 		r, ok := m.currentSession()
