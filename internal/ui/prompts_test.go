@@ -45,3 +45,17 @@ func TestClaudeForTicketPicksIntent(t *testing.T) {
 		}
 	}
 }
+
+func TestSessionTitle(t *testing.T) {
+	m := &Model{}
+	m.ix.issues = map[string]atlassian.Issue{"ABC-1": {Key: "ABC-1", Summary: "Expose gender on suggestions"}}
+	for _, c := range []struct{ verb, key, fallback, want string }{
+		{"review", "ABC-1", "feat(ABC-1): add gender", "review: Expose gender on suggestions"},
+		{"review", "", "Draft: fix(api)!: drop the old routes", "review: drop the old routes"},
+		{"fix threads", "", "", "fix threads: "},
+	} {
+		if got := m.sessionTitle(c.verb, c.key, c.fallback); got != c.want {
+			t.Errorf("%q: got %q", c.want, got)
+		}
+	}
+}

@@ -1,14 +1,19 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"syscall"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/MartyJRE/claudia/internal/brief"
+	"github.com/MartyJRE/claudia/internal/claude"
 	"github.com/MartyJRE/claudia/internal/kitty"
+	"github.com/MartyJRE/claudia/internal/launch"
 	"github.com/MartyJRE/claudia/internal/tmux"
 	"github.com/MartyJRE/claudia/internal/ui"
 	"github.com/MartyJRE/claudia/internal/watch"
@@ -37,6 +42,15 @@ func main() {
 		home()
 		return
 	}
+	if len(args) > 0 && args[0] == "brief" {
+		makeBrief()
+		b, _ := brief.Load()
+		if b.Err != "" {
+			fail(errors.New(b.Err))
+		}
+		fmt.Println(b.Text)
+		return
+	}
 	if len(args) > 0 && args[0] == "setup" {
 		if err := setup(); err != nil {
 			fail(err)
@@ -44,7 +58,7 @@ func main() {
 		return
 	}
 	if len(args) > 0 && args[0] == "watch" {
-		if err := watch.Run(); err != nil {
+		if err := watch.Run(makeBrief); err != nil {
 			fail(err)
 		}
 		return
@@ -92,6 +106,20 @@ func home() {
 		fail(err)
 	}
 	fail(syscall.Exec(bin, []string{"tmux", "new-session", "-A", "-s", tmux.Home, cmd}, os.Environ()))
+}
+
+// makeBrief rewrites the inbox brief; on failure the previous text stays, with
+// the error next to it.
+func makeBrief() {
+	prev, _ := brief.Load()
+	m := ui.Headless()
+	text, err := brief.Generate(m.BriefData(), prev.Text, launch.WorkProfile(claude.DefaultProfiles()).Dir)
+	b := brief.Brief{Text: text, At: time.Now()}
+	if err != nil {
+		b = brief.Brief{Text: prev.Text, At: prev.At, Err: err.Error()}
+		fmt.Fprintln(os.Stderr, time.Now().Format(time.TimeOnly), "brief:", err)
+	}
+	_ = brief.Save(b)
 }
 
 func fail(err error) {

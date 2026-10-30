@@ -13,7 +13,9 @@ import (
 	"time"
 
 	"github.com/MartyJRE/claudia/internal/atlassian"
+	"github.com/MartyJRE/claudia/internal/brief"
 	"github.com/MartyJRE/claudia/internal/claude"
+	"github.com/MartyJRE/claudia/internal/config"
 	"github.com/MartyJRE/claudia/internal/gitlab"
 	"github.com/MartyJRE/claudia/internal/state"
 	"github.com/MartyJRE/claudia/internal/tmux"
@@ -67,7 +69,9 @@ type watcher struct {
 	baseline [3]bool
 }
 
-func Run() error {
+// Run polls until killed. makeBrief writes the inbox brief; it runs on the
+// configured interval and whenever the TUI asks for one.
+func Run(makeBrief func()) error {
 	if Running() {
 		return fmt.Errorf("already running")
 	}
@@ -87,7 +91,22 @@ func Run() error {
 	w.atl, _ = atlassian.New()
 
 	var lastGL, lastJira time.Time
+	lastBrief := time.Now()
+	if b, ok := brief.Load(); ok {
+		lastBrief = b.At
+	}
+	briefing := make(chan struct{}, 1)
 	for {
+		every := config.Get().BriefEvery
+		due := every > 0 && time.Since(lastBrief) >= every
+		if (brief.TakeRequest() || due) && len(briefing) == 0 {
+			lastBrief = time.Now()
+			briefing <- struct{}{}
+			go func() {
+				defer func() { <-briefing }()
+				makeBrief()
+			}()
+		}
 		w.sessions()
 		if time.Since(lastGL) >= time.Minute {
 			lastGL = time.Now()

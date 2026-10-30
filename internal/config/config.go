@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 )
 
 type Config struct {
@@ -39,6 +40,10 @@ type Config struct {
 	// VaultProjects is the vault folder holding one subfolder per ticket;
 	// defaults to "01 - Projects".
 	VaultProjects string `json:"vault_projects"`
+	// BriefEvery is how often the inbox brief is rewritten, e.g. "2h"; "off"
+	// leaves only the on-demand refresh. Defaults to 2h.
+	BriefEveryRaw string        `json:"brief_every"`
+	BriefEvery    time.Duration `json:"-"`
 	// RemoteControl lists the profiles whose sessions start with Remote Control,
 	// e.g. ["work"].
 	RemoteControl []string `json:"remote_control"`
@@ -113,6 +118,12 @@ func Get() Config {
 		}
 		if cfg.VaultProjects == "" {
 			cfg.VaultProjects = "01 - Projects"
+		}
+		cfg.BriefEvery = 2 * time.Hour
+		if v := cfg.BriefEveryRaw; v == "off" || v == "0" {
+			cfg.BriefEvery = 0
+		} else if d, err := time.ParseDuration(v); err == nil && d > 0 {
+			cfg.BriefEvery = d
 		}
 		if cfg.WorkProfile == "" {
 			cfg.WorkProfile = "work"

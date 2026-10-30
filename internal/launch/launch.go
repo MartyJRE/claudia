@@ -22,6 +22,7 @@ type Spec struct {
 	Profile claude.Profile
 	Name    string
 	Args    []string
+	Session string // tmux session; defaults to the repo's name
 }
 
 func Resume(s claude.Session) Spec {
@@ -88,7 +89,11 @@ func Start(sp Spec) (string, error) {
 	}
 	argv = append(argv, sp.Args...)
 	env := []string{"CLAUDE_CONFIG_DIR=" + sp.Profile.Dir}
-	return tmux.NewWindow(SessionName(sp.Dir), windowName(sp.Name), sp.Dir, env, argv)
+	session := sp.Session
+	if session == "" {
+		session = SessionName(sp.Dir)
+	}
+	return tmux.NewWindow(session, windowName(sp.Name), sp.Dir, env, argv)
 }
 
 func SessionName(dir string) string {
@@ -105,8 +110,8 @@ func SessionName(dir string) string {
 
 func windowName(name string) string {
 	r := []rune(name)
-	if len(r) > 24 {
-		r = append(r[:23], '…')
+	if len(r) > 32 {
+		r = append(r[:31], '…')
 	}
 	return fmt.Sprintf("✻ %s", string(r))
 }
@@ -135,4 +140,42 @@ func ProfileFor(dir string, profiles []claude.Profile) claude.Profile {
 // WorkProfile is the configured work profile, or the first one.
 func WorkProfile(profiles []claude.Profile) claude.Profile {
 	return Profile(config.Get().WorkProfile, profiles)
+}
+
+// AssistantSession is the tmux session the assistant lives in.
+const AssistantSession = "assistant"
+
+// Assistant is the long-lived helper session claudia opens on @: it knows the
+// dashboard's own commands and asks before writing anywhere. id resumes it.
+func Assistant(p claude.Profile, id string, resume bool) Spec {
+	self, err := os.Executable()
+	if err != nil {
+		self = "claudia"
+	}
+	c := config.Get()
+	note := fmt.Sprintf("You are the user's assistant inside claudia, their terminal dashboard for Claude Code, GitLab, Jira and Confluence. "+
+		"They come here to ask what to do next and to get small things done. "+
+		"`%[1]s ctl inbox` prints everyone waiting on them as JSON, oldest first; `%[1]s ctl help` lists more. "+
+		"The latest status brief is in %[2]s. GitLab: use glab. Jira and Confluence: the Atlassian MCP.", self, filepath.Join(stateDir(), "brief.json"))
+	if c.Vault != "" {
+		note += " Their notes are an Obsidian vault at " + c.Vault + "; " + c.VaultProjects + "/<TICKET>/ holds a ticket's notes."
+	}
+	note += " Be brief and concrete and name tickets and MRs. Ask before anything that writes to GitLab, Jira or Confluence: approving, transitioning, commenting, posting or pushing."
+	args := []string{"--session-id", id, "-n", "assistant"}
+	if resume {
+		args = []string{"--resume", id}
+	}
+	args = append(args, "--append-system-prompt", note)
+	return Spec{Dir: c.CodeRoot, Profile: p, Name: "assistant", Args: args, Session: AssistantSession}
+}
+
+// NewID makes a session id for a session claudia names up front.
+func NewID() string { return uuid() }
+
+func stateDir() string {
+	if d := os.Getenv("XDG_STATE_HOME"); d != "" {
+		return filepath.Join(d, "claudia")
+	}
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".local", "state", "claudia")
 }

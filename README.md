@@ -46,6 +46,13 @@ link gets reviewed in your local clone even if it isn't assigned to you, a Jira
 link gets what the ticket needs, anything else lands in a repo you pick. `n`
 starts a plain session in any repo.
 
+The Inbox opens with a short brief in plain English, written by a headless
+`claude -p` over claudia's own data (no tools): who's waited longest, what's
+failing, what to do next. It's rewritten every `brief_every` (default `2h`, `off`
+to disable) and on `R`; `claudia brief` prints a fresh one. `@` opens a
+long-lived assistant session that knows claudia's commands, for "what should I
+do first?" and small errands.
+
 With an Obsidian vault configured, every ticket shows its notes: the ones in
 its project folder and every note that mentions the key (an epic includes its
 stories' notes). `N` lists them, `enter` reads one, `e` edits it in `$EDITOR`,

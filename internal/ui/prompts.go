@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -43,7 +44,7 @@ func (m *Model) claudeForTicket(key, summary string) (tea.Model, tea.Cmd) {
 	status := strings.ToLower(is.Status)
 	switch {
 	case known && (is.Category == "new" || strings.Contains(status, "analysis")):
-		return m.ticketSession(key, summary, "analyse "+key+" in", func(path string, err error) string {
+		return m.ticketSession(key, summary, "analyse", "analyse "+key+" in", func(path string, err error) string {
 			brief := path
 			if err != nil {
 				brief = "Jira (use the Atlassian MCP)"
@@ -51,12 +52,12 @@ func (m *Model) claudeForTicket(key, summary string) (tea.Model, tea.Cmd) {
 			return strings.NewReplacer("{key}", key, "{brief}", brief).Replace(config.Get().AnalysisPrompt)
 		})
 	case known && strings.Contains(status, "test"):
-		return m.ticketSession(key, summary, "test plan for "+key+" in", func(path string, err error) string {
+		return m.ticketSession(key, summary, "test plan", "test plan for "+key+" in", func(path string, err error) string {
 			return briefRef(key, path, err) + " and look at the changes that went in for it" + m.mrList(key) +
 				". It's ready for testing: write a test plan for devel from the acceptance criteria, with concrete requests or UI steps, expected results and edge cases. " + noWrites
 		})
 	case known && is.Category == "indeterminate" && is.Mine:
-		return m.ticketSession(key, summary, "continue "+key+" in", func(path string, err error) string {
+		return m.ticketSession(key, summary, "continue", "continue "+key+" in", func(path string, err error) string {
 			return briefRef(key, path, err) + ". I'm working on it. Check where the work stands: the branches for " + key +
 				" in this repo and its MRs" + m.mrList(key) + ", against the acceptance criteria. Summarise what's done, what's left, and propose the next steps. Don't change files yet."
 		})
@@ -66,7 +67,7 @@ func (m *Model) claudeForTicket(key, summary string) (tea.Model, tea.Cmd) {
 
 // briefSession is the plain "what is this ticket about" session.
 func (m *Model) briefSession(key, summary string) (tea.Model, tea.Cmd) {
-	return m.ticketSession(key, summary, key+" in", func(path string, err error) string {
+	return m.ticketSession(key, summary, "about", key+" in", func(path string, err error) string {
 		return briefRef(key, path, err) + ". Then look into this repo and summarise: what needs to be done, where in the code, and what is unclear or needs a decision. " + noWrites
 	})
 }
@@ -93,7 +94,7 @@ func (m *Model) replyToMention(x mention) (tea.Model, tea.Cmd) {
 		})
 		return m, nil
 	}
-	return m.ticketSession(x.where, x.title, "reply to "+x.author+" in", func(path string, err error) string {
+	return m.ticketSession(x.where, x.title, "reply to "+firstName(x.author), "reply to "+x.author+" in", func(path string, err error) string {
 		return fmt.Sprintf("%s mentioned me on %s (%s):\n\n%s\n\n%s, and look at the code where it helps to answer. "+
 			"Then draft my reply: answer each of their points, briefly, in the language they wrote in. Don't post anything to Jira; show me the draft.",
 			x.author, x.where, x.url, quote, briefRef(x.where, path, err))
@@ -103,7 +104,7 @@ func (m *Model) replyToMention(x mention) (tea.Model, tea.Cmd) {
 // ticketSession picks a repo (those on the ticket's branch or holding its MRs
 // first) and starts claude paired with the ticket. prompt receives the exported
 // brief; the export runs off the UI thread.
-func (m *Model) ticketSession(key, summary, title string, prompt func(path string, err error) string) (tea.Model, tea.Cmd) {
+func (m *Model) ticketSession(key, summary, verb, title string, prompt func(path string, err error) string) (tea.Model, tea.Cmd) {
 	lower := strings.ToLower(key)
 	onBranch := slices.ContainsFunc(m.repos, func(r repos.Repo) bool { return strings.Contains(strings.ToLower(r.Branch), lower) })
 	mrRepo := map[string]string{}
@@ -127,7 +128,7 @@ func (m *Model) ticketSession(key, summary, title string, prompt func(path strin
 		}
 		return false, ""
 	}, func(m *Model, dir string, p claude.Profile) (tea.Model, tea.Cmd) {
-		name := key + " " + summary
+		name := m.sessionTitle(verb, key, summary)
 		atl := m.atl
 		return m, func() tea.Msg {
 			path, err := "", error(nil)
@@ -153,10 +154,7 @@ func (m *Model) reviewWithClaude(mr gitlab.MR) (tea.Model, tea.Cmd) {
 		urls = append(urls, o.WebURL)
 	}
 	m.seen.mark(rel...)
-	name := fmt.Sprintf("review %s!%d", mr.Repo(), mr.IID)
-	if t := mrTicket(mr); t != "" {
-		name = "review " + t
-	}
+	name := m.sessionTitle("review", mrTicket(mr), mr.Title)
 	prompt := strings.ReplaceAll(config.Get().ReviewPrompt, "{urls}", strings.Join(urls, " "))
 	return m.inClone(mr, "review", name, prompt, urls)
 }
@@ -168,7 +166,7 @@ func (m *Model) addressThreads(mr gitlab.MR) (tea.Model, tea.Cmd) {
 		"Read the threads with `glab api projects/%d/merge_requests/%d/discussions`. For each one, decide whether the remark is right: if it is, fix it on this branch; if not, draft a reply explaining why. "+
 		"Then summarise the changes and the replies you propose. Don't push, post replies or resolve threads until I confirm.",
 		mr.WebURL, mr.SourceBranch, mr.SourceBranch, mr.ProjectID, mr.IID)
-	return m.inClone(mr, "fix", fmt.Sprintf("threads %s!%d", mr.Repo(), mr.IID), prompt, []string{mr.WebURL})
+	return m.inClone(mr, "fix", m.sessionTitle("fix threads", mrTicket(mr), mr.Title), prompt, []string{mr.WebURL})
 }
 
 // inClone starts claude in a local clone of the MR's project, asking which one
@@ -218,4 +216,29 @@ func (m *Model) claudeForInbox(it inboxItem) (tea.Model, tea.Cmd) {
 		return m.jumpTo(it.sess)
 	}
 	return m, nil
+}
+
+var commitPrefix = regexp.MustCompile(`^(?i)(draft:\s*)?([a-z]+(\([^)]*\))?!?:\s*)?`)
+
+// sessionTitle names a session after what it's about rather than its ticket
+// key: "review: Expose gender on suggestions". The ticket's summary wins; else
+// the MR title without its "feat(KEY):" prefix.
+func (m *Model) sessionTitle(verb, key, fallback string) string {
+	about := commitPrefix.ReplaceAllString(strings.TrimSpace(fallback), "")
+	if is, ok := m.ix.issues[key]; ok && is.Summary != "" {
+		about = is.Summary
+	}
+	if about == "" {
+		about = key
+	}
+	if r := []rune(about); len(r) > 50 {
+		about = strings.TrimSpace(string(r[:49])) + "…"
+	}
+	return verb + ": " + about
+}
+
+func firstName(s string) string {
+	s, _, _ = strings.Cut(s, " ")
+	s, _, _ = strings.Cut(s, ".")
+	return s
 }

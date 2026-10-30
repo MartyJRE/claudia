@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/MartyJRE/claudia/internal/atlassian"
+	"github.com/MartyJRE/claudia/internal/brief"
 	"github.com/MartyJRE/claudia/internal/claude"
 	"github.com/MartyJRE/claudia/internal/gitlab"
 	"github.com/MartyJRE/claudia/internal/launch"
@@ -92,6 +93,9 @@ type Model struct {
 	vaultLoading bool
 	vaultAt      time.Time
 	notesPrefs   notesPrefs
+	brief        brief.Brief
+	briefAt      time.Time
+	briefPending time.Time
 	restore      []restoreItem
 
 	busy      [nSources]bool
@@ -145,6 +149,7 @@ func New(opts Options) *Model {
 	m.loadCaches()
 	m.restore = pendingRestore()
 	m.usageScanner = claude.NewUsageScanner(m.store.Profiles, 31)
+	m.reloadBrief()
 	if watch.Notifier() == "" {
 		m.setFlash("notifications open Script Editor when clicked: run `claudia setup` once to install the notification helper", true)
 		m.flashAt = time.Now().Add(20 * time.Second)
@@ -229,6 +234,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if time.Since(m.vaultAt) > 30*time.Second {
 			cmds = append(cmds, m.refreshVault())
 		}
+		m.reloadBrief()
 		if m.reloadDismissed() {
 			m.refilter()
 		}
@@ -353,6 +359,8 @@ func (m *Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "shift+tab", "left", "h":
 		m.switchView((m.view + nViews - 1) % nViews)
 		return m, nil
+	case "@":
+		return m.openAssistant()
 	case "u":
 		return m, m.askLink()
 	case "N":
@@ -657,7 +665,7 @@ func (m *Model) viewFooter() string {
 		}
 	} else {
 		keys = m.help()
-		keys = append(keys, [2]string{"u", "open link"}, [2]string{"n", "new"}, [2]string{"1-9", "views"}, [2]string{"/", "filter"}, [2]string{"q", "quit"})
+		keys = append(keys, [2]string{"@", "assistant"}, [2]string{"u", "open link"}, [2]string{"n", "new"}, [2]string{"1-9", "views"}, [2]string{"/", "filter"}, [2]string{"q", "quit"})
 	}
 	var parts []string
 	for _, k := range keys {
@@ -679,7 +687,7 @@ func (m *Model) help() [][2]string {
 	case vNotes:
 		return [][2]string{{"enter", "read"}, {"space", "fold"}, {"e", "edit"}, {"o", "Obsidian"}, {"v", "recent/tree"}, {"J", "ticket"}}
 	case vInbox:
-		return [][2]string{{"enter", "open"}, {"r", "review with claude"}, {"v", "threads"}, {"A", "approve"}, {"B", "rebase"}, {"x", "snooze"}, {"J", "ticket"}, {"c", "claude does what fits"}}
+		return [][2]string{{"enter", "open"}, {"R", "brief"}, {"r", "review with claude"}, {"v", "threads"}, {"A", "approve"}, {"B", "rebase"}, {"x", "snooze"}, {"J", "ticket"}, {"c", "claude does what fits"}}
 	case vSessions:
 		return [][2]string{{"enter", "jump"}, {"R", "resume"}, {"J", "ticket"}, {"t", "set ticket"}, {"o", "MR"}, {"X", "restore"}}
 	case vReview:

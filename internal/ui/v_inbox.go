@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"os"
 	"slices"
 	"strings"
 	"time"
@@ -9,6 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/MartyJRE/claudia/internal/brief"
 	"github.com/MartyJRE/claudia/internal/claude"
 	"github.com/MartyJRE/claudia/internal/gitlab"
 )
@@ -176,8 +178,10 @@ func waiting(t time.Time) string {
 }
 
 func (m *Model) listInbox(h int) string {
+	top := m.viewBrief()
+	h -= lipgloss.Height(top)
 	rows := m.vis.inbox
-	return m.table(inboxCols, len(rows), &m.cur[vInbox], h, func(i int, sel bool) []string {
+	return top + m.table(inboxCols, len(rows), &m.cur[vInbox], h, func(i int, sel bool) []string {
 		it := rows[i]
 		st := sText
 		if sel {
@@ -235,9 +239,17 @@ func (m *Model) detailInbox() string {
 }
 
 func (m *Model) keyInbox(k string) (tea.Model, tea.Cmd) {
-	if k == "a" {
+	switch k {
+	case "a":
 		m.showAll = !m.showAll
 		m.refilter()
+		return m, nil
+	case "R":
+		if err := brief.Request(); err != nil {
+			m.setFlash(err.Error(), true)
+		} else {
+			m.briefPending = time.Now()
+		}
 		return m, nil
 	}
 	it, ok := m.currentInbox()
@@ -287,4 +299,45 @@ func (m *Model) keyInbox(k string) (tea.Model, tea.Cmd) {
 		return m.claudeForInbox(it)
 	}
 	return m, nil
+}
+
+// viewBrief is the natural-language status above the inbox list.
+func (m *Model) viewBrief() string {
+	head := lipgloss.NewStyle().Foreground(purple).Bold(true).Render(" ✻ brief")
+	b := m.brief
+	switch {
+	case !m.briefPending.IsZero():
+		head += sDim.Render("  " + spinner[m.frame%len(spinner)] + " writing a fresh one…")
+	case !b.At.IsZero():
+		head += sDim.Render("  written " + age(b.At) + " ago  ·  ")
+		head += sKey.Render("R") + sDim.Render(" refresh")
+	default:
+		head += sDim.Render("  ") + sKey.Render("R") + sDim.Render(" asks Claude for a summary of what's waiting")
+	}
+	lines := []string{head}
+	if b.Text != "" {
+		body := lipgloss.NewStyle().Foreground(fg).Width(max(20, m.width-4)).Render(b.Text)
+		for _, l := range strings.Split(body, "\n") {
+			lines = append(lines, "   "+l)
+			if len(lines) > 6 {
+				break
+			}
+		}
+	}
+	if b.Err != "" {
+		lines = append(lines, "   "+sErr.Render("last refresh failed: "+oneLine(b.Err)))
+	}
+	return strings.Join(lines, "\n") + "\n"
+}
+
+func (m *Model) reloadBrief() {
+	st, err := os.Stat(brief.Path())
+	if err != nil || !st.ModTime().After(m.briefAt) {
+		return
+	}
+	m.briefAt = st.ModTime()
+	m.brief, _ = brief.Load()
+	if !m.briefPending.IsZero() && st.ModTime().After(m.briefPending) {
+		m.briefPending = time.Time{}
+	}
 }

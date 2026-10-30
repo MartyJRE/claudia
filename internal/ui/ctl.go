@@ -1,9 +1,11 @@
 package ui
 
 import (
+	"fmt"
 	"os"
 	"time"
 
+	"github.com/MartyJRE/claudia/internal/gitlab"
 	"github.com/MartyJRE/claudia/internal/state"
 	"github.com/MartyJRE/claudia/internal/tmux"
 )
@@ -156,3 +158,65 @@ func (m *Model) reloadDismissed() bool {
 
 // Home switches the terminal back to claudia's session.
 func Home() error { return tmux.Switch("=" + tmux.Home) }
+
+// BriefData is what the inbox brief is written from: compact on purpose, since
+// it goes to Claude on every run.
+func (m *Model) BriefData() any {
+	type issue struct {
+		Key, Summary, Status, Epic, Sprint string
+	}
+	type mr struct {
+		Ref, Title, Pipeline, Ticket string
+		Approved                     bool     `json:",omitempty"`
+		Reviewers                    []string `json:",omitempty"`
+		OpenThreads                  int      `json:",omitempty"`
+		NeedsRebase                  bool     `json:",omitempty"`
+	}
+	type sess struct{ Name, Status, Ticket string }
+	var out struct {
+		Inbox    []CtlItem
+		Sprint   []issue
+		MyMRs    []mr
+		Merged   []mr
+		Sessions []sess
+	}
+	for _, it := range m.CtlInbox("") {
+		if !it.Snoozed {
+			out.Inbox = append(out.Inbox, it)
+		}
+	}
+	for _, is := range m.jira.Sprint {
+		if is.Category == "done" {
+			continue
+		}
+		i := issue{Key: is.Key, Summary: is.Summary, Status: is.Status, Epic: is.ParentSummary}
+		if is.Sprint != nil {
+			i.Sprint = is.Sprint.Name
+		}
+		out.Sprint = append(out.Sprint, i)
+	}
+	conv := func(g gitlab.MR, pipeline string) mr {
+		r := mr{Ref: fmt.Sprintf("%s!%d", g.Repo(), g.IID), Title: g.Title, Pipeline: pipeline, Ticket: mrTicket(g),
+			Approved: g.Approved, OpenThreads: g.OpenThreads(), NeedsRebase: g.MergeStatus == "need_rebase"}
+		for _, u := range g.Reviewers {
+			r.Reviewers = append(r.Reviewers, u.Username)
+		}
+		return r
+	}
+	for _, g := range m.gl.Mine {
+		out.MyMRs = append(out.MyMRs, conv(g, g.PipelineStatus()))
+	}
+	for _, g := range m.gl.Merged {
+		p := ""
+		if g.MergePipeline != nil {
+			p = g.MergePipeline.Status
+		}
+		out.Merged = append(out.Merged, conv(g, p))
+	}
+	for _, r := range m.sessions {
+		if r.live() {
+			out.Sessions = append(out.Sessions, sess{r.Name(), string(r.Live.Status), m.ix.sessionTicket[r.ID]})
+		}
+	}
+	return out
+}
