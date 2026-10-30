@@ -34,6 +34,11 @@ type Config struct {
 	// WorkProfile is the profile for repos under WorkDir; defaults to "work"
 	// when such a profile exists.
 	WorkProfile string `json:"work_profile"`
+	// Vault is an Obsidian vault whose notes are shown next to tickets.
+	Vault string `json:"vault"`
+	// VaultProjects is the vault folder holding one subfolder per ticket;
+	// defaults to "01 - Projects".
+	VaultProjects string `json:"vault_projects"`
 	// RemoteControl lists the profiles whose sessions start with Remote Control,
 	// e.g. ["work"].
 	RemoteControl []string `json:"remote_control"`
@@ -102,6 +107,12 @@ func Get() Config {
 			if strings.HasPrefix(dir, "~/") {
 				cfg.Profiles[name] = filepath.Join(home, dir[2:])
 			}
+		}
+		if strings.HasPrefix(cfg.Vault, "~/") {
+			cfg.Vault = filepath.Join(home, cfg.Vault[2:])
+		}
+		if cfg.VaultProjects == "" {
+			cfg.VaultProjects = "01 - Projects"
 		}
 		if cfg.WorkProfile == "" {
 			cfg.WorkProfile = "work"

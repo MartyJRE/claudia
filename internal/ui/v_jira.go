@@ -307,7 +307,7 @@ func (m *Model) detailJira() string {
 	if n := m.unansweredFor(is.Key); n > 0 {
 		lines = append(lines, lipgloss.NewStyle().Foreground(purple).Render(fmt.Sprintf("%d unanswered mention(s) — see Mentions", n)))
 	}
-	return m.panel(lines)
+	return m.panel(m.withNotes(lines, is.Key))
 }
 
 func (m *Model) keyJira(k string) (tea.Model, tea.Cmd) {

@@ -231,7 +231,7 @@ func (m *Model) detailInbox() string {
 	default:
 		lines = append(lines, sText.Render(it.text))
 	}
-	return m.panel(lines)
+	return m.panel(m.withNotes(lines, it.ticket))
 }
 
 func (m *Model) keyInbox(k string) (tea.Model, tea.Cmd) {

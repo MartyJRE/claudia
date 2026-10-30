@@ -18,6 +18,7 @@ import (
 	"github.com/MartyJRE/claudia/internal/links"
 	"github.com/MartyJRE/claudia/internal/repos"
 	"github.com/MartyJRE/claudia/internal/tmux"
+	"github.com/MartyJRE/claudia/internal/vault"
 )
 
 type Options struct {
@@ -39,11 +40,12 @@ const (
 	vJira
 	vMentions
 	vConfluence
+	vNotes
 	vUsage
 	nViews
 )
 
-var viewNames = [nViews]string{"Inbox", "Sessions", "Review", "My MRs", "Jira", "Mentions", "Confluence", "Usage"}
+var viewNames = [nViews]string{"Inbox", "Sessions", "Review", "My MRs", "Jira", "Mentions", "Confluence", "Notes", "Usage"}
 
 var spinner = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 
@@ -84,6 +86,11 @@ type Model struct {
 	seenExisted  bool
 	dismissed    dismissed
 	dismissedAt  time.Time
+	vault        *vault.Index
+	vaultNotes   []vault.Note
+	vaultLoading bool
+	vaultAt      time.Time
+	notesPrefs   notesPrefs
 	restore      []restoreItem
 
 	busy      [nSources]bool
@@ -103,6 +110,7 @@ type Model struct {
 	filtering bool
 	chooser   *chooser
 	prompt    *promptBox
+	reader    *reader
 
 	confirmKey string
 	confirmAt  time.Time
@@ -121,13 +129,15 @@ func New(opts Options) *Model {
 	f.TextStyle = sText
 	f.Placeholder = "filter"
 	m := &Model{
-		opts:      opts,
-		store:     claude.NewStore(claude.DefaultProfiles(), 7*24*time.Hour),
-		jiraPrefs: loadJiraPrefs(),
-		view:      vSessions,
-		links:     links.Load(),
-		filter:    f,
-		dismissed: loadDismissed(),
+		opts:       opts,
+		store:      claude.NewStore(claude.DefaultProfiles(), 7*24*time.Hour),
+		jiraPrefs:  loadJiraPrefs(),
+		vault:      newVault(),
+		notesPrefs: loadNotesPrefs(),
+		view:       vSessions,
+		links:      links.Load(),
+		filter:     f,
+		dismissed:  loadDismissed(),
 	}
 	m.atl, m.atlErr = atlassian.New()
 	m.seen, m.seenExisted = loadSeen()
@@ -147,7 +157,7 @@ type refreshMsg source
 
 func (m *Model) Init() tea.Cmd {
 	m.sessLoading = true
-	return tea.Batch(m.loadSessions(), m.refreshStale(), m.maybeUsage(), tick(), frame())
+	return tea.Batch(m.loadSessions(), m.refreshStale(), m.maybeUsage(), m.refreshVault(), tick(), frame())
 }
 
 func tick() tea.Cmd {
@@ -187,6 +197,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
+		if m.reader != nil {
+			m.renderReader()
+		}
 		m.filter.Width = msg.Width / 2
 		return m, nil
 	case sessionsMsg:
@@ -207,6 +220,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !m.sessLoading {
 			m.sessLoading = true
 			cmds = append(cmds, m.loadSessions())
+		}
+		if time.Since(m.vaultAt) > 30*time.Second {
+			cmds = append(cmds, m.refreshVault())
 		}
 		if m.reloadDismissed() {
 			m.refilter()
@@ -241,6 +257,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case transitionsMsg:
 		m.showTransitions(msg)
 		return m, nil
+	case vaultMsg:
+		m.applyVault(msg)
+		return m, nil
+	case editedMsg:
+		if msg.err != nil {
+			m.setFlash(msg.err.Error(), true)
+		}
+		return m, m.refreshVault()
 	case mrLoadedMsg:
 		if msg.err != nil {
 			m.setFlash(msg.err.Error(), true)
@@ -250,6 +274,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.reviewWithClaude(msg.mr)
 	case tea.KeyMsg:
 		switch {
+		case m.reader != nil:
+			return m.updateReader(msg)
 		case m.prompt != nil:
 			return m.updatePrompt(msg)
 		case m.chooser != nil:
@@ -324,6 +350,11 @@ func (m *Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "u":
 		return m, m.askLink()
+	case "N":
+		m.chooseNotes()
+		return m, nil
+	case "w":
+		return m, m.writeNote()
 	case "n":
 		m.newSession()
 		return m, nil
@@ -339,6 +370,8 @@ func (m *Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	switch m.view {
+	case vNotes:
+		return m.keyNotes(k)
 	case vInbox:
 		return m.keyInbox(k)
 	case vSessions:
@@ -379,6 +412,9 @@ func (m *Model) View() string {
 	if m.width == 0 {
 		return ""
 	}
+	if m.reader != nil {
+		return m.viewReader()
+	}
 	header := m.viewHeader()
 	footer := m.viewFooter()
 	body := m.height - lipgloss.Height(header) - lipgloss.Height(footer)
@@ -395,6 +431,8 @@ func (m *Model) View() string {
 
 func (m *Model) viewList(h int) string {
 	switch m.view {
+	case vNotes:
+		return m.listNotes(h)
 	case vInbox:
 		return m.listInbox(h)
 	case vSessions:
@@ -415,6 +453,8 @@ func (m *Model) viewList(h int) string {
 
 func (m *Model) viewDetail() string {
 	switch m.view {
+	case vNotes:
+		return m.detailNote()
 	case vInbox:
 		return m.detailInbox()
 	case vSessions:
@@ -556,6 +596,11 @@ func (m *Model) sourceStatus() string {
 
 func (m *Model) subtitle() string {
 	switch m.view {
+	case vNotes:
+		if m.notesPrefs.Recent {
+			return sDim.Render("recently edited notes") + "  " + sKey.Render("v") + sDim.Render(" folders")
+		}
+		return sDim.Render("your vault") + "  " + sKey.Render("v") + sDim.Render(" recently edited") + "  " + sKey.Render("N") + sDim.Render(" on any ticket lists its notes, ") + sKey.Render("w") + sDim.Render(" writes one")
 	case vInbox:
 		s := "everyone waiting on you, oldest first"
 		if m.showAll {
@@ -607,7 +652,7 @@ func (m *Model) viewFooter() string {
 		}
 	} else {
 		keys = m.help()
-		keys = append(keys, [2]string{"u", "open link"}, [2]string{"n", "new"}, [2]string{"1-8", "views"}, [2]string{"/", "filter"}, [2]string{"q", "quit"})
+		keys = append(keys, [2]string{"u", "open link"}, [2]string{"n", "new"}, [2]string{"1-9", "views"}, [2]string{"/", "filter"}, [2]string{"q", "quit"})
 	}
 	var parts []string
 	for _, k := range keys {
@@ -626,6 +671,8 @@ func (m *Model) viewFooter() string {
 
 func (m *Model) help() [][2]string {
 	switch m.view {
+	case vNotes:
+		return [][2]string{{"enter", "read"}, {"space", "fold"}, {"e", "edit"}, {"o", "Obsidian"}, {"v", "recent/tree"}, {"J", "ticket"}}
 	case vInbox:
 		return [][2]string{{"enter", "open"}, {"r", "review with claude"}, {"v", "threads"}, {"A", "approve"}, {"B", "rebase"}, {"x", "snooze"}, {"J", "ticket"}, {"c", "claude does what fits"}}
 	case vSessions:
@@ -646,6 +693,8 @@ func (m *Model) help() [][2]string {
 
 func (m *Model) count() int {
 	switch m.view {
+	case vNotes:
+		return len(m.vis.notes)
 	case vInbox:
 		return len(m.vis.inbox)
 	case vSessions:
@@ -666,6 +715,7 @@ func (m *Model) count() int {
 
 type visible struct {
 	inbox    []inboxItem
+	notes    []nrow
 	sessions []row
 	mrs      []mrRow
 	jira     []jrow
@@ -686,6 +736,7 @@ func (m *Model) refilter() {
 		return true
 	}
 	m.vis.inbox = m.filterInbox(match)
+	m.vis.notes = m.filterNotes(match, len(terms) > 0)
 	m.vis.sessions = m.filterSessions(match)
 	m.vis.mrs = m.filterMRs(match)
 	m.vis.jira = m.buildJira(m.jiraIssues(match), len(terms) > 0)

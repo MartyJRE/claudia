@@ -46,12 +46,17 @@ type CtlHere struct {
 	Ticket  *CtlTicket `json:"ticket,omitempty"`
 	MRs     []CtlMR    `json:"mrs,omitempty"`
 	Items   []CtlItem  `json:"inbox_items"`
+	Notes   []string   `json:"notes,omitempty"` // Obsidian notes about the ticket
 }
 
 // Headless builds the model from caches and live sessions without a terminal.
 func Headless() *Model {
 	m := New(Options{})
 	m.sessions = m.loadSessions()().(sessionsMsg)
+	if m.vault != nil {
+		m.vault.Refresh()
+		m.vaultNotes = m.vault.All()
+	}
 	m.reindex()
 	return m
 }
@@ -113,6 +118,9 @@ func (m *Model) CtlHere(r row) CtlHere {
 			mr.Title, mr.State, mr.Pipeline, mr.Approved = g.Title, g.State, g.PipelineStatus(), g.Approved
 		}
 		h.MRs = append(h.MRs, mr)
+	}
+	for _, n := range m.notesFor(m.ix.sessionTicket[r.ID]) {
+		h.Notes = append(h.Notes, n.Path)
 	}
 	for _, it := range m.CtlInbox(r.ID) {
 		if it.ThisSession {

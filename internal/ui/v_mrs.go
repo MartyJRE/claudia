@@ -269,7 +269,7 @@ func (m *Model) detailMR() string {
 	} else if len(r.ApprovedBy) > 0 {
 		lines = append(lines, sDim.Render("approved by "+strings.Join(r.ApprovedBy, ", ")))
 	}
-	return m.panel(lines)
+	return m.panel(m.withNotes(lines, mrTicket(r.MR)))
 }
 
 // reviewers marks who already approved.

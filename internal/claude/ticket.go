@@ -13,6 +13,13 @@ var (
 	ticketRe   *regexp.Regexp
 )
 
+// TicketRegexp matches ticket keys; its first group is the project key and the
+// second the number.
+func TicketRegexp() *regexp.Regexp {
+	TicketFrom("")
+	return ticketRe
+}
+
 // TicketFrom finds a Jira key in a branch name or title. With ticket_keys
 // configured it matches those projects in any case (feat/abc-12/x); without,
 // any upper-case KEY-123.

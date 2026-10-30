@@ -38,12 +38,18 @@ switches between those sessions.
 | 5 | Jira | Your sprint, or the team's |
 | 6 | Mentions | Jira comments and Confluence pages that mention you |
 | 7 | Confluence | Pages you edited recently |
-| 8 | Usage | Tokens and API-equivalent cost per day, plan limits |
+| 8 | Notes | Your Obsidian vault as a folder tree, or recently edited first |
+| 9 | Usage | Tokens and API-equivalent cost per day, plan limits |
 
 `u` opens any link in Claude (also `claudia open <link>` from a shell): an MR
 link gets reviewed in your local clone even if it isn't assigned to you, a Jira
 link gets what the ticket needs, anything else lands in a repo you pick. `n`
 starts a plain session in any repo.
+
+With an Obsidian vault configured, every ticket shows its notes: the ones in
+its project folder and every note that mentions the key (an epic includes its
+stories' notes). `N` lists them, `enter` reads one, `e` edits it in `$EDITOR`,
+`w` writes a new one into the ticket's folder.
 
 `c` starts the Claude session the item calls for: a review for a review request,
 a drafted reply for a mention, fixes for review threads, an analysis for a new
@@ -110,6 +116,8 @@ Run `claudia` to open it in its own tmux session.
 - `work_dir` is the folder under `code_root` whose repos are listed first and
   started with the `work` profile (`work_profile` to pick another); other repos
   use `personal` if it exists.
+- `vault`: an Obsidian vault, e.g. `"~/Documents/Notes"`; `vault_projects` is its
+  folder with one subfolder per ticket (default `01 - Projects`).
 - `remote_control`: profiles whose sessions start with Remote Control, e.g. `["work"]`.
 - `review_prompt` and `analysis_prompt` let you point at your own skills; the
   defaults are plain prompts.

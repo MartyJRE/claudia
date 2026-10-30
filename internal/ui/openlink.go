@@ -30,11 +30,7 @@ type promptBox struct {
 }
 
 func (m *Model) askLink() tea.Cmd {
-	in := textinput.New()
-	in.Prompt = "link › "
-	in.PromptStyle = sKey
-	in.TextStyle = sText
-	in.Placeholder = "GitLab MR, Jira ticket or any URL"
+	in := newInput("link › ", "GitLab MR, Jira ticket or any URL")
 	in.Width = max(40, m.width-12)
 	if clip, err := exec.Command("pbpaste").Output(); err == nil {
 		if s := strings.TrimSpace(string(clip)); strings.HasPrefix(s, "http") && !strings.ContainsAny(s, " \n") {
@@ -46,6 +42,15 @@ func (m *Model) askLink() tea.Cmd {
 		return m.openLink(s)
 	}}
 	return m.prompt.in.Focus()
+}
+
+func newInput(prompt, placeholder string) textinput.Model {
+	in := textinput.New()
+	in.Prompt = prompt
+	in.PromptStyle = sKey
+	in.TextStyle = sText
+	in.Placeholder = placeholder
+	return in
 }
 
 func (m *Model) updatePrompt(msg tea.KeyMsg) (tea.Model, tea.Cmd) {

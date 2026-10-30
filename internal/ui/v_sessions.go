@@ -193,7 +193,7 @@ func (m *Model) detailSession() string {
 			lines = append(lines, strings.Join(info, sDim.Render("   ")))
 		}
 	}
-	return m.panel(lines)
+	return m.panel(m.withNotes(lines, m.ix.sessionTicket[r.ID]))
 }
 
 // mrRef renders an MR link with whatever claudia knows about its state.
