@@ -80,7 +80,7 @@ claudia ctl home [--close]  # back to claudia; --close also ends the session
 
 ```sh
 go install github.com/MartyJRE/claudia@latest
-./notifier/build.sh          # optional: native notifications, builds ~/Applications/Claudia.app
+claudia setup                # native notifications: builds ~/Applications/Claudia.app (needs Xcode CLT)
 ```
 
 In `~/.tmux.conf`, to toggle between claudia and the session you came from:

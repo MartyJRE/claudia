@@ -37,6 +37,12 @@ func main() {
 		home()
 		return
 	}
+	if len(args) > 0 && args[0] == "setup" {
+		if err := setup(); err != nil {
+			fail(err)
+		}
+		return
+	}
 	if len(args) > 0 && args[0] == "watch" {
 		if err := watch.Run(); err != nil {
 			fail(err)

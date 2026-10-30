@@ -19,6 +19,7 @@ import (
 	"github.com/MartyJRE/claudia/internal/repos"
 	"github.com/MartyJRE/claudia/internal/tmux"
 	"github.com/MartyJRE/claudia/internal/vault"
+	"github.com/MartyJRE/claudia/internal/watch"
 )
 
 type Options struct {
@@ -144,6 +145,10 @@ func New(opts Options) *Model {
 	m.loadCaches()
 	m.restore = pendingRestore()
 	m.usageScanner = claude.NewUsageScanner(m.store.Profiles, 31)
+	if watch.Notifier() == "" {
+		m.setFlash("notifications open Script Editor when clicked: run `claudia setup` once to install the notification helper", true)
+		m.flashAt = time.Now().Add(20 * time.Second)
+	}
 	return m
 }
 

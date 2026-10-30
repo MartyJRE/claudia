@@ -198,7 +198,7 @@ type note struct {
 }
 
 // notifier is the Claudia.app helper built by notifier/build.sh.
-func notifier() string {
+func Notifier() string {
 	home, _ := os.UserHomeDir()
 	p := filepath.Join(home, "Applications", "Claudia.app", "Contents", "MacOS", "claudia-notify")
 	if _, err := os.Stat(p); err != nil {
@@ -231,7 +231,7 @@ func looking(target string) bool {
 }
 
 func notify(n note) {
-	if bin := notifier(); bin != "" {
+	if bin := Notifier(); bin != "" {
 		args := []string{"post", "--title", n.title, "--subtitle", n.subtitle, "--body", n.body, "--thread", n.thread, "--id", n.id}
 		switch {
 		case n.target != "":
