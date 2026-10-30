@@ -309,7 +309,11 @@ func (m *Model) viewBrief() string {
 	case !m.briefPending.IsZero():
 		head += sDim.Render("  " + spinner[m.frame%len(spinner)] + " writing a fresh one…")
 	case !b.At.IsZero():
-		head += sDim.Render("  written " + age(b.At) + " ago  ·  ")
+		when := "written " + age(b.At) + " ago"
+		if age(b.At) == "now" {
+			when = "written just now"
+		}
+		head += sDim.Render("  " + when + "  ·  ")
 		head += sKey.Render("R") + sDim.Render(" refresh")
 	default:
 		head += sDim.Render("  ") + sKey.Render("R") + sDim.Render(" asks Claude for a summary of what's waiting")
@@ -327,7 +331,7 @@ func (m *Model) viewBrief() string {
 	if b.Err != "" {
 		lines = append(lines, "   "+sErr.Render("last refresh failed: "+oneLine(b.Err)))
 	}
-	return strings.Join(lines, "\n") + "\n"
+	return strings.Join(lines, "\n") + "\n\n"
 }
 
 func (m *Model) reloadBrief() {
