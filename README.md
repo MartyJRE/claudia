@@ -99,8 +99,12 @@ Run `claudia` to open it in its own tmux session.
 ```
 
 - `gitlab_host` defaults to glab's configured host.
+- Claude profiles: every `~/.claude` and `~/.claude-<name>` dir with sessions is
+  picked up (named `default` and `<name>`). Name them yourself with
+  `"profiles": {"work": "~/.claude-work", "personal": "~/.claude"}`.
 - `work_dir` is the folder under `code_root` whose repos are listed first and
-  started with the `~/.claude` profile; other repos use `~/.claude-personal` if it exists.
+  started with the `work` profile (`work_profile` to pick another); other repos
+  use `personal` if it exists.
 - `review_prompt` and `analysis_prompt` let you point at your own skills; the
   defaults are plain prompts.
 

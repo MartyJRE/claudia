@@ -27,6 +27,13 @@ type Config struct {
 	// WorkDir is the folder under CodeRoot whose repos are listed first and
 	// started with the work profile; defaults to "Work".
 	WorkDir string `json:"work_dir"`
+	// Profiles names Claude Code config dirs, e.g. {"work": "~/.claude-work"}.
+	// Without it every ~/.claude and ~/.claude-<name> dir is used, named
+	// "default" and <name>.
+	Profiles map[string]string `json:"profiles"`
+	// WorkProfile is the profile for repos under WorkDir; defaults to "work"
+	// when such a profile exists.
+	WorkProfile string `json:"work_profile"`
 	// ReviewPrompt starts a review session; {urls} is replaced by the MR links,
 	// e.g. "/review-mr {urls}" to use a review skill.
 	ReviewPrompt string `json:"review_prompt"`
@@ -88,6 +95,14 @@ func Get() Config {
 			cfg.TicketKeys = []string{cfg.JiraProject}
 		}
 		home, _ := os.UserHomeDir()
+		for name, dir := range cfg.Profiles {
+			if strings.HasPrefix(dir, "~/") {
+				cfg.Profiles[name] = filepath.Join(home, dir[2:])
+			}
+		}
+		if cfg.WorkProfile == "" {
+			cfg.WorkProfile = "work"
+		}
 		if cfg.CodeRoot == "" {
 			cfg.CodeRoot = filepath.Join(home, "Documents", "Code")
 		} else if strings.HasPrefix(cfg.CodeRoot, "~/") {

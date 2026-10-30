@@ -6,27 +6,50 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/MartyJRE/claudia/internal/config"
 )
 
-// Profile is one Claude Code config dir: ~/.claude (work) and, when it exists,
-// ~/.claude-personal, selected with CLAUDE_CONFIG_DIR.
+// Profile is one Claude Code config dir, selected with CLAUDE_CONFIG_DIR.
 type Profile struct {
 	Name string
 	Dir  string
 }
 
+// DefaultProfiles returns the configured profiles, or else every ~/.claude and
+// ~/.claude-<name> dir that holds sessions.
 func DefaultProfiles() []Profile {
-	home, _ := os.UserHomeDir()
 	var out []Profile
-	for _, p := range []Profile{
-		{"work", filepath.Join(home, ".claude")},
-		{"personal", filepath.Join(home, ".claude-personal")},
-	} {
-		if st, err := os.Stat(p.Dir); err == nil && st.IsDir() {
-			out = append(out, p)
+	if ps := config.Get().Profiles; len(ps) > 0 {
+		for name, dir := range ps {
+			if st, err := os.Stat(dir); err == nil && st.IsDir() {
+				out = append(out, Profile{name, dir})
+			}
+		}
+	} else {
+		home, _ := os.UserHomeDir()
+		dirs, _ := filepath.Glob(filepath.Join(home, ".claude*"))
+		for _, dir := range dirs {
+			if !isProfile(dir) {
+				continue
+			}
+			name := strings.TrimPrefix(strings.TrimPrefix(filepath.Base(dir), ".claude"), "-")
+			if name == "" {
+				name = "default"
+			}
+			out = append(out, Profile{name, dir})
 		}
 	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out
+}
+
+func isProfile(dir string) bool {
+	if st, err := os.Stat(dir); err != nil || !st.IsDir() {
+		return false
+	}
+	_, err := os.Stat(filepath.Join(dir, "projects"))
+	return err == nil
 }
 
 type Session struct {

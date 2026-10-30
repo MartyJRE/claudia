@@ -66,6 +66,10 @@ func Profile(name string, profiles []claude.Profile) claude.Profile {
 			return p
 		}
 	}
+	if len(profiles) == 0 {
+		home, _ := os.UserHomeDir()
+		return claude.Profile{Name: "default", Dir: filepath.Join(home, ".claude")}
+	}
 	return profiles[0]
 }
 
@@ -102,17 +106,28 @@ func windowName(name string) string {
 	return fmt.Sprintf("✻ %s", string(r))
 }
 
-// ProfileFor guesses which Claude license a directory belongs to.
+// ProfileFor guesses which Claude profile a directory belongs to: the work
+// profile under the work folder, otherwise "personal", otherwise any other one.
 func ProfileFor(dir string, profiles []claude.Profile) claude.Profile {
-	want := "personal"
 	c := config.Get()
-	if strings.HasPrefix(dir, filepath.Join(c.CodeRoot, c.WorkDir)+"/") {
-		want = "work"
+	work := strings.HasPrefix(dir, filepath.Join(c.CodeRoot, c.WorkDir)+"/")
+	if work {
+		return WorkProfile(profiles)
 	}
 	for _, p := range profiles {
-		if p.Name == want {
+		if p.Name == "personal" {
 			return p
 		}
 	}
-	return profiles[0]
+	for _, p := range profiles {
+		if p.Name != c.WorkProfile {
+			return p
+		}
+	}
+	return Profile("", profiles)
+}
+
+// WorkProfile is the configured work profile, or the first one.
+func WorkProfile(profiles []claude.Profile) claude.Profile {
+	return Profile(config.Get().WorkProfile, profiles)
 }
