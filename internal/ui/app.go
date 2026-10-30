@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -19,6 +20,7 @@ import (
 	"github.com/MartyJRE/claudia/internal/links"
 	"github.com/MartyJRE/claudia/internal/repos"
 	"github.com/MartyJRE/claudia/internal/tmux"
+	"github.com/MartyJRE/claudia/internal/update"
 	"github.com/MartyJRE/claudia/internal/vault"
 	"github.com/MartyJRE/claudia/internal/watch"
 )
@@ -29,7 +31,8 @@ type Options struct {
 
 // Result is what main does after the TUI exits: outside tmux it attaches to Attach.
 type Result struct {
-	Attach string
+	Attach  string
+	Restart bool // re-exec after an update
 }
 
 type view int
@@ -97,6 +100,8 @@ type Model struct {
 	brief        brief.Brief
 	briefAt      time.Time
 	briefPending time.Time
+	updateAvail  bool
+	updateAt     time.Time
 	restore      []restoreItem
 
 	busy      [nSources]bool
@@ -237,6 +242,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, m.refreshVault())
 		}
 		m.reloadBrief()
+		if time.Since(m.updateAt) > 30*time.Second {
+			m.updateAt, m.updateAvail = time.Now(), update.Available()
+		}
 		if m.reloadDismissed() {
 			m.refilter()
 		}
@@ -278,6 +286,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.setFlash(msg.err.Error(), true)
 		}
 		return m, m.refreshVault()
+	case updatedMsg:
+		if msg.err != nil {
+			m.setFlash("update failed: "+msg.err.Error(), true)
+			return m, nil
+		}
+		m.Result.Restart = true
+		return m, tea.Quit
 	case mrLoadedMsg:
 		if msg.err != nil {
 			m.setFlash(msg.err.Error(), true)
@@ -363,6 +378,8 @@ func (m *Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "@":
 		return m.openAssistant()
+	case "ctrl+u":
+		return m, m.runUpdate()
 	case "u":
 		return m, m.askLink()
 	case "N":
@@ -512,6 +529,9 @@ func (m *Model) viewHeader() string {
 	}
 	title := sAccent.Render(" ✻ claudia")
 	var pills []string
+	if m.updateAvail {
+		pills = append(pills, pill(black, cyan, "⬆ update · ctrl+u"))
+	}
 	if waiting > 0 {
 		pills = append(pills, pill(black, yellow, fmt.Sprintf("%d needs you", waiting)))
 	}
@@ -890,3 +910,15 @@ func age(t time.Time) string {
 }
 
 func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
+
+type updatedMsg struct{ err error }
+
+// runUpdate installs the latest claudia in the foreground, then restarts into it.
+func (m *Model) runUpdate() tea.Cmd {
+	self, err := os.Executable()
+	if err != nil {
+		m.setFlash(err.Error(), true)
+		return nil
+	}
+	return tea.ExecProcess(exec.Command(self, "update"), func(err error) tea.Msg { return updatedMsg{err} })
+}

@@ -19,6 +19,7 @@ import (
 	"github.com/MartyJRE/claudia/internal/gitlab"
 	"github.com/MartyJRE/claudia/internal/state"
 	"github.com/MartyJRE/claudia/internal/tmux"
+	"github.com/MartyJRE/claudia/internal/update"
 )
 
 const pidFile = "watch.pid"
@@ -31,6 +32,17 @@ func Running() bool {
 	}
 	pid, _ := strconv.Atoi(strings.TrimSpace(string(b)))
 	return pid > 0 && syscall.Kill(pid, 0) == nil
+}
+
+// Stop ends a running watcher, so the next claudia start runs a fresh one.
+func Stop() {
+	b, err := os.ReadFile(state.Path(pidFile))
+	if err != nil {
+		return
+	}
+	if pid, _ := strconv.Atoi(strings.TrimSpace(string(b))); pid > 0 {
+		_ = syscall.Kill(pid, syscall.SIGTERM)
+	}
 }
 
 // Spawn starts `claudia watch` detached, inheriting this environment (and so the
@@ -97,6 +109,9 @@ func Run(makeBrief func()) error {
 	}
 	briefing := make(chan struct{}, 1)
 	for {
+		if _, ok := update.Current(); ok && update.Due(time.Hour) {
+			go update.Check()
+		}
 		every := config.Get().BriefEvery
 		due := every > 0 && time.Since(lastBrief) >= every
 		if (brief.TakeRequest() || due) && len(briefing) == 0 {

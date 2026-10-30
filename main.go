@@ -16,6 +16,7 @@ import (
 	"github.com/MartyJRE/claudia/internal/launch"
 	"github.com/MartyJRE/claudia/internal/tmux"
 	"github.com/MartyJRE/claudia/internal/ui"
+	"github.com/MartyJRE/claudia/internal/update"
 	"github.com/MartyJRE/claudia/internal/watch"
 )
 
@@ -51,6 +52,14 @@ func main() {
 		fmt.Println(b.Text)
 		return
 	}
+	if len(args) > 0 && args[0] == "update" {
+		if err := update.Install(os.Stdout); err != nil {
+			fail(err)
+		}
+		watch.Stop()
+		fmt.Println("updated; restart claudia to use it (ctrl+u inside claudia does that for you)")
+		return
+	}
 	if len(args) > 0 && args[0] == "setup" {
 		if err := setup(); err != nil {
 			fail(err)
@@ -71,6 +80,14 @@ func main() {
 	m := ui.New(ui.Options{Popup: args[0] == "popup"})
 	if _, err := tea.NewProgram(m, tea.WithAltScreen()).Run(); err != nil {
 		fail(err)
+	}
+	if m.Result.Restart {
+		// The binary on disk was just replaced: start it in place of this one.
+		self, err := os.Executable()
+		if err != nil {
+			fail(err)
+		}
+		fail(syscall.Exec(self, os.Args, os.Environ()))
 	}
 	if t := m.Result.Attach; t != "" {
 		bin, err := exec.LookPath("tmux")
