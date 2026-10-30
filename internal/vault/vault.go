@@ -79,7 +79,7 @@ func (ix *Index) Refresh() {
 
 func (ix *Index) keys(n *Note) []string {
 	set := map[string]bool{}
-	// A note in "01 - Projects/LUT-123/…" belongs to LUT-123.
+	// A note in "01 - Projects/ABC-123/…" belongs to ABC-123.
 	if rest, ok := strings.CutPrefix(n.Rel, ix.Projects+string(filepath.Separator)); ok {
 		folder, _, _ := strings.Cut(rest, string(filepath.Separator))
 		if k := ix.keyRe.FindString(folder); k != "" {
