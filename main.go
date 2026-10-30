@@ -28,6 +28,15 @@ func main() {
 		}
 		return
 	}
+	if len(args) > 1 && args[0] == "open" {
+		// Hand the link to claudia's session and switch there; it picks it up
+		// on its next tick (or right after starting).
+		if err := ui.RequestOpen(args[1]); err != nil {
+			fail(err)
+		}
+		home()
+		return
+	}
 	if len(args) > 0 && args[0] == "watch" {
 		if err := watch.Run(); err != nil {
 			fail(err)

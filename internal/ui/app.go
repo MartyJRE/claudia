@@ -102,6 +102,7 @@ type Model struct {
 	filter    textinput.Model
 	filtering bool
 	chooser   *chooser
+	prompt    *promptBox
 
 	confirmKey string
 	confirmAt  time.Time
@@ -210,6 +211,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.reloadDismissed() {
 			m.refilter()
 		}
+		if link, ok := m.takeOpenRequest(); ok {
+			_, cmd := m.openLink(link)
+			cmds = append(cmds, cmd)
+		}
 		cmds = append(cmds, m.refreshStale(), m.maybeUsage(), tick())
 		if m.flash != "" && time.Since(m.flashAt) > 5*time.Second {
 			m.flash = ""
@@ -236,8 +241,17 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case transitionsMsg:
 		m.showTransitions(msg)
 		return m, nil
+	case mrLoadedMsg:
+		if msg.err != nil {
+			m.setFlash(msg.err.Error(), true)
+			return m, nil
+		}
+		m.flash = ""
+		return m.reviewWithClaude(msg.mr)
 	case tea.KeyMsg:
 		switch {
+		case m.prompt != nil:
+			return m.updatePrompt(msg)
 		case m.chooser != nil:
 			return m.updateChooser(msg)
 		case m.filtering:
@@ -308,6 +322,11 @@ func (m *Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "shift+tab", "left", "h":
 		m.switchView((m.view + nViews - 1) % nViews)
 		return m, nil
+	case "u":
+		return m, m.askLink()
+	case "n":
+		m.newSession()
+		return m, nil
 	case "/":
 		m.filtering = true
 		return m, m.filter.Focus()
@@ -363,6 +382,9 @@ func (m *Model) View() string {
 	header := m.viewHeader()
 	footer := m.viewFooter()
 	body := m.height - lipgloss.Height(header) - lipgloss.Height(footer)
+	if m.prompt != nil {
+		return lipgloss.JoinVertical(lipgloss.Left, header, m.viewPrompt(body), footer)
+	}
 	if m.chooser != nil {
 		return lipgloss.JoinVertical(lipgloss.Left, header, m.viewChooser(body), footer)
 	}
@@ -576,14 +598,16 @@ func (m *Model) subtitle() string {
 
 func (m *Model) viewFooter() string {
 	var keys [][2]string
-	if m.chooser != nil {
+	if m.prompt != nil {
+		keys = [][2]string{{"enter", "open"}, {"esc", "back"}}
+	} else if m.chooser != nil {
 		keys = [][2]string{{"enter", "choose"}, {"esc", "back"}}
 		if it, ok := m.chooser.selected(); ok && m.chooser.status != nil {
 			keys = append(keys, [2]string{"tab", m.chooser.status(m, it)})
 		}
 	} else {
 		keys = m.help()
-		keys = append(keys, [2]string{"1-8", "views"}, [2]string{"/", "filter"}, [2]string{"q", "quit"})
+		keys = append(keys, [2]string{"u", "open link"}, [2]string{"n", "new"}, [2]string{"1-8", "views"}, [2]string{"/", "filter"}, [2]string{"q", "quit"})
 	}
 	var parts []string
 	for _, k := range keys {
@@ -605,7 +629,7 @@ func (m *Model) help() [][2]string {
 	case vInbox:
 		return [][2]string{{"enter", "open"}, {"r", "review with claude"}, {"v", "threads"}, {"A", "approve"}, {"B", "rebase"}, {"x", "snooze"}, {"J", "ticket"}, {"c", "claude does what fits"}}
 	case vSessions:
-		return [][2]string{{"enter", "jump"}, {"R", "resume"}, {"n", "new"}, {"J", "ticket"}, {"t", "set ticket"}, {"o", "MR"}, {"X", "restore"}}
+		return [][2]string{{"enter", "jump"}, {"R", "resume"}, {"J", "ticket"}, {"t", "set ticket"}, {"o", "MR"}, {"X", "restore"}}
 	case vReview:
 		return [][2]string{{"enter", "review with claude"}, {"o", "open"}, {"J", "ticket"}, {"B", "rebase"}, {"A", "approve"}, {"s", "seen"}, {"c", "sessions"}}
 	case vMine:

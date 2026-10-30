@@ -222,16 +222,6 @@ func (m *Model) keySessions(k string) (tea.Model, tea.Cmd) {
 		if ok {
 			return m.resume(r)
 		}
-	case "n":
-		dir := ""
-		if r, ok := m.currentSession(); ok {
-			dir = r.Dir()
-		}
-		m.pickRepo("new session in", "", func(r repos.Repo) (bool, string) {
-			return dir != "" && (dir == r.Dir || strings.HasPrefix(dir, r.Dir+"/")), ""
-		}, func(m *Model, dir string, p claude.Profile) (tea.Model, tea.Cmd) {
-			return m.start(launch.Spec{Dir: dir, Profile: p, Name: filepath.Base(dir)})
-		})
 	case "t":
 		if r, ok := m.currentSession(); ok {
 			m.pickTicket(r)
@@ -345,4 +335,19 @@ func tokens(n int) string {
 		return fmt.Sprintf("%.0fk", float64(n)/1e3)
 	}
 	return fmt.Sprint(n)
+}
+
+// newSession starts a plain claude in a picked repo, nothing linked. From the
+// Sessions tab the current session's repo is preselected.
+func (m *Model) newSession() {
+	dir := ""
+	if r, ok := m.currentSession(); ok && m.view == vSessions {
+		dir = r.Dir()
+	}
+	m.pickRepo("new session in", "", func(r repos.Repo) (bool, string) {
+		return dir != "" && (dir == r.Dir || strings.HasPrefix(dir, r.Dir+"/")), ""
+	}, func(m *Model, dir string, p claude.Profile) (tea.Model, tea.Cmd) {
+		sp, _ := launch.New(dir, p, filepath.Base(dir), "")
+		return m.start(sp)
+	})
 }

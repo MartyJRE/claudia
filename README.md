@@ -40,6 +40,11 @@ switches between those sessions.
 | 7 | Confluence | Pages you edited recently |
 | 8 | Usage | Tokens and API-equivalent cost per day, plan limits |
 
+`u` opens any link in Claude (also `claudia open <link>` from a shell): an MR
+link gets reviewed in your local clone even if it isn't assigned to you, a Jira
+link gets what the ticket needs, anything else lands in a repo you pick. `n`
+starts a plain session in any repo.
+
 `c` starts the Claude session the item calls for: a review for a review request,
 a drafted reply for a mention, fixes for review threads, an analysis for a new
 ticket. Every view lists its keys in the footer.

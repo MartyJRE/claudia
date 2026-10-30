@@ -292,3 +292,31 @@ func (m MR) OpenThreads() int {
 	}
 	return n
 }
+
+// ParseMRURL reads an MR link on the configured host:
+// https://host/group/repo/-/merge_requests/123[/diffs…].
+func ParseMRURL(raw string) (project string, iid int, ok bool) {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || u.Host != Host() {
+		return "", 0, false
+	}
+	path, rest, found := strings.Cut(strings.TrimPrefix(u.Path, "/"), "/-/merge_requests/")
+	if !found {
+		return "", 0, false
+	}
+	num, _, _ := strings.Cut(rest, "/")
+	if _, err := fmt.Sscanf(num, "%d", &iid); err != nil || path == "" {
+		return "", 0, false
+	}
+	return path, iid, true
+}
+
+// FetchMR loads any MR, whether or not it involves you.
+func FetchMR(project string, iid int) (MR, error) {
+	var m MR
+	if err := api(fmt.Sprintf("projects/%s/merge_requests/%d", url.PathEscape(project), iid), &m); err != nil {
+		return m, err
+	}
+	enrich(&m)
+	return m, nil
+}
