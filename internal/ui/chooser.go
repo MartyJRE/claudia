@@ -141,7 +141,7 @@ func (m *Model) viewChooser(h int) string {
 			line += "  " + sDim.Render(it.hint)
 		}
 		if i == c.cur.pos {
-			b.WriteString(sBar.Render(" ▌ ") + sCursor.Width(m.width-3).Render(fit(line, m.width-4)) + "\n")
+			b.WriteString(sBar.Render(" ▌ ") + highlight(fit(line, m.width-4)) + "\n")
 		} else {
 			b.WriteString("   " + fit(line, m.width-4) + "\n")
 		}

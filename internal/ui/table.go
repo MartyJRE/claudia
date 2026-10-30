@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -40,13 +41,19 @@ func layout(cols []col, width int) []int {
 	return ws
 }
 
-func joinCells(ws []int, cells []string) string {
+// joinCells lays cells out in their widths; the hl-th one gets the cursor
+// highlight (-1 for none).
+func joinCells(ws []int, cells []string, hl int) string {
 	var parts []string
 	for i, w := range ws {
 		if w < 0 || i >= len(cells) {
 			continue
 		}
-		parts = append(parts, fit(cells[i], w))
+		c := fit(cells[i], w)
+		if i == hl {
+			c = highlight(c)
+		}
+		parts = append(parts, c)
 	}
 	return strings.Join(parts, " ")
 }
@@ -75,18 +82,27 @@ func (m *Model) table(cols []col, n int, cur *cursor, h int, cell func(i int, se
 	cur.offset = max(0, min(cur.offset, n-rows))
 
 	var b strings.Builder
-	b.WriteString("   " + joinCells(ws, titles))
+	b.WriteString("   " + joinCells(ws, titles, -1))
+	// The cursor lights up the row's main column (the one that stretches).
+	main := slices.IndexFunc(cols, func(c col) bool { return c.w == 0 })
 	for i := cur.offset; i < min(n, cur.offset+rows); i++ {
 		sel := i == cur.pos
 		cells := cell(i, sel)
-		line := joinCells(ws, cells)
+		hl := -1
+		if sel {
+			hl = main
+		}
+		line := joinCells(ws, cells, hl)
 		if len(cells) == 1 {
 			// A single cell is a group header spanning the whole row.
 			line = fit(cells[0], m.width-4)
+			if sel {
+				line = highlightHeader(line)
+			}
 		}
 		b.WriteString("\n")
 		if sel {
-			b.WriteString(sBar.Render(" ▌ ") + sCursor.Width(m.width-3).Render(line))
+			b.WriteString(sBar.Render(" ▌ ") + line)
 		} else {
 			b.WriteString("   " + line)
 		}
@@ -113,4 +129,15 @@ func (m *Model) panel(lines []string) string {
 		lines = []string{sDim.Render("—")}
 	}
 	return sPanel.Width(w).Height(detailHeight - 2).Render(strings.Join(lines, "\n"))
+}
+
+// highlightHeader lights a spanning header row from its first visible
+// character on, leaving the leading indentation plain.
+func highlightHeader(line string) string {
+	plain := ansi.Strip(line)
+	lead := len(plain) - len(strings.TrimLeft(plain, " "))
+	if lead == 0 {
+		return highlight(line)
+	}
+	return strings.Repeat(" ", lead) + highlight(ansi.TruncateLeft(line, lead, ""))
 }

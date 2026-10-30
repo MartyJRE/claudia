@@ -1,6 +1,10 @@
 package ui
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	"strings"
+
+	"github.com/charmbracelet/lipgloss"
+)
 
 // One Dark, as in ~/dot/.tmux/plugins/tmux-onedark-theme plus onedark.nvim's accents.
 var (
@@ -33,10 +37,9 @@ var (
 	sTabOn  = lipgloss.NewStyle().Foreground(black).Background(blue).Bold(true).Padding(0, 1)
 	sTabOff = lipgloss.NewStyle().Foreground(commentGrey).Background(bg1).Padding(0, 1)
 
-	sCursor = lipgloss.NewStyle().Background(visualGrey)
-	sBar    = lipgloss.NewStyle().Foreground(purple)
-	sRule   = lipgloss.NewStyle().Foreground(visualGrey)
-	sPanel  = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(visualGrey).Padding(0, 1)
+	sBar   = lipgloss.NewStyle().Foreground(purple)
+	sRule  = lipgloss.NewStyle().Foreground(visualGrey)
+	sPanel = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(visualGrey).Padding(0, 1)
 )
 
 func pill(fgc, bgc lipgloss.Color, s string) string {
@@ -55,4 +58,18 @@ func modelColor(family string) lipgloss.Color {
 		return red
 	}
 	return commentGrey
+}
+
+// highlight puts the cursor background behind already-styled text. Each styled
+// segment ends with a reset that would also end a plain background, so the
+// background is put back after every reset.
+func highlight(s string) string {
+	bg := lipgloss.NewStyle().Background(visualGrey).Render(" ")
+	open, _, _ := strings.Cut(bg, " ")
+	if open == "" {
+		return s // no colour support
+	}
+	s = strings.ReplaceAll(s, "\x1b[0m", "\x1b[0m"+open)
+	s = strings.ReplaceAll(s, "\x1b[m", "\x1b[m"+open)
+	return open + s + "\x1b[0m"
 }
