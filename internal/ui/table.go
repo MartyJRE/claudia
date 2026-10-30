@@ -96,8 +96,8 @@ func (m *Model) table(cols []col, n int, cur *cursor, h int, cell func(i int, se
 		if len(cells) == 1 {
 			// A single cell is a group header spanning the whole row.
 			line = fit(cells[0], m.width-4)
-			if sel {
-				line = highlightHeader(line)
+			if sel && main >= 0 {
+				line = highlightSpan(line, colStart(ws, main), ws[main])
 			}
 		}
 		b.WriteString("\n")
@@ -131,13 +131,22 @@ func (m *Model) panel(lines []string) string {
 	return sPanel.Width(w).Height(detailHeight - 2).Render(strings.Join(lines, "\n"))
 }
 
-// highlightHeader lights a spanning header row from its first visible
-// character on, leaving the leading indentation plain.
-func highlightHeader(line string) string {
-	plain := ansi.Strip(line)
-	lead := len(plain) - len(strings.TrimLeft(plain, " "))
-	if lead == 0 {
-		return highlight(line)
+// colStart is where column i begins in a joined line.
+func colStart(ws []int, i int) int {
+	x := 0
+	for j := 0; j < i; j++ {
+		if ws[j] >= 0 {
+			x += ws[j] + 1
+		}
 	}
-	return strings.Repeat(" ", lead) + highlight(ansi.TruncateLeft(line, lead, ""))
+	return x
+}
+
+// highlightSpan lights the w cells from start, so a spanning header is lit
+// exactly where the main column is on every other row.
+func highlightSpan(line string, start, w int) string {
+	left := ansi.Truncate(line, start, "")
+	mid := fit(ansi.Truncate(ansi.TruncateLeft(line, start, ""), w, ""), w)
+	right := ansi.TruncateLeft(line, start+w, "")
+	return left + highlight(mid) + right
 }
