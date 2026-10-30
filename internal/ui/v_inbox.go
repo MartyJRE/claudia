@@ -1,0 +1,290 @@
+package ui
+
+import (
+	"fmt"
+	"slices"
+	"strings"
+	"time"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+
+	"github.com/MartyJRE/claudia/internal/claude"
+	"github.com/MartyJRE/claudia/internal/gitlab"
+)
+
+type inboxKind int
+
+const (
+	kReview inboxKind = iota
+	kThreads
+	kMention
+	kPage
+	kClaude
+)
+
+var kindLabel = map[inboxKind]string{
+	kReview:  "review",
+	kThreads: "threads",
+	kMention: "mention",
+	kPage:    "page",
+	kClaude:  "claude",
+}
+
+// inboxItem is anything someone (or a session) is waiting on you for.
+type inboxItem struct {
+	id     string // snooze key; it embeds a version so a change brings the item back
+	kind   inboxKind
+	where  string
+	who    string
+	text   string
+	since  time.Time
+	url    string
+	ticket string
+	mr     gitlab.MR
+	sess   row
+	ment   mention
+}
+
+func (m *Model) inbox() []inboxItem {
+	var out []inboxItem
+	for _, mr := range m.gl.Review {
+		if mr.Draft || mr.ApprovedByMe(m.gl.Me.Username) {
+			continue
+		}
+		out = append(out, inboxItem{
+			id: "rev:" + mr.WebURL + ":" + mr.SHA, kind: kReview,
+			where: fmt.Sprintf("%s !%d", mr.Repo(), mr.IID), who: mr.Author.Username, text: mr.Title,
+			since: mr.CreatedAt, url: mr.WebURL, ticket: mrTicket(mr), mr: mr,
+		})
+	}
+	for _, mr := range m.gl.Mine {
+		var open []gitlab.Thread
+		for _, t := range mr.Threads {
+			if !t.Resolved {
+				open = append(open, t)
+			}
+		}
+		if len(open) == 0 {
+			continue
+		}
+		var who []string
+		since := open[0].At
+		for _, t := range open {
+			if !slices.Contains(who, t.Author) {
+				who = append(who, t.Author)
+			}
+			if t.At.Before(since) {
+				since = t.At
+			}
+		}
+		out = append(out, inboxItem{
+			id: fmt.Sprintf("thr:%s:%d:%s", mr.WebURL, len(open), mr.SHA), kind: kThreads,
+			where: fmt.Sprintf("%s !%d", mr.Repo(), mr.IID), who: strings.Join(who, ", "),
+			text:  fmt.Sprintf("%d open: %s", len(open), oneLine(open[0].Body)),
+			since: since, url: mr.WebURL, ticket: mrTicket(mr), mr: mr,
+		})
+	}
+	for _, x := range m.mentions() {
+		if !m.open(x) {
+			continue
+		}
+		k := kMention
+		if !x.jira {
+			k = kPage
+		}
+		it := inboxItem{id: x.id, kind: k, where: x.where, who: x.author, text: x.text, since: x.at, url: x.url, ment: x}
+		if x.jira {
+			it.ticket = x.where
+		} else {
+			it.text = x.title
+		}
+		out = append(out, it)
+	}
+	for _, r := range m.sessions {
+		if !r.live() || r.Live.Status != claude.StatusWaiting {
+			continue
+		}
+		out = append(out, inboxItem{
+			id: fmt.Sprintf("cc:%s:%d", r.ID, r.Live.UpdatedAt), kind: kClaude,
+			where: project(r.Dir()), who: "claude", text: r.Name(), since: r.Live.Since(),
+			ticket: m.ix.sessionTicket[r.ID], sess: r,
+		})
+	}
+	slices.SortStableFunc(out, func(a, b inboxItem) int { return a.since.Compare(b.since) })
+	return out
+}
+
+func (m *Model) filterInbox(match func(...string) bool) []inboxItem {
+	var out []inboxItem
+	for _, it := range m.inbox() {
+		if _, snoozed := m.dismissed[it.id]; snoozed && !m.showAll {
+			continue
+		}
+		if match(kindLabel[it.kind], it.where, it.who, it.text, it.ticket) {
+			out = append(out, it)
+		}
+	}
+	return out
+}
+
+func (m *Model) inboxCount() int {
+	n := 0
+	for _, it := range m.inbox() {
+		if _, snoozed := m.dismissed[it.id]; !snoozed {
+			n++
+		}
+	}
+	return n
+}
+
+var inboxCols = []col{
+	{"WAITING", 8, 0},
+	{"", 9, 0},
+	{"WHERE", 24, 0},
+	{"FROM", 20, 100},
+	{"", 0, 0},
+}
+
+func kindStyle(k inboxKind) lipgloss.Style {
+	switch k {
+	case kReview:
+		return lipgloss.NewStyle().Foreground(orange)
+	case kThreads:
+		return lipgloss.NewStyle().Foreground(yellow)
+	case kMention:
+		return lipgloss.NewStyle().Foreground(purple)
+	case kPage:
+		return lipgloss.NewStyle().Foreground(blue)
+	}
+	return lipgloss.NewStyle().Foreground(green)
+}
+
+// waiting colours how long someone has been blocked on you.
+func waiting(t time.Time) string {
+	d := time.Since(t)
+	st := sDim
+	switch {
+	case d > 3*24*time.Hour:
+		st = sErr
+	case d > 24*time.Hour:
+		st = lipgloss.NewStyle().Foreground(yellow)
+	case d > 4*time.Hour:
+		st = sText
+	}
+	return st.Render(age(t))
+}
+
+func (m *Model) listInbox(h int) string {
+	rows := m.vis.inbox
+	return m.table(inboxCols, len(rows), &m.cur[vInbox], h, func(i int, sel bool) []string {
+		it := rows[i]
+		st := sText
+		if sel {
+			st = sBold
+		}
+		if _, snoozed := m.dismissed[it.id]; snoozed {
+			st = sDim
+		}
+		where := sText.Render(it.where)
+		if it.kind == kMention {
+			where = sTicket.Render(it.where)
+		}
+		return []string{waiting(it.since), kindStyle(it.kind).Render(kindLabel[it.kind]), where, sDim.Render(it.who), st.Render(it.text)}
+	}, "nobody is waiting on you")
+}
+
+func (m *Model) currentInbox() (inboxItem, bool) {
+	c := m.cur[vInbox].pos
+	if c < 0 || c >= len(m.vis.inbox) {
+		return inboxItem{}, false
+	}
+	return m.vis.inbox[c], true
+}
+
+func (m *Model) detailInbox() string {
+	it, ok := m.currentInbox()
+	if !ok {
+		return m.panel(nil)
+	}
+	head := kindStyle(it.kind).Render(kindLabel[it.kind]) + "  " + sBold.Render(it.where)
+	if it.ticket != "" {
+		head += "  " + sTicket.Render(it.ticket)
+		if is, ok := m.ix.issues[it.ticket]; ok {
+			head += sDim.Render(" "+is.Summary+" · ") + statusText(is)
+		}
+	}
+	lines := []string{head, sDim.Render("waiting since " + it.since.Local().Format("Mon 2 Jan 15:04") + " · " + it.who)}
+	switch it.kind {
+	case kReview:
+		lines = append(lines, sText.Render(it.mr.Title), pipelineText(mrRow{it.mr, false})+"  "+m.approvalText(it.mr)+"  "+m.chipsText(mrRow{it.mr, false}))
+	case kThreads:
+		for _, t := range it.mr.Threads {
+			if !t.Resolved {
+				lines = append(lines, threadLine(t))
+			}
+		}
+	case kClaude:
+		if it.sess.Transcript != nil && it.sess.LastPrompt != "" {
+			lines = append(lines, sDim.Render("› ")+sText.Render(oneLine(it.sess.LastPrompt)))
+		}
+	default:
+		lines = append(lines, sText.Render(it.text))
+	}
+	return m.panel(lines)
+}
+
+func (m *Model) keyInbox(k string) (tea.Model, tea.Cmd) {
+	if k == "a" {
+		m.showAll = !m.showAll
+		m.refilter()
+		return m, nil
+	}
+	it, ok := m.currentInbox()
+	if !ok {
+		return m, nil
+	}
+	switch k {
+	case "enter", "o":
+		switch it.kind {
+		case kClaude:
+			return m.jumpTo(it.sess)
+		case kReview, kThreads:
+			m.seen.mark(it.mr)
+		}
+		return m, openURL(it.url)
+	case "r":
+		if it.kind == kReview {
+			return m.reviewWithClaude(it.mr)
+		}
+	case "v":
+		if it.kind == kThreads {
+			m.chooseThreads(it.mr)
+		}
+	case "B":
+		if it.kind == kReview || it.kind == kThreads {
+			return m.rebase(it.mr)
+		}
+	case "A":
+		if it.kind == kReview {
+			if !m.confirm("A"+it.mr.WebURL, fmt.Sprintf("approve !%d %s", it.mr.IID, it.mr.Repo())) {
+				return m, nil
+			}
+			mr := it.mr
+			return m, func() tea.Msg {
+				if err := gitlab.Approve(mr); err != nil {
+					return flashMsg{err.Error(), true}
+				}
+				return refreshMsg(srcGitlab)
+			}
+		}
+	case "x":
+		m.dismissed.toggle(it.id)
+		m.refilter()
+	case "J":
+		return m.gotoTicket(it.ticket)
+	case "c":
+		return m.claudeForInbox(it)
+	}
+	return m, nil
+}
