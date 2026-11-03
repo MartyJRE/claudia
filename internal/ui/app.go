@@ -571,8 +571,8 @@ func (m *Model) viewHeader() string {
 	if n := m.unansweredMentions(); n > 0 {
 		pills = append(pills, pill(black, purple, fmt.Sprintf("%d mentions", n)))
 	}
-	if open, merged := m.failedSplit(); open+merged > 0 {
-		pills = append(pills, pill(black, red, failedPill(open, merged)))
+	if n := m.failedOpen(); n > 0 {
+		pills = append(pills, pill(black, red, failedPill(n)))
 	}
 	if working > 0 {
 		pills = append(pills, pill(black, green, fmt.Sprintf("%d working", working)))
