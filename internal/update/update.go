@@ -20,10 +20,11 @@ import (
 )
 
 const (
-	module    = "github.com/MartyJRE/claudia"
-	latestURL = "https://api.github.com/repos/MartyJRE/claudia/commits/main"
-	file      = "update.json"
+	module = "github.com/MartyJRE/claudia"
+	file   = "update.json"
 )
+
+var repoAPI = "https://api.github.com/repos/MartyJRE/claudia"
 
 // Current is the commit this binary was built from, if it was installed from
 // the module proxy; ok is false for local builds.
@@ -57,7 +58,7 @@ type status struct {
 
 // Check asks GitHub for the newest commit on main and remembers it.
 func Check() error {
-	req, err := http.NewRequest("GET", latestURL, nil)
+	req, err := http.NewRequest("GET", repoAPI+"/commits/main", nil)
 	if err != nil {
 		return err
 	}
@@ -111,9 +112,9 @@ func Fetch() (Plan, error) {
 	var p Plan
 	cur, known := Current()
 	p.Current = cur
-	url := "https://api.github.com/repos/MartyJRE/claudia/commits?per_page=5"
+	url := repoAPI + "/commits?per_page=5"
 	if known {
-		url = "https://api.github.com/repos/MartyJRE/claudia/compare/" + cur + "...main"
+		url = repoAPI + "/compare/" + cur + "...main"
 	}
 	c := &http.Client{Timeout: 10 * time.Second}
 	resp, err := c.Get(url)

@@ -315,7 +315,10 @@ func ghosttyInFront() bool {
 	return strings.HasPrefix(string(front), `"Ghostty"`)
 }
 
-func notify(n note) {
+// notify is a var so tests can catch notifications instead of posting them.
+var notify = post
+
+func post(n note) {
 	if bin := Notifier(); bin != "" {
 		args := []string{"post", "--title", n.title, "--subtitle", n.subtitle, "--body", n.body, "--thread", n.thread, "--id", n.id}
 		switch {
