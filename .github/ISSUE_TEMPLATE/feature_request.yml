@@ -1,0 +1,24 @@
+name: Feature request
+description: An idea for claudia
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What you're trying to do
+      description: The situation and what gets in the way today
+      placeholder: When I start a session on a ticket I can't tell analysis sessions from implementation ones…
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you'd like claudia to do
+      description: The behaviour you have in mind; keys, views and config are all fair game
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives or workarounds
+      description: Anything you tried or considered instead
