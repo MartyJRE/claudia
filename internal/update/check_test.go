@@ -52,11 +52,18 @@ func TestCheckAndDue(t *testing.T) {
 
 func TestCheckFailureKeepsState(t *testing.T) {
 	fakeGitHub(t, func(w http.ResponseWriter, _ *http.Request) { http.Error(w, "rate limited", 403) })
-	if err := Check(); err != nil {
-		t.Errorf("non-200 is not an error: %v", err)
+	if err := state.Save(file, status{Latest: "abc1234", Checked: time.Now().Add(-2 * time.Hour)}); err != nil {
+		t.Fatal(err)
 	}
-	if !Due(time.Hour) {
-		t.Error("a failed check counted as checked")
+	if err := Check(); err == nil || !strings.Contains(err.Error(), "403") {
+		t.Errorf("non-200 should be an error: %v", err)
+	}
+	if Due(time.Hour) {
+		t.Error("a failed check must wait until it's due again, not retry every tick")
+	}
+	var s status
+	if !state.Load(file, &s) || s.Latest != "abc1234" {
+		t.Errorf("a failed check lost the last known commit: %+v", s)
 	}
 	repoAPI = "http://127.0.0.1:1"
 	if err := Check(); err == nil {

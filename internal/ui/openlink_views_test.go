@@ -24,6 +24,7 @@ func TestOpenLinkRoutes(t *testing.T) {
 		{"Jira ticket", atlBaseViews + "/browse/ABC-2", "session for ABC-2", "", false},
 		{"Jira board with a selected issue", atlBaseViews + "/jira/software/projects/ABC/boards/1?selectedIssue=ABC-77", "session for ABC-77", "", false},
 		{"Atlassian page without a key", atlBaseViews + "/wiki/spaces/OPS", "take a look in", "", false},
+		{"Confluence page titled like a key", atlBaseViews + "/wiki/spaces/OPS/pages/42/RFC-2119+notes", "take a look in", "", false},
 		{"MR on another host", "https://gitlab.other.org/acme/pay/-/merge_requests/5", "take a look in", "", false},
 		{"anything else", "https://example.com/a/b", "take a look in", "", false},
 	}

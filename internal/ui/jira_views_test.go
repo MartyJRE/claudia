@@ -457,3 +457,16 @@ func TestJiraIssueActions(t *testing.T) {
 		t.Error("a sprint header has nothing to open")
 	}
 }
+
+func TestNoSprintSummarySkipsEpicsShownElsewhere(t *testing.T) {
+	m := newModelViews(t)
+	s2 := &atlassian.Sprint{ID: 2, Name: "Sprint 2", State: "active"}
+	m.jira.Sprint = []atlassian.Issue{
+		{Key: "ABC-1", Summary: "epic", Level: 1, Category: "indeterminate"},
+		{Key: "ABC-2", Summary: "story", Parent: "ABC-1", Sprint: s2, Category: "new"},
+		{Key: "ABC-3", Summary: "loose", Category: "new"},
+	}
+	if s := plainViews(m.detailSprint(jrow{sprint: "No sprint"})); !strings.Contains(s, "1 to do  0 in progress  0 done") {
+		t.Errorf("the epic sits under Sprint 2, not No sprint:\n%s", s)
+	}
+}

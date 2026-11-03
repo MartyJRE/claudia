@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 
@@ -135,13 +136,21 @@ func modelName(id string) (string, string) {
 	if len(parts) == 0 || parts[0] == "" {
 		return id, ""
 	}
-	fam := strings.ToUpper(parts[0][:1]) + parts[0][1:]
-	var ver []string
-	for _, p := range parts[1:] {
-		if len(p) > 2 {
-			break
+	// Older ids put the version first: claude-3-5-haiku-20241022.
+	short := func(p string) bool { return len(p) <= 2 && strings.Trim(p, "0123456789") == "" }
+	i := 0
+	for i < len(parts)-1 && short(parts[i]) {
+		i++
+	}
+	fam := strings.ToUpper(parts[i][:1]) + parts[i][1:]
+	ver := slices.Clone(parts[:i])
+	if i == 0 {
+		for _, p := range parts[1:] {
+			if !short(p) {
+				break
+			}
+			ver = append(ver, p)
 		}
-		ver = append(ver, p)
 	}
 	return fam, strings.Join(ver, ".")
 }
@@ -171,7 +180,7 @@ func (m *Model) detailSession() string {
 	if b := branch(r); b != "" {
 		meta = append(meta, sBranch.Render(" "+b))
 	}
-	meta = append(meta, sDim.Render(r.Profile.Name), sDim.Render(r.ID[:8]))
+	meta = append(meta, sDim.Render(r.Profile.Name), sDim.Render(r.ShortID()))
 	lines = append(lines, strings.Join(meta, sDim.Render("  ·  ")))
 
 	if r.Transcript != nil {
@@ -211,11 +220,13 @@ func (m *Model) mrRef(u string) string {
 	mr, ok := m.ix.mrs[u]
 	if !ok {
 		iid := u[strings.LastIndex(u, "/")+1:]
-		proj := u
 		if i := strings.Index(u, "/-/"); i >= 0 {
-			proj = filepath.Base(u[:i])
+			return sKey.Render("!"+iid) + sDim.Render(" "+filepath.Base(u[:i]))
 		}
-		return sKey.Render("!"+iid) + sDim.Render(" "+proj)
+		if i := strings.Index(u, "/pull/"); i >= 0 {
+			return sKey.Render("#"+iid) + sDim.Render(" "+filepath.Base(u[:i]))
+		}
+		return sDim.Render(shortLink(u))
 	}
 	return sKey.Render(fmt.Sprintf("!%d", mr.IID)) + sDim.Render(" "+mr.Repo()+" ") + mrState(mr)
 }
@@ -448,7 +459,7 @@ func shortHome(p string) string {
 
 func tokens(n int) string {
 	switch {
-	case n >= 1_000_000:
+	case n >= 999_500: // would round to "1000k"
 		return fmt.Sprintf("%.1fM", float64(n)/1e6)
 	case n >= 1_000:
 		return fmt.Sprintf("%.0fk", float64(n)/1e3)

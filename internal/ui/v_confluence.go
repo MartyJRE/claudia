@@ -25,7 +25,7 @@ func (m *Model) filterPages(match func(...string) bool) []atlassian.Page {
 func (m *Model) listConfluence(h int) string {
 	rows := m.vis.pages
 	empty := "no pages"
-	if m.atl == nil {
+	if m.atl == nil && m.atlErr != nil {
 		empty = m.atlErr.Error()
 	} else if m.conf.FetchedAt.IsZero() {
 		empty = spinner[m.frame%len(spinner)] + " asking Confluence…"

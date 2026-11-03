@@ -337,6 +337,8 @@ func TestModelNameShell(t *testing.T) {
 		{"claude-sonnet-4-5-20250929", "Sonnet", "4.5"},
 		{"claude-haiku-4-5", "Haiku", "4.5"},
 		{"claude-fable", "Fable", ""},
+		{"claude-3-5-haiku-20241022", "Haiku", "3.5"},
+		{"claude-3-opus-20240229", "Opus", "3"},
 		{"opus", "Opus", ""},
 		{"", "", ""},
 	} {
@@ -354,7 +356,7 @@ func TestModelNameShell(t *testing.T) {
 }
 
 func TestSessionHelpersShell(t *testing.T) {
-	for n, want := range map[int]string{0: "0", 999: "999", 1_000: "1k", 12_499: "12k", 1_000_000: "1.0M", 2_350_000: "2.4M"} {
+	for n, want := range map[int]string{0: "0", 999: "999", 1_000: "1k", 12_499: "12k", 999_499: "999k", 999_999: "1.0M", 1_000_000: "1.0M", 2_350_000: "2.4M"} {
 		if got := tokens(n); got != want {
 			t.Errorf("tokens(%d) = %q, want %q", n, got, want)
 		}
@@ -386,6 +388,9 @@ func TestMRRefShell(t *testing.T) {
 	}
 	if got := plainShell(m.mrRef(glShell + "g/sub/thing/-/merge_requests/5")); got != "!5 thing" {
 		t.Errorf("unknown MR: %q", got)
+	}
+	if got := plainShell(m.mrRef("https://github.com/o/r/pull/7")); got != "#7 r" {
+		t.Errorf("GitHub PR: %q", got)
 	}
 	closed := gitlab.MR{State: "closed"}
 	draft := gitlab.MR{Draft: true}

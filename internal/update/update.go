@@ -56,8 +56,16 @@ type status struct {
 	Checked time.Time `json:"checked"`
 }
 
-// Check asks GitHub for the newest commit on main and remembers it.
+// Check asks GitHub for the newest commit on main and remembers it. The attempt
+// is recorded up front, so a failing or slow check isn't retried until it's due
+// again (the watcher asks every few seconds, and GitHub rate-limits).
 func Check() error {
+	var s status
+	state.Load(file, &s)
+	s.Checked = time.Now()
+	if err := state.Save(file, s); err != nil {
+		return err
+	}
 	req, err := http.NewRequest("GET", repoAPI+"/commits/main", nil)
 	if err != nil {
 		return err
@@ -70,10 +78,14 @@ func Check() error {
 	}
 	defer resp.Body.Close()
 	b, err := io.ReadAll(io.LimitReader(resp.Body, 100))
-	if err != nil || resp.StatusCode != 200 {
+	if err != nil {
 		return err
 	}
-	return state.Save(file, status{Latest: strings.TrimSpace(string(b)), Checked: time.Now()})
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("github: %s", resp.Status)
+	}
+	s.Latest = strings.TrimSpace(string(b))
+	return state.Save(file, s)
 }
 
 // Due reports whether the last check is older than every.
@@ -146,7 +158,7 @@ func Fetch() (Plan, error) {
 	}
 	for _, g := range list {
 		subject, _, _ := strings.Cut(g.Commit.Message, "\n")
-		p.Commits = append(p.Commits, Commit{SHA: g.SHA[:7], Subject: subject})
+		p.Commits = append(p.Commits, Commit{SHA: g.SHA[:min(7, len(g.SHA))], Subject: subject})
 	}
 	if known {
 		if n := len(p.Commits); n > 0 {

@@ -40,7 +40,7 @@ func TestViewsRenderShell(t *testing.T) {
 		s := plainShell(out)
 		containsAllShell(t, viewNames[c.v], s, append(header, c.wants...)...)
 		lacksShell(t, viewNames[c.v], s, c.lacks...)
-		if h := lipgloss.Height(out); h > m.height || (c.v != vInbox && h != m.height) {
+		if h := lipgloss.Height(out); h != m.height {
 			t.Errorf("%s: %d lines, want the full %d", viewNames[c.v], h, m.height)
 		}
 		for i, l := range strings.Split(out, "\n") {

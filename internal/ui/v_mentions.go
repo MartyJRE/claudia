@@ -99,7 +99,7 @@ var mentionCols = []col{
 func (m *Model) listMentions(h int) string {
 	rows := m.vis.mentions
 	empty := "inbox zero — a shows handled ones"
-	if m.atl == nil {
+	if m.atl == nil && m.atlErr != nil {
 		empty = m.atlErr.Error()
 	}
 	return m.table(mentionCols, len(rows), &m.cur[vMentions], h, func(i int, sel bool) []string {

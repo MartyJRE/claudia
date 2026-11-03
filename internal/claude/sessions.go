@@ -68,8 +68,11 @@ func (s Session) Name() string {
 	if s.Live != nil && s.Live.Name != "" {
 		return s.Live.Name
 	}
-	return s.ID[:8]
+	return s.ShortID()
 }
+
+// ShortID is the id's first 8 characters, as Claude shows it.
+func (s Session) ShortID() string { return s.ID[:min(8, len(s.ID))] }
 
 func (s Session) Dir() string {
 	if s.Live != nil && s.Live.Cwd != "" {

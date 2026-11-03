@@ -42,12 +42,13 @@ func (c *Client) ExportBrief(key, dir string) (string, error) {
 	}
 
 	media := map[string]string{}
-	n := 0
+	type image struct{ name, path string }
+	var saved []image
 	for _, a := range is.Fields.Attachment {
-		if !strings.HasPrefix(a.MimeType, "image/") || a.Size > maxImageSize || n >= maxImages {
+		if !strings.HasPrefix(a.MimeType, "image/") || a.Size > maxImageSize || len(saved) >= maxImages {
 			continue
 		}
-		p := filepath.Join(out, filepath.Base(a.Filename))
+		p := uniquePath(out, filepath.Base(a.Filename))
 		f, err := os.Create(p)
 		if err != nil {
 			continue
@@ -58,8 +59,10 @@ func (c *Client) ExportBrief(key, dir string) (string, error) {
 			os.Remove(p)
 			continue
 		}
-		media[a.Filename] = p
-		n++
+		if _, dup := media[a.Filename]; !dup {
+			media[a.Filename] = p
+		}
+		saved = append(saved, image{a.Filename, p})
 	}
 
 	var md strings.Builder
@@ -109,9 +112,9 @@ func (c *Client) ExportBrief(key, dir string) (string, error) {
 	}
 
 	var unref []string
-	for name, p := range media {
-		if !strings.Contains(md.String(), p) {
-			unref = append(unref, fmt.Sprintf("![%s](%s)", name, p))
+	for _, im := range saved {
+		if !strings.Contains(md.String(), im.path) {
+			unref = append(unref, fmt.Sprintf("![%s](%s)", im.name, im.path))
 		}
 	}
 	if len(unref) > 0 {
@@ -121,4 +124,16 @@ func (c *Client) ExportBrief(key, dir string) (string, error) {
 
 	path := filepath.Join(out, "story.md")
 	return path, os.WriteFile(path, []byte(md.String()), 0o644)
+}
+
+// uniquePath keeps two attachments with the same name from overwriting each other.
+func uniquePath(dir, name string) string {
+	p := filepath.Join(dir, name)
+	ext := filepath.Ext(name)
+	for i := 2; ; i++ {
+		if _, err := os.Stat(p); os.IsNotExist(err) {
+			return p
+		}
+		p = filepath.Join(dir, fmt.Sprintf("%s (%d)%s", strings.TrimSuffix(name, ext), i, ext))
+	}
 }

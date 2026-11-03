@@ -99,7 +99,8 @@ func (m *Model) openLink(link string) (tea.Model, tea.Cmd) {
 			return mrLoadedMsg{mr, err}
 		}
 	}
-	if base := config.Get().AtlassianURL; base != "" && strings.HasPrefix(link, base) {
+	// Confluence lives under /wiki/; page titles there often contain KEY-123-looking words.
+	if base := config.Get().AtlassianURL; base != "" && strings.HasPrefix(link, base) && !strings.Contains(link, "/wiki/") {
 		if k := jiraKeyRe.FindString(link); k != "" {
 			summary := ""
 			if is, ok := m.ix.issues[k]; ok {

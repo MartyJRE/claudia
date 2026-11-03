@@ -179,7 +179,7 @@ func waiting(t time.Time) string {
 
 func (m *Model) listInbox(h int) string {
 	top := m.viewBrief()
-	h -= lipgloss.Height(top)
+	h -= lipgloss.Height(top) - 1 // its trailing empty line is the table's first
 	rows := m.vis.inbox
 	return top + m.table(inboxCols, len(rows), &m.cur[vInbox], h, func(i int, sel bool) []string {
 		it := rows[i]
@@ -211,7 +211,10 @@ func (m *Model) detailInbox() string {
 	if !ok {
 		return m.panel(nil)
 	}
-	head := kindStyle(it.kind).Render(kindLabel[it.kind]) + "  " + sBold.Render(it.where)
+	head := kindStyle(it.kind).Render(kindLabel[it.kind])
+	if it.where != it.ticket {
+		head += "  " + sBold.Render(it.where)
+	}
 	if it.ticket != "" {
 		head += "  " + sTicket.Render(it.ticket)
 		if is, ok := m.ix.issues[it.ticket]; ok {

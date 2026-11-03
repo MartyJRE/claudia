@@ -52,7 +52,7 @@ func (r adfRenderer) blocks(b *strings.Builder, nodes []adfNode, indent string) 
 func (r adfRenderer) block(b *strings.Builder, n adfNode, indent string) {
 	switch n.Type {
 	case "paragraph":
-		b.WriteString(indent + r.inline(n.Content) + "\n\n")
+		b.WriteString(indent + strings.TrimRight(r.inline(n.Content), " ") + "\n\n")
 	case "heading":
 		lvl := 2
 		if l, ok := n.Attrs["level"].(float64); ok {
@@ -79,19 +79,13 @@ func (r adfRenderer) block(b *strings.Builder, n adfNode, indent string) {
 	case "blockquote":
 		var qb strings.Builder
 		r.blocks(&qb, n.Content, "")
-		for _, l := range strings.Split(strings.TrimSpace(qb.String()), "\n") {
-			b.WriteString("> " + l + "\n")
-		}
-		b.WriteString("\n")
+		quote(b, qb.String())
 	case "panel":
 		kind, _ := n.Attrs["panelType"].(string)
 		var pb strings.Builder
 		r.blocks(&pb, n.Content, "")
 		b.WriteString("> **" + strings.ToUpper(kind) + "**\n")
-		for _, l := range strings.Split(strings.TrimSpace(pb.String()), "\n") {
-			b.WriteString("> " + l + "\n")
-		}
-		b.WriteString("\n")
+		quote(b, pb.String())
 	case "rule":
 		b.WriteString("---\n\n")
 	case "mediaSingle", "mediaGroup":
@@ -113,6 +107,13 @@ func (r adfRenderer) block(b *strings.Builder, n adfNode, indent string) {
 			b.WriteString(indent + s + "\n\n")
 		}
 	}
+}
+
+func quote(b *strings.Builder, body string) {
+	for _, l := range strings.Split(strings.TrimSpace(body), "\n") {
+		b.WriteString(strings.TrimRight("> "+l, " ") + "\n")
+	}
+	b.WriteString("\n")
 }
 
 func (r adfRenderer) table(b *strings.Builder, n adfNode) {

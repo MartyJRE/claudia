@@ -205,7 +205,7 @@ func (m *Model) gotoTicket(key string) (tea.Model, tea.Cmd) {
 func (m *Model) listJira(h int) string {
 	rows := m.vis.jira
 	empty := "nothing in your sprint — d shows done, a the team"
-	if m.atl == nil {
+	if m.atl == nil && m.atlErr != nil {
 		empty = m.atlErr.Error()
 	} else if m.jira.FetchedAt.IsZero() {
 		empty = spinner[m.frame%len(spinner)] + " asking Jira…"
@@ -444,11 +444,19 @@ func (m *Model) detailSprint(r jrow) string {
 	if m.teamJira {
 		src = m.jira.Team
 	}
+	parents := map[string]bool{}
+	for _, is := range src {
+		parents[is.Parent] = true
+	}
 	byCat := map[string]int{}
 	for _, is := range src {
-		if is.Sprint != nil && is.Sprint.Name == r.sprint || is.Sprint == nil && r.sprint == "No sprint" {
-			byCat[is.Category]++
+		switch {
+		case is.Sprint != nil && is.Sprint.Name == r.sprint:
+		case is.Sprint == nil && r.sprint == "No sprint" && !(is.Level >= 1 && parents[is.Key]):
+		default:
+			continue
 		}
+		byCat[is.Category]++
 	}
 	lines := []string{sBold.Render(r.sprint)}
 	if r.state != "" {

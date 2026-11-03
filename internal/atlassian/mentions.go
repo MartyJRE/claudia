@@ -50,7 +50,8 @@ func (c *Client) Mentions(me string) ([]Mention, error) {
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			q := url.Values{"orderBy": {"created"}, "maxResults": {"100"}}
+			// Newest first: mentions only count for 30 days, and a busy issue has more than one page.
+			q := url.Values{"orderBy": {"-created"}, "maxResults": {"100"}}
 			var res struct {
 				Comments []comment `json:"comments"`
 			}

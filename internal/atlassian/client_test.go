@@ -52,6 +52,15 @@ func reply(body string) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, _ *http.Request) { io.WriteString(w, body) }
 }
 
+func newestFirst(t *testing.T, body string) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.Query().Get("orderBy"); got != "-created" {
+			t.Errorf("comments ordered by %q; the oldest 100 would hide recent mentions", got)
+		}
+		io.WriteString(w, body)
+	}
+}
+
 func TestNew(t *testing.T) {
 	t.Setenv("ATLASSIAN_EMAIL", "")
 	t.Setenv("ATLASSIAN_API_TOKEN", "")
@@ -136,12 +145,12 @@ func TestFetchJira(t *testing.T) {
 				http.Error(w, "bad jql "+jql, 400)
 			}
 		},
-		"/rest/api/3/issue/PAY-9/comment": reply(`{"comments":[
-			{"id":"10","author":{"accountId":"bob","displayName":"Bob"},"created":"` + recent + `","body":` + mention("me") + `},
-			{"id":"11","author":{"accountId":"me","displayName":"Me"},"created":"` + later + `","body":` + mention("bob") + `},
-			{"id":"12","author":{"accountId":"ann","displayName":"Ann"},"created":"` + later + `","body":` + mention("me") + `},
-			{"id":"13","author":{"accountId":"ann","displayName":"Ann"},"created":"` + later + `","body":` + mention("bob") + `},
-			{"id":"14","author":{"accountId":"ann","displayName":"Ann"},"created":"` + ancient + `","body":` + mention("me") + `}]}`),
+		"/rest/api/3/issue/PAY-9/comment": newestFirst(t, `{"comments":[
+			{"id":"10","author":{"accountId":"bob","displayName":"Bob"},"created":"`+recent+`","body":`+mention("me")+`},
+			{"id":"11","author":{"accountId":"me","displayName":"Me"},"created":"`+later+`","body":`+mention("bob")+`},
+			{"id":"12","author":{"accountId":"ann","displayName":"Ann"},"created":"`+later+`","body":`+mention("me")+`},
+			{"id":"13","author":{"accountId":"ann","displayName":"Ann"},"created":"`+later+`","body":`+mention("bob")+`},
+			{"id":"14","author":{"accountId":"ann","displayName":"Ann"},"created":"`+ancient+`","body":`+mention("me")+`}]}`),
 	})
 
 	s, err := c.FetchJira()
@@ -341,6 +350,7 @@ func TestExportBrief(t *testing.T) {
 					"attachment": []any{
 						map[string]any{"filename": "inline.png", "mimeType": "image/png", "size": 10, "content": srv.URL + "/att/1"},
 						map[string]any{"filename": "other.png", "mimeType": "image/png", "size": 10, "content": srv.URL + "/att/2"},
+						map[string]any{"filename": "other.png", "mimeType": "image/png", "size": 10, "content": srv.URL + "/att/2"},
 						map[string]any{"filename": "gone.png", "mimeType": "image/png", "size": 10, "content": srv.URL + "/att/404"},
 						map[string]any{"filename": "huge.png", "mimeType": "image/png", "size": maxImageSize + 1, "content": srv.URL + "/att/1"},
 						map[string]any{"filename": "spec.pdf", "mimeType": "application/pdf", "size": 10, "content": srv.URL + "/att/1"},
@@ -372,7 +382,7 @@ func TestExportBrief(t *testing.T) {
 	for _, e := range entries {
 		names = append(names, e.Name())
 	}
-	if strings.Join(names, ",") != "inline.png,other.png,story.md" {
+	if strings.Join(names, ",") != "inline.png,other (2).png,other.png,story.md" {
 		t.Errorf("files %v", names)
 	}
 	if b, _ := os.ReadFile(filepath.Join(out, "inline.png")); string(b) != string(png) {
@@ -387,7 +397,7 @@ func TestExportBrief(t *testing.T) {
 		"## Zeta notes\n\nlast\n\n" +
 		"## Linked issues\n\n- blocks PAY-8: Next (Open)\n- is blocked by PAY-6: Prev (Done)\n\n" +
 		"## Comments\n\n### Bob, 2026-11-01\n\nship it\n\n" +
-		"## Other attached images\n\n![other.png](" + other + ")\n"
+		"## Other attached images\n\n![other.png](" + filepath.Join(out, "other (2).png") + ")\n![other.png](" + other + ")\n"
 	if string(md) != want {
 		t.Errorf("got:\n%s\nwant:\n%s", md, want)
 	}

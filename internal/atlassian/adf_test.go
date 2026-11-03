@@ -43,7 +43,7 @@ func TestADFBlocks(t *testing.T) {
 			{"type":"listItem","content":[` + para(text("one")) + `,{"type":"bulletList","content":[{"type":"listItem","content":[` + para(text("sub")) + `]}]}]},
 			{"type":"listItem","content":[` + para(text("two")) + `]}]}`, "1. one\n   \n   - sub\n2. two"},
 		"code block":  {`{"type":"codeBlock","attrs":{"language":"go"},"content":[` + text("x := 1") + `]}`, "```go\nx := 1\n```"},
-		"blockquote":  {`{"type":"blockquote","content":[` + para(text("a")) + "," + para(text("b")) + `]}`, "> a\n> \n> b"},
+		"blockquote":  {`{"type":"blockquote","content":[` + para(text("a")) + "," + para(text("b")) + `]}`, "> a\n>\n> b"},
 		"panel":       {`{"type":"panel","attrs":{"panelType":"warning"},"content":[` + para(text("careful")) + `]}`, "> **WARNING**\n> careful"},
 		"rule":        {`{"type":"rule"}`, "---"},
 		"expand":      {`{"type":"expand","attrs":{"title":"More"},"content":[` + para(text("hidden")) + `]}`, "**More**\n\nhidden"},
