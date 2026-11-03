@@ -203,3 +203,18 @@ func TestUniquePathGivesUpOnUnstatableNames(t *testing.T) {
 		t.Fatal("uniquePath loops on a name the filesystem can't stat")
 	}
 }
+
+func TestFetchConfluenceCommentsQueryFails(t *testing.T) {
+	c, _ := newFakeJira(t, map[string]func(http.ResponseWriter, *http.Request){
+		"/wiki/rest/api/search": func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasPrefix(r.URL.Query().Get("cql"), "type = comment") {
+				http.Error(w, "comments broken", 500)
+				return
+			}
+			io.WriteString(w, `{"results":[]}`)
+		},
+	})
+	if s, err := c.FetchConfluence(); err == nil || !strings.Contains(err.Error(), "comments broken") || !s.FetchedAt.IsZero() {
+		t.Errorf("got %+v %v", s, err)
+	}
+}

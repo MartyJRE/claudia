@@ -15,16 +15,18 @@ type Page struct {
 	Excerpt  string    `json:"excerpt"`
 	Modified time.Time `json:"modified"`
 	Comment  bool      `json:"comment"`
+	OnPage   string    `json:"on_page"` // the page it's on: a comment's page, or the page itself
 }
 
 type ConfluenceSnapshot struct {
 	Mentions  []Page    `json:"mentions"`
 	Mine      []Page    `json:"mine"`
+	Comments  []Page    `json:"comments"` // mine, from the last 30 days
 	FetchedAt time.Time `json:"fetched_at"`
 }
 
 func (c *Client) cql(cql string, limit int) ([]Page, error) {
-	q := url.Values{"cql": {cql}, "limit": {strconv.Itoa(limit)}, "expand": {"content.space"}}
+	q := url.Values{"cql": {cql}, "limit": {strconv.Itoa(limit)}, "expand": {"content.space,content.container"}}
 	var res struct {
 		Results []struct {
 			Content struct {
@@ -34,6 +36,9 @@ func (c *Client) cql(cql string, limit int) ([]Page, error) {
 				Space struct {
 					Key string `json:"key"`
 				} `json:"space"`
+				Container struct {
+					ID string `json:"id"`
+				} `json:"container"`
 			} `json:"content"`
 			Title        string `json:"title"`
 			Excerpt      string `json:"excerpt"`
@@ -53,6 +58,10 @@ func (c *Client) cql(cql string, limit int) ([]Page, error) {
 			URL:     c.Base + "/wiki" + r.URL,
 			Excerpt: r.Excerpt,
 			Comment: r.Content.Type == "comment",
+			OnPage:  r.Content.ID,
+		}
+		if p.Comment && r.Content.Container.ID != "" {
+			p.OnPage = r.Content.Container.ID
 		}
 		p.Modified, _ = time.Parse(time.RFC3339, r.LastModified)
 		out = append(out, p)
@@ -67,6 +76,9 @@ func (c *Client) FetchConfluence() (ConfluenceSnapshot, error) {
 		return s, err
 	}
 	if s.Mine, err = c.cql("contributor = currentUser() and type = page order by lastmodified desc", 25); err != nil {
+		return s, err
+	}
+	if s.Comments, err = c.cql("type = comment and creator = currentUser() and created >= now(\"-30d\") order by created desc", 100); err != nil {
 		return s, err
 	}
 	s.FetchedAt = time.Now()

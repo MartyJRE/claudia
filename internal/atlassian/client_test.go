@@ -290,11 +290,19 @@ func TestFetchConfluence(t *testing.T) {
 			mu.Lock()
 			cqls = append(cqls, r.URL.Query().Get("cql"))
 			mu.Unlock()
-			if r.URL.Query().Get("limit") != "25" || r.URL.Query().Get("expand") != "content.space" {
+			if r.URL.Query().Get("expand") != "content.space,content.container" {
 				http.Error(w, "query", 400)
 				return
 			}
-			io.WriteString(w, `{"results":[{"content":{"id":"1","type":"comment","space":{"key":"ENG"}},
+			if strings.HasPrefix(r.URL.Query().Get("cql"), "type = comment") {
+				if r.URL.Query().Get("limit") != "100" {
+					http.Error(w, "limit", 400)
+					return
+				}
+				io.WriteString(w, `{"results":[{"content":{"id":"9","type":"comment","container":{"id":"7"}},"lastModified":"2026-11-03T17:28:25Z"}]}`)
+				return
+			}
+			io.WriteString(w, `{"results":[{"content":{"id":"1","type":"comment","space":{"key":"ENG"},"container":{"id":"7"}},
 				"title":"Q&amp;A","excerpt":"hi","url":"/spaces/ENG/pages/1","lastModified":"2026-11-01T12:00:00Z"},
 				{"content":{"id":"2","type":"page","space":{"key":"OPS"}},"title":"Runbook","url":"/x","lastModified":"junk"}]}`)
 		},
@@ -305,8 +313,18 @@ func TestFetchConfluence(t *testing.T) {
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	if len(cqls) != 2 || !strings.HasPrefix(cqls[0], "mention = currentUser()") || !strings.HasPrefix(cqls[1], "contributor = currentUser()") {
+	if len(cqls) != 3 || !strings.HasPrefix(cqls[0], "mention = currentUser()") || !strings.HasPrefix(cqls[1], "contributor = currentUser()") ||
+		!strings.HasPrefix(cqls[2], "type = comment and creator = currentUser()") {
 		t.Errorf("cql %q", cqls)
+	}
+	if p := s.Mentions[0]; p.OnPage != "7" {
+		t.Errorf("a comment is on its container page, got %q", p.OnPage)
+	}
+	if q := s.Mentions[1]; q.OnPage != "2" {
+		t.Errorf("a page is on itself, got %q", q.OnPage)
+	}
+	if len(s.Comments) != 1 || s.Comments[0].OnPage != "7" {
+		t.Errorf("my comments %+v", s.Comments)
 	}
 	p := s.Mentions[0]
 	if p.Title != "Q&A" || !p.Comment || p.Space != "ENG" || p.URL != c.Base+"/wiki/spaces/ENG/pages/1" || !p.Modified.Equal(time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)) {

@@ -7,6 +7,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/MartyJRE/claudia/internal/atlassian"
 )
 
 // mention is a Jira comment or Confluence page that @-mentions you.
@@ -33,10 +35,20 @@ func (m *Model) mentions() []mention {
 	for _, p := range m.conf.Mentions {
 		out = append(out, mention{
 			id: "conf:" + p.ID + ":" + p.Modified.Format(time.RFC3339), where: p.Space, title: p.Title,
-			text: cleanExcerpt(p.Excerpt), url: p.URL, at: p.Modified,
+			text: cleanExcerpt(p.Excerpt), url: p.URL, at: p.Modified, answered: m.repliedOnPage(p),
 		})
 	}
 	return out
+}
+
+// repliedOnPage: I commented on the mention's page after it, as with Jira.
+func (m *Model) repliedOnPage(p atlassian.Page) bool {
+	for _, c := range m.conf.Comments {
+		if c.OnPage != "" && c.OnPage == p.OnPage && c.Modified.After(p.Modified) {
+			return true
+		}
+	}
+	return false
 }
 
 // open: a Jira mention nobody has answered yet and that wasn't dismissed.
