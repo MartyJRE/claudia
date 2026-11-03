@@ -149,6 +149,37 @@ func boolCmp(a, b bool) int {
 	return -1
 }
 
+const recentClosed = 8
+
+// sessionRows is the Sessions tab: the tree, and unless closed sessions are
+// shown anyway, the few closed most recently, to revive with enter.
+func (m *Model) sessionRows(match func(...string) bool, filtering bool) []srow {
+	out := m.buildSessions(m.filterSessions(match), filtering)
+	if m.allSessions {
+		return out
+	}
+	var closed []row
+	for _, r := range m.sessions {
+		if !r.live() && r.Dir() != "" && match(r.Name(), project(r.Dir()), branch(r), m.ix.sessionTicket[r.ID], r.Profile.Name) {
+			closed = append(closed, r)
+		}
+	}
+	if len(closed) == 0 {
+		return out
+	}
+	slices.SortStableFunc(closed, func(a, b row) int { return b.LastActive().Compare(a.LastActive()) })
+	closed = closed[:min(len(closed), recentClosed)]
+	h := srow{key: "recent", title: "Recently closed", n: len(closed)}
+	h.collapsed = !filtering && slices.Contains(m.sessPrefs.Collapsed, h.key)
+	out = append(out, h)
+	if !h.collapsed {
+		for _, r := range closed {
+			out = append(out, srow{isSess: true, sess: r, depth: 1})
+		}
+	}
+	return out
+}
+
 func (m *Model) buildSessions(sessions []row, filtering bool) []srow {
 	if m.sessPrefs.Group == sessFlat {
 		var out []srow
@@ -275,7 +306,7 @@ func (m *Model) toggleSessionFold() {
 func (m *Model) foldAllSessions(fold bool) {
 	m.sessPrefs.Collapsed = nil
 	if fold {
-		for _, r := range m.buildSessions(m.filterSessions(func(...string) bool { return true }), true) {
+		for _, r := range m.sessionRows(func(...string) bool { return true }, true) {
 			if !r.isSess {
 				m.sessPrefs.Collapsed = append(m.sessPrefs.Collapsed, r.key)
 			}

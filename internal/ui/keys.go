@@ -60,7 +60,7 @@ var actions = []action{
 	{"sessions.group", []string{"v"}, "group"},
 	{"sessions.all", []string{"a"}, "show closed"},
 	{"sessions.resume", []string{"R"}, "resume"},
-	{"sessions.close", []string{"K"}, "close"},
+	{"sessions.close", []string{"K"}, "kill"},
 	{"sessions.mark", []string{"m"}, "mark"},
 	{"sessions.split", []string{"S"}, "split marked"},
 	{"sessions.unsplit", []string{"U"}, "unsplit"},

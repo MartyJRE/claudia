@@ -706,19 +706,30 @@ func (m *Model) viewFooter() string {
 		keys = append(keys, [2]string{"1-9", "views"})
 		keys = append(keys, m.hints("global.filter", "global.quit")...)
 	}
-	var parts []string
-	for _, k := range keys {
-		parts = append(parts, sKey.Render(k[0])+" "+sDim.Render(k[1]))
-	}
-	help := " " + strings.Join(parts, sRule.Render("  │  "))
 	if m.flash != "" {
 		st := sOK
 		if m.flashErr {
 			st = sErr
 		}
-		help = " " + st.Render(m.flash)
+		return ansi.Truncate(" "+st.Render(m.flash), m.width, "…")
 	}
-	return ansi.Truncate(help, m.width, "…")
+	// Wraps rather than truncates, so no key falls off a narrow terminal.
+	sep := sRule.Render("  │  ")
+	var lines []string
+	line := ""
+	for _, k := range keys {
+		part := sKey.Render(k[0]) + " " + sDim.Render(k[1])
+		if line != "" && ansi.StringWidth(line+sep+part) > m.width {
+			lines = append(lines, line)
+			line = ""
+		}
+		if line == "" {
+			line = " " + part
+		} else {
+			line += sep + part
+		}
+	}
+	return strings.Join(append(lines, line), "\n")
 }
 
 func (m *Model) help() [][2]string {
@@ -795,7 +806,7 @@ func (m *Model) refilter() {
 	if c := m.cur[vSessions].pos; c >= 0 && c < len(m.vis.sessions) {
 		selected = m.vis.sessions[c].id()
 	}
-	m.vis.sessions = m.buildSessions(m.filterSessions(match), len(terms) > 0)
+	m.vis.sessions = m.sessionRows(match, len(terms) > 0)
 	if i := slices.IndexFunc(m.vis.sessions, func(r srow) bool { return r.id() == selected }); selected != "" && i >= 0 {
 		m.cur[vSessions].pos = i
 	}

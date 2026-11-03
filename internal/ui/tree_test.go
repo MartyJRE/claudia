@@ -1,8 +1,10 @@
 package ui
 
 import (
+	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/MartyJRE/claudia/internal/atlassian"
 	"github.com/MartyJRE/claudia/internal/claude"
@@ -88,5 +90,34 @@ func TestSessionTree(t *testing.T) {
 	m.sessPrefs.Group = sessByTicket
 	if got, want := render(m.buildSessions(rows, false)), "#epic| #story|  a|  c|#No ticket| b"; got != want {
 		t.Errorf("by ticket: got %s want %s", got, want)
+	}
+}
+
+func TestRecentlyClosed(t *testing.T) {
+	closed := func(id string, ago time.Duration) row {
+		return row{Session: claude.Session{ID: id, Transcript: &claude.Transcript{Cwd: "/c/pay", Updated: time.Now().Add(-ago)}}}
+	}
+	live := row{Session: claude.Session{ID: "live-session", Transcript: &claude.Transcript{Cwd: "/c/pay"}, Live: &claude.Live{Status: "busy"}}}
+	m := &Model{repos: []repos.Repo{{Dir: "/c/pay"}}, sessPrefs: sessionPrefs{Group: sessFlat}}
+	m.sessions = []row{live}
+	for i := range recentClosed + 2 {
+		m.sessions = append(m.sessions, closed(fmt.Sprintf("old-session-%d", i), time.Duration(i+2)*time.Hour))
+	}
+	m.sessions = append(m.sessions, closed("newest-session", time.Minute))
+	all := func(...string) bool { return true }
+
+	rs := m.sessionRows(all, false)
+	if rs[0].sess.ID != "live-session" || rs[1].isSess || rs[2].sess.ID != "newest-session" || len(rs) != 2+recentClosed {
+		t.Fatalf("want live, header, newest first and %d closed; got %d rows", recentClosed, len(rs))
+	}
+	m.sessPrefs.Collapsed = []string{"recent"}
+	if rs := m.sessionRows(all, false); len(rs) != 2 || !rs[1].collapsed {
+		t.Errorf("folded group should leave just its header, got %d rows", len(rs))
+	}
+	m.allSessions = true
+	for _, r := range m.sessionRows(all, false) {
+		if !r.isSess {
+			t.Errorf("no recent group when closed sessions are shown anyway")
+		}
 	}
 }
