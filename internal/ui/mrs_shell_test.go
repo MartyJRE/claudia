@@ -377,10 +377,27 @@ func TestMineKeysShell(t *testing.T) {
 
 func TestFailedPipelinesShell(t *testing.T) {
 	m := newModelShell(t)
-	if n := m.failedPipelines(); n != 2 {
-		t.Errorf("own failed head pipeline and failed merge pipeline: %d", n)
+	if open, merged := m.failedSplit(); open != 1 || merged != 1 {
+		t.Errorf("own failed head pipeline and failed merge pipeline: %d open, %d merged", open, merged)
 	}
 	if n := m.pendingReviews(); n != 1 {
 		t.Errorf("drafts and approved don't count: %d", n)
+	}
+}
+
+func TestFailedPillWording(t *testing.T) {
+	for _, c := range []struct {
+		open, merged int
+		want         string
+	}{
+		{2, 3, "2 failed pipelines · 3 after merge"},
+		{1, 0, "1 failed pipeline"},
+		{0, 1, "1 pipeline failed after merge"},
+		{0, 2, "2 pipelines failed after merge"},
+		{0, 0, ""},
+	} {
+		if got := failedPill(c.open, c.merged); got != c.want {
+			t.Errorf("failedPill(%d, %d) = %q, want %q", c.open, c.merged, got, c.want)
+		}
 	}
 }

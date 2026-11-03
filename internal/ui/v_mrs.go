@@ -39,19 +39,43 @@ func (m *Model) pendingReviews() int {
 	return n
 }
 
-func (m *Model) failedPipelines() int {
-	n := 0
+// failedSplit counts failed pipelines on my open MRs, and on what my recently
+// merged MRs merged.
+func (m *Model) failedSplit() (open, merged int) {
 	for _, mr := range m.gl.Mine {
 		if mr.PipelineStatus() == "failed" {
-			n++
+			open++
 		}
 	}
 	for _, mr := range m.gl.Merged {
 		if mr.MergePipeline != nil && mr.MergePipeline.Status == "failed" {
-			n++
+			merged++
 		}
 	}
-	return n
+	return open, merged
+}
+
+// failedPill says which pipelines failed: on open MRs, after merging, or both.
+func failedPill(open, merged int) string {
+	var parts []string
+	if open > 0 {
+		parts = append(parts, fmt.Sprintf("%d failed pipeline%s", open, plural(open)))
+	}
+	if merged > 0 {
+		if open == 0 {
+			parts = append(parts, fmt.Sprintf("%d pipeline%s failed after merge", merged, plural(merged)))
+		} else {
+			parts = append(parts, fmt.Sprintf("%d after merge", merged))
+		}
+	}
+	return strings.Join(parts, " · ")
+}
+
+func plural(n int) string {
+	if n == 1 {
+		return ""
+	}
+	return "s"
 }
 
 func (m *Model) filterMRs(match func(...string) bool) []mrRow {

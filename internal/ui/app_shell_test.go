@@ -18,7 +18,7 @@ import (
 
 func TestViewsRenderShell(t *testing.T) {
 	m := newModelShell(t)
-	header := []string{"✻ claudia", "1 needs you", "1 to review", "1 mentions", "2 failed", "1 working", "1 your turn",
+	header := []string{"✻ claudia", "1 needs you", "1 to review", "1 mentions", "1 failed pipeline · 1 after merge", "1 working", "1 your turn",
 		"1 Inbox 4", "2 Sessions 3", "3 Review 1", "4 My MRs 1", "6 Mentions 1", "9 Usage"}
 	for _, c := range []struct {
 		v     view
