@@ -188,3 +188,18 @@ func TestExportBriefSkipsImageItCantCreate(t *testing.T) {
 		t.Errorf("got:\n%s", md)
 	}
 }
+
+func TestUniquePathGivesUpOnUnstatableNames(t *testing.T) {
+	dir := t.TempDir()
+	long := strings.Repeat("x", 300) + ".png"
+	done := make(chan string, 1)
+	go func() { done <- uniquePath(dir, long) }()
+	select {
+	case p := <-done:
+		if p != filepath.Join(dir, long) {
+			t.Errorf("got %q", p)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("uniquePath loops on a name the filesystem can't stat")
+	}
+}

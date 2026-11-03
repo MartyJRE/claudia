@@ -11,6 +11,7 @@ import (
 
 	"github.com/MartyJRE/claudia/internal/claude"
 	"github.com/MartyJRE/claudia/internal/config"
+	"github.com/MartyJRE/claudia/internal/state"
 	"github.com/MartyJRE/claudia/internal/tmux"
 )
 
@@ -23,12 +24,28 @@ type Spec struct {
 	Name    string
 	Args    []string
 	Session string // tmux session; defaults to the repo's name
+	ID      string // the Claude session id, when known
+	Kind    string // what it was started for; picks the window's icon
 }
+
+// Nerd Font (Material Design) icons per kind; anything else gets tmux.Icon.
+var kindIcons = map[string]string{
+	"review":         "\U000F0208", // md-eye
+	"fix":            "\U000F05B7", // md-wrench
+	"reply":          "\U000F045A", // md-reply
+	"analysis":       "\U000F0349", // md-magnify
+	"implementation": "\U000F0169", // md-code_braces
+	"test":           "\U000F0668", // md-test_tube
+	"continue":       "\U000F040A", // md-play
+	"look":           "\U000F0337", // md-link
+}
+
+const kindsFile = "session-kinds.json"
 
 var executable = os.Executable
 
 func Resume(s claude.Session) Spec {
-	return Spec{Dir: s.Dir(), Profile: s.Profile, Name: s.Name(), Args: append([]string{"--resume", s.ID}, hint()...)}
+	return Spec{Dir: s.Dir(), Profile: s.Profile, Name: s.Name(), Args: append([]string{"--resume", s.ID}, hint()...), ID: s.ID}
 }
 
 // hint tells the session it can operate claudia itself.
@@ -53,7 +70,7 @@ func New(dir string, p claude.Profile, name, prompt string) (Spec, string) {
 	if prompt != "" {
 		args = append(args, prompt)
 	}
-	return Spec{Dir: dir, Profile: p, Name: name, Args: args}, id
+	return Spec{Dir: dir, Profile: p, Name: name, Args: args, ID: id}, id
 }
 
 func uuid() string {
@@ -95,7 +112,23 @@ func Start(sp Spec) (string, error) {
 	if session == "" {
 		session = SessionName(sp.Dir)
 	}
-	return tmux.NewWindow(session, windowName(sp.Name), sp.Dir, env, argv)
+	return tmux.NewWindow(session, windowName(rememberKind(sp), sp.Name), sp.Dir, env, argv)
+}
+
+// rememberKind records what a new session is for, and looks it up when one is
+// resumed, so it keeps its icon.
+func rememberKind(sp Spec) string {
+	if sp.ID == "" {
+		return sp.Kind
+	}
+	kinds := map[string]string{}
+	state.Load(kindsFile, &kinds)
+	if sp.Kind == "" {
+		return kinds[sp.ID]
+	}
+	kinds[sp.ID] = sp.Kind
+	_ = state.Save(kindsFile, kinds)
+	return sp.Kind
 }
 
 func SessionName(dir string) string {
@@ -110,12 +143,16 @@ func SessionName(dir string) string {
 	return name
 }
 
-func windowName(name string) string {
+func windowName(kind, name string) string {
 	r := []rune(name)
 	if len(r) > 32 {
 		r = append(r[:31], '…')
 	}
-	return tmux.Icon + " " + string(r)
+	icon, ok := kindIcons[kind]
+	if !ok {
+		icon = tmux.Icon
+	}
+	return icon + " " + string(r)
 }
 
 // ProfileFor guesses which Claude profile a directory belongs to: the work

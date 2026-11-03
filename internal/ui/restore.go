@@ -106,7 +106,7 @@ func (m *Model) restoreAll() (tea.Model, tea.Cmd) {
 		if live[it.ID] {
 			continue
 		}
-		sp := launch.Spec{Dir: it.Dir, Profile: launch.Profile(it.Profile, m.store.Profiles), Name: it.Name, Args: []string{"--resume", it.ID}}
+		sp := launch.Spec{Dir: it.Dir, Profile: launch.Profile(it.Profile, m.store.Profiles), Name: it.Name, Args: []string{"--resume", it.ID}, ID: it.ID}
 		target, err := startSession(sp)
 		if err != nil {
 			m.setFlash(err.Error(), true)

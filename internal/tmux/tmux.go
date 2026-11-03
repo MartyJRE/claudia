@@ -195,6 +195,41 @@ func (e *cmdError) Error() string { return strings.TrimSpace(e.out) + ": " + e.e
 // Icon marks the windows claudia opens Claude in: Nerd Font's robot (md-robot).
 const Icon = "\U000F06A9"
 
+const (
+	splitIcon = "\U000F0BCC"  // md-view_split_vertical
+	bell      = " \U000F009E" // md-bell_ring, after the name while a session needs you
+)
+
+// stripIcon drops a leading icon (a Nerd Font glyph, or the older "✻") and the
+// trailing bell, leaving the bare name.
+func stripIcon(name string) string {
+	name = strings.TrimSuffix(name, bell)
+	r := []rune(name)
+	if len(r) > 1 && r[1] == ' ' && (r[0] == '✻' || r[0] >= 0xE000 && r[0] <= 0xF8FF || r[0] >= 0xF0000) {
+		return string(r[2:])
+	}
+	return name
+}
+
+// MarkWaiting puts the bell on the given windows and takes it off every other
+// window that has one, renaming only what changes.
+func MarkWaiting(waiting map[string]bool) {
+	out, err := tm("list-windows", "-a", "-F", "#{window_id}\t#{window_name}")
+	if err != nil {
+		return
+	}
+	for _, line := range strings.Split(out, "\n") {
+		id, name, _ := strings.Cut(line, "\t")
+		has := strings.HasSuffix(name, bell)
+		switch {
+		case waiting[id] && !has:
+			_, _ = tm("rename-window", "-t", id, name+bell)
+		case !waiting[id] && has:
+			_, _ = tm("rename-window", "-t", id, strings.TrimSuffix(name, bell))
+		}
+	}
+}
+
 // Retitle swaps the "✻ " older claudia versions put on window names for Icon.
 func Retitle() {
 	out, err := tm("list-windows", "-a", "-F", "#{window_id}\t#{window_name}")
@@ -271,7 +306,7 @@ func JoinSplit(panes []Pane) (string, error) {
 			return "", err
 		}
 		if win == "" {
-			win, err = tm("break-pane", "-d", "-s", p.ID, "-t", "="+SplitSession+":", "-n", Icon+" split", "-P", "-F", "#{window_id}")
+			win, err = tm("break-pane", "-d", "-s", p.ID, "-t", "="+SplitSession+":", "-n", splitIcon+" split", "-P", "-F", "#{window_id}")
 		} else {
 			_, err = tm("join-pane", "-d", "-s", p.ID, "-t", win)
 		}
@@ -288,16 +323,19 @@ func JoinSplit(panes []Pane) (string, error) {
 	// Also on a re-split: panes already in the window may come from an older layout.
 	_, _ = tm("select-layout", "-t", win, "even-horizontal")
 	// Name the tab after what's in it, so the status bar says which sessions are
-	// tiled; labels from before the icon lose their "✻ ".
+	// tiled. Labels keep each session's icon; the old "✻ " and the bell go.
 	if out, err := tm("list-panes", "-t", win, "-F", "#{pane_id}\t#{"+splitNameOpt+"}"); err == nil {
 		var short []string
 		for _, line := range strings.Split(out, "\n") {
 			id, n, _ := strings.Cut(line, "\t")
-			n = strings.TrimPrefix(strings.TrimPrefix(n, "✻ "), Icon+" ")
-			short = append(short, n)
-			_, _ = tm("set-option", "-p", "-t", id, splitNameOpt, Icon+" "+n)
+			n = strings.TrimSuffix(n, bell)
+			if rest, ok := strings.CutPrefix(n, "✻ "); ok {
+				n = Icon + " " + rest
+			}
+			short = append(short, stripIcon(n))
+			_, _ = tm("set-option", "-p", "-t", id, splitNameOpt, n)
 		}
-		_, _ = tm("rename-window", "-t", win, Icon+" "+strings.Join(short, " │ "))
+		_, _ = tm("rename-window", "-t", win, splitIcon+" "+strings.Join(short, " │ "))
 	}
 	_, _ = tm("set-option", "-w", "-t", win, "pane-border-status", "top")
 	_, _ = tm("set-option", "-w", "-t", win, "pane-border-format", " #{"+splitNameOpt+"} ")
@@ -312,10 +350,8 @@ func Unsplit(windowID string) error {
 		return err
 	}
 	for _, line := range strings.Split(out, "\n") {
-		f := strings.Split(line, "\t")
-		if len(f) != 3 {
-			continue
-		}
+		// tm trims the output, which also eats the last pane's empty trailing fields.
+		f := append(strings.Split(line, "\t"), "", "")
 		dest := f[1]
 		if dest == "" {
 			dest = SplitSession

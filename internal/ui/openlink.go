@@ -110,6 +110,7 @@ func (m *Model) openLink(link string) (tea.Model, tea.Cmd) {
 	}
 	m.pickRepo("take a look in", "", nil, func(m *Model, dir string, p claude.Profile) (tea.Model, tea.Cmd) {
 		sp, _ := launch.New(dir, p, "look: "+shortLink(link), "Take a look at "+link)
+		sp.Kind = "look"
 		return m.start(sp)
 	})
 	return m, nil

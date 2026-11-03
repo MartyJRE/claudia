@@ -141,6 +141,10 @@ When a Claude session starts waiting on you while you're in another tmux session
 it shows up there as an extra tab. The tab goes away once you've answered and
 switched to another tab; the window stays in its repo's session throughout.
 
+Claude windows are named with a Nerd Font icon for what they were started for
+(review, fixing threads, a reply, analysis, implementation, a link, or a robot
+for anything else), and get a bell after the name while they need you.
+
 ## Configuration
 
 `~/.config/claudia/config.json` (every field is optional):

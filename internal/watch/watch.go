@@ -203,6 +203,7 @@ func (w *watcher) sessions() {
 			_ = tmux.Unborrow(l)
 		}
 	}
+	tmux.MarkWaiting(waiting)
 }
 
 // borrow links a waiting session's window into the session you're in, so it's a

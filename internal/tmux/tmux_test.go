@@ -2,6 +2,7 @@ package tmux
 
 import (
 	"os"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -155,7 +156,7 @@ func TestUnsplitWhenHomeIsGone(t *testing.T) {
 	if HasSession("pay") || HasSession("bill") {
 		t.Fatal("sessions whose only window was split should end")
 	}
-	if name, _ := tm("display-message", "-p", "-t", target, "#{window_name}"); name != Icon+" bill │ pay" && name != Icon+" pay │ bill" {
+	if name, _ := tm("display-message", "-p", "-t", target, "#{window_name}"); name != splitIcon+" bill │ pay" && name != splitIcon+" pay │ bill" {
 		t.Errorf("split tab should name its sessions, got %q", name)
 	}
 	// Splitting the split again is a no-op that keeps the window.
@@ -234,5 +235,76 @@ func TestResplitFixesOldLayoutAndLabels(t *testing.T) {
 	labels, _ := tm("list-panes", "-t", target, "-F", "#{"+splitNameOpt+"}")
 	if labels != Icon+" old\n"+Icon+" old" {
 		t.Errorf("labels %q", labels)
+	}
+}
+
+func TestStripIcon(t *testing.T) {
+	for in, want := range map[string]string{
+		Icon + " pay":           "pay",
+		"✻ pay":                 "pay",
+		"\U000F0208 pay" + bell: "pay",
+		" pay":                 "pay",
+		"zsh":                   "zsh",
+		"zsh" + bell:            "zsh",
+		"a b":                   "a b",
+		"":                      "",
+	} {
+		if got := stripIcon(in); got != want {
+			t.Errorf("stripIcon(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestMarkWaiting(t *testing.T) {
+	privateServer(t)
+	ids := map[string]string{}
+	for _, s := range []string{"pay", "bill"} {
+		id, err := tm("new-session", "-d", "-s", s, "-n", Icon+" "+s, "-P", "-F", "#{window_id}", "sleep 60")
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids[s] = id
+	}
+	name := func(s string) string {
+		n, _ := tm("display-message", "-p", "-t", ids[s], "#{window_name}")
+		return n
+	}
+	MarkWaiting(map[string]bool{ids["pay"]: true})
+	if name("pay") != Icon+" pay"+bell || name("bill") != Icon+" bill" {
+		t.Errorf("after marking pay: %q %q", name("pay"), name("bill"))
+	}
+	MarkWaiting(map[string]bool{ids["pay"]: true})
+	if name("pay") != Icon+" pay"+bell {
+		t.Errorf("marking twice adds a second bell: %q", name("pay"))
+	}
+	MarkWaiting(map[string]bool{ids["bill"]: true})
+	if name("pay") != Icon+" pay" || name("bill") != Icon+" bill"+bell {
+		t.Errorf("after moving the bell: %q %q", name("pay"), name("bill"))
+	}
+	failOn(t, "list-windows")
+	MarkWaiting(nil)
+	if name("bill") != Icon+" bill"+bell {
+		t.Error("a failed listing must change nothing")
+	}
+}
+
+func TestSplitKeepsKindIcons(t *testing.T) {
+	privateServer(t)
+	review := "\U000F0208"
+	if _, err := tm("new-session", "-d", "-s", "pay", "-n", review+" pay"+bell, "sleep 60"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tm("new-session", "-d", "-s", "bill", "-n", "zsh", "sleep 60"); err != nil {
+		t.Fatal(err)
+	}
+	target, err := JoinSplit(Panes())
+	if err != nil {
+		t.Fatal(err)
+	}
+	labels, _ := tm("list-panes", "-t", target, "-F", "#{"+splitNameOpt+"}")
+	got := strings.Split(labels, "\n")
+	slices.Sort(got)
+	if want := []string{"zsh", review + " pay"}; !slices.Equal(got, want) {
+		t.Errorf("labels %q, want %q", got, want)
 	}
 }

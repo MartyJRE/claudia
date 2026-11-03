@@ -131,7 +131,8 @@ func uniquePath(dir, name string) string {
 	p := filepath.Join(dir, name)
 	ext := filepath.Ext(name)
 	for i := 2; ; i++ {
-		if _, err := os.Stat(p); os.IsNotExist(err) {
+		// Any Stat error ends the search: a name too long to stat would never become free.
+		if _, err := os.Stat(p); err != nil {
 			return p
 		}
 		p = filepath.Join(dir, fmt.Sprintf("%s (%d)%s", strings.TrimSuffix(name, ext), i, ext))

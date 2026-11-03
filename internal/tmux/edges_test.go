@@ -178,17 +178,17 @@ func TestUnsplitFailures(t *testing.T) {
 	}
 }
 
-func TestUnsplitSkipsOddLines(t *testing.T) {
+func TestUnsplitLastPaneWithEmptyFields(t *testing.T) {
 	privateServer(t)
 	p := session(t, "pay")["pay"]
-	// A tab in the name splits its line into more fields than expected.
-	if _, err := tm("set-option", "-p", "-t", p.ID, splitNameOpt, "a\tb"); err != nil {
-		t.Fatal(err)
-	}
+	// No home and no name: the trimmed output loses the line's trailing tabs.
 	if err := Unsplit(p.WindowID); err != nil {
 		t.Fatal(err)
 	}
-	if !HasSession("pay") || HasSession(SplitSession) {
-		t.Error("odd pane moved")
+	if !HasSession(SplitSession) {
+		t.Fatal("a pane without a home should get a window of its own in splits")
+	}
+	if out, _ := tm("list-panes", "-s", "-t", "="+SplitSession, "-F", "#{pane_id}"); out != p.ID {
+		t.Errorf("panes in splits %q, want %s", out, p.ID)
 	}
 }

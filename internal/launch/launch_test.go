@@ -55,12 +55,34 @@ func TestProfileFor(t *testing.T) {
 }
 
 func TestWindowName(t *testing.T) {
-	if got := windowName("fix it"); got != tmux.Icon+" fix it" {
+	if got := windowName("", "fix it"); got != tmux.Icon+" fix it" {
 		t.Errorf("got %q", got)
 	}
+	if got := windowName("review", "pay !12"); got != "\U000F0208 pay !12" {
+		t.Errorf("review icon: %q", got)
+	}
+	if got := windowName("unknown", "x"); got != tmux.Icon+" x" {
+		t.Errorf("unknown kind falls back to the robot: %q", got)
+	}
 	long := strings.Repeat("é", 40)
-	if got := windowName(long); got != tmux.Icon+" "+strings.Repeat("é", 31)+"…" {
+	if got := windowName("", long); got != tmux.Icon+" "+strings.Repeat("é", 31)+"…" {
 		t.Errorf("got %q", got)
+	}
+}
+
+func TestRememberKind(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	if got := rememberKind(Spec{Kind: "fix"}); got != "fix" {
+		t.Errorf("no id: %q", got)
+	}
+	if got := rememberKind(Spec{ID: "s1", Kind: "review"}); got != "review" {
+		t.Errorf("new: %q", got)
+	}
+	if got := rememberKind(Spec{ID: "s1"}); got != "review" {
+		t.Errorf("a resumed session keeps its kind, got %q", got)
+	}
+	if got := rememberKind(Spec{ID: "s2"}); got != "" {
+		t.Errorf("unknown session: %q", got)
 	}
 }
 

@@ -158,6 +158,7 @@ func (m *Model) replyToMention(x mention) (tea.Model, tea.Cmd) {
 		prompt := fmt.Sprintf("I was mentioned on the Confluence page %q (%s). Read it with the Atlassian MCP, find where I'm mentioned and what is asked of me, check the code where it helps, and draft my reply. Don't post anything to Confluence; show me the draft.", x.title, x.url)
 		m.pickRepo("reply on "+x.title+" in", "", nil, func(m *Model, dir string, p claude.Profile) (tea.Model, tea.Cmd) {
 			sp, _ := launch.New(dir, p, "reply: "+x.title, prompt)
+			sp.Kind = "reply"
 			return m.start(sp)
 		})
 		return m, nil
@@ -206,6 +207,7 @@ func (m *Model) ticketSession(key, summary, intent, verb, title string, prompt f
 				err = m.atlErr
 			}
 			sp, id := launch.New(dir, p, name, prompt(path, err))
+			sp.Kind = intent
 			_ = m.links.SetTicket(id, key)
 			return startMsg{sp}
 		}
@@ -242,6 +244,7 @@ func (m *Model) addressThreads(mr gitlab.MR) (tea.Model, tea.Cmd) {
 func (m *Model) inClone(mr gitlab.MR, verb, name, prompt string, urls []string) (tea.Model, tea.Cmd) {
 	launchIn := func(m *Model, dir string) (tea.Model, tea.Cmd) {
 		sp, id := launch.New(dir, launch.WorkProfile(m.store.Profiles), name, prompt)
+		sp.Kind = verb
 		if err := m.links.AddMRs(id, urls); err != nil {
 			m.setFlash(err.Error(), true)
 		}
