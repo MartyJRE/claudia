@@ -53,11 +53,36 @@ type Config struct {
 	// AnalysisPrompt starts the analysis of a ticket that isn't started yet;
 	// {key} is the ticket key and {brief} where its exported description is.
 	AnalysisPrompt string `json:"analysis_prompt"`
+	// ImplementationPrompt starts implementing a ticket; same placeholders.
+	ImplementationPrompt string `json:"implementation_prompt"`
+	// SessionNames names sessions per intent (analysis, implementation,
+	// general, review, fix, test, continue, reply), e.g. {"analysis":
+	// "{key}-analysis"}; {key}, {summary} and {verb} are filled in.
+	SessionNames map[string]string `json:"session_names"`
+	// Keys rebinds actions, e.g. {"sessions.close": "ctrl+w"}; a list binds
+	// several keys. `claudia keys` lists the actions.
+	Keys map[string]KeyList `json:"keys"`
+}
+
+// KeyList is one key or a list of them.
+type KeyList []string
+
+func (k *KeyList) UnmarshalJSON(b []byte) error {
+	var one string
+	if json.Unmarshal(b, &one) == nil {
+		*k = KeyList{one}
+		return nil
+	}
+	return json.Unmarshal(b, (*[]string)(k))
 }
 
 const defaultReviewPrompt = "Review these merge requests as one change: {urls}. " +
 	"Read each diff and its existing discussion with glab, read the surrounding code where the diff isn't enough, " +
 	"and check that the MRs fit together. List findings by severity with file and line. Don't post anything to GitLab."
+
+const defaultImplementationPrompt = "Read the Jira issue {key} at {brief} and implement it in this repo. " +
+	"Check out the ticket's branch if there is one, else create one from the base branch; stop and ask if the working tree has changes. " +
+	"Plan first and show me the plan, then implement it with tests. Don't push and don't write anything to Jira until I confirm."
 
 const defaultAnalysisPrompt = "Read the Jira issue {key} at {brief} and analyse it before implementation: " +
 	"what changes where in this codebase, the rollout steps, what's out of scope, and the open questions. " +
@@ -141,6 +166,9 @@ func Get() Config {
 		}
 		if cfg.AnalysisPrompt == "" {
 			cfg.AnalysisPrompt = defaultAnalysisPrompt
+		}
+		if cfg.ImplementationPrompt == "" {
+			cfg.ImplementationPrompt = defaultImplementationPrompt
 		}
 	})
 	return cfg

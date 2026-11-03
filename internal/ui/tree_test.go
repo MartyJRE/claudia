@@ -55,14 +55,14 @@ func TestJiraTree(t *testing.T) {
 }
 
 func TestSessionTree(t *testing.T) {
-	sess := func(id, dir, status string) row {
+	sess := func(id, dir, status string, started int64) row {
 		r := row{Session: claude.Session{ID: id, Transcript: &claude.Transcript{Cwd: dir}}}
 		if status != "" {
-			r.Live = &claude.Live{SessionID: id, Status: claude.Status(status)}
+			r.Live = &claude.Live{SessionID: id, Status: claude.Status(status), StartedAt: started}
 		}
 		return r
 	}
-	rows := []row{sess("a", "/c/pay", ""), sess("b", "/c/bill", "waiting"), sess("c", "/c/pay/sub", "busy")}
+	rows := []row{sess("a", "/c/pay", "", 0), sess("b", "/c/bill", "waiting", 1), sess("c", "/c/pay/sub", "busy", 2)}
 	m := &Model{repos: []repos.Repo{{Dir: "/c/pay"}, {Dir: "/c/bill"}}}
 	m.ix.sessionTicket = map[string]string{"a": "ABC-2", "c": "ABC-2"}
 	m.ix.issues = map[string]atlassian.Issue{"ABC-2": {Key: "ABC-2", Summary: "story", Parent: "ABC-1"}, "ABC-1": {Key: "ABC-1", Summary: "epic", Level: 1}}
@@ -77,12 +77,16 @@ func TestSessionTree(t *testing.T) {
 		}
 		return strings.Join(b, "|")
 	}
-	// The repo with a session waiting for you comes first.
-	if got, want := render(m.buildSessions(rows, false)), "#bill| b|#pay| a| c"; got != want {
+	// Live groups by when their newest session started; waiting doesn't move them.
+	if got, want := render(m.buildSessions(rows, false)), "#pay| a| c|#bill| b"; got != want {
 		t.Errorf("by repo: got %s want %s", got, want)
 	}
+	rows[1].Live.UpdatedAt = 1e12
+	if got, want := render(m.buildSessions(rows, false)), "#pay| a| c|#bill| b"; got != want {
+		t.Errorf("activity reordered: got %s want %s", got, want)
+	}
 	m.sessPrefs.Group = sessByTicket
-	if got, want := render(m.buildSessions(rows, false)), "#No ticket| b|#epic| #story|  a|  c"; got != want {
+	if got, want := render(m.buildSessions(rows, false)), "#epic| #story|  a|  c|#No ticket| b"; got != want {
 		t.Errorf("by ticket: got %s want %s", got, want)
 	}
 }

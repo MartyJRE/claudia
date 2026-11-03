@@ -357,17 +357,18 @@ func (m *Model) sessionRefs(ids []string) string {
 
 func (m *Model) keyMRs(k string) (tea.Model, tea.Cmd) {
 	r, ok := m.currentMR()
-	switch k {
-	case "a":
+	act := m.action(k)
+	switch act {
+	case "mrs.all":
 		m.showAll = !m.showAll
 		m.refilter()
 		return m, nil
-	case "o":
+	case "mrs.open":
 		if ok {
 			m.seen.mark(r.MR)
 			return m, openURL(r.WebURL)
 		}
-	case "p":
+	case "mrs.pipeline":
 		if ok {
 			p := r.Pipeline
 			if r.merged {
@@ -378,23 +379,23 @@ func (m *Model) keyMRs(k string) (tea.Model, tea.Cmd) {
 			}
 			m.setFlash("no pipeline", true)
 		}
-	case "s":
+	case "mrs.seen":
 		if ok {
 			m.seen.mark(r.MR)
 		}
-	case "y":
+	case "mrs.copy":
 		if ok {
 			return m, copyText(r.WebURL, "MR link")
 		}
-	case "c":
+	case "mrs.sessions":
 		if ok {
 			m.chooseSessions(m.ix.mrSessions[r.WebURL], "sessions for !"+fmt.Sprint(r.IID))
 		}
-	case "v":
+	case "mrs.threads":
 		if ok {
 			m.chooseThreads(r.MR)
 		}
-	case "f":
+	case "mrs.fix":
 		if ok && m.view == vMine && !r.merged {
 			if r.OpenThreads() == 0 {
 				m.setFlash("no open review threads", false)
@@ -402,15 +403,15 @@ func (m *Model) keyMRs(k string) (tea.Model, tea.Cmd) {
 			}
 			return m.addressThreads(r.MR)
 		}
-	case "B":
+	case "mrs.rebase":
 		if ok && !r.merged {
 			return m.rebase(r.MR)
 		}
-	case "J":
+	case "mrs.ticket":
 		if ok {
 			return m.gotoTicket(mrTicket(r.MR))
 		}
-	case "enter":
+	case "mrs.primary":
 		if !ok {
 			return m, nil
 		}
@@ -423,15 +424,15 @@ func (m *Model) keyMRs(k string) (tea.Model, tea.Cmd) {
 			return m, openURL(r.WebURL)
 		}
 		return m.reviewWithClaude(r.MR)
-	case "A", "U":
+	case "mrs.approve", "mrs.unapprove":
 		if !ok || m.view != vReview {
 			return m, nil
 		}
 		verb, fn := "approve", gitlab.Approve
-		if k == "U" {
+		if act == "mrs.unapprove" {
 			verb, fn = "unapprove", gitlab.Unapprove
 		}
-		if !m.confirm(k+r.WebURL, fmt.Sprintf("%s !%d %s", verb, r.IID, r.Repo())) {
+		if !m.confirm(act+r.WebURL, fmt.Sprintf("%s !%d %s", verb, r.IID, r.Repo())) {
 			return m, nil
 		}
 		mr := r.MR

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"runtime/debug"
 	"strings"
 	"syscall"
 	"time"
@@ -76,6 +77,14 @@ func main() {
 		}
 		watch.Stop()
 		fmt.Println("done; restart claudia to use it (ctrl+u inside claudia restarts by itself)")
+		return
+	}
+	if len(args) > 0 && args[0] == "version" {
+		fmt.Println(version())
+		return
+	}
+	if len(args) > 0 && args[0] == "keys" {
+		fmt.Print(ui.KeyActions())
 		return
 	}
 	if len(args) > 0 && args[0] == "setup" {
@@ -155,6 +164,29 @@ func makeBrief() {
 		fmt.Fprintln(os.Stderr, time.Now().Format(time.TimeOnly), "brief:", err)
 	}
 	_ = brief.Save(b)
+}
+
+func version() string {
+	if sha, ok := update.Current(); ok {
+		return sha
+	}
+	bi, ok := debug.ReadBuildInfo()
+	if !ok {
+		return "unknown"
+	}
+	rev, dirty := "", ""
+	for _, st := range bi.Settings {
+		switch {
+		case st.Key == "vcs.revision" && len(st.Value) >= 12:
+			rev = st.Value[:12]
+		case st.Key == "vcs.modified" && st.Value == "true":
+			dirty = "+changes"
+		}
+	}
+	if rev == "" {
+		return "unknown (local build)"
+	}
+	return rev + dirty + " (local build)"
 }
 
 func fail(err error) {

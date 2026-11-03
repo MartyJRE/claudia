@@ -173,7 +173,8 @@ func (m *Model) detailMention() string {
 }
 
 func (m *Model) keyMentions(k string) (tea.Model, tea.Cmd) {
-	if k == "a" {
+	act := m.action(k)
+	if act == "mentions.all" {
 		m.showAll = !m.showAll
 		m.refilter()
 		return m, nil
@@ -182,19 +183,19 @@ func (m *Model) keyMentions(k string) (tea.Model, tea.Cmd) {
 	if !ok {
 		return m, nil
 	}
-	switch k {
-	case "enter", "o":
+	switch act {
+	case "mentions.open":
 		return m, openURL(x.url)
-	case "x":
+	case "mentions.dismiss":
 		m.dismissed.toggle(x.id)
 		m.refilter()
-	case "J":
+	case "mentions.ticket":
 		if x.jira {
 			return m.gotoTicket(x.where)
 		}
-	case "y":
+	case "mentions.copy":
 		return m, copyText(x.url, "link")
-	case "c":
+	case "mentions.reply":
 		return m.replyToMention(x)
 	}
 	return m, nil

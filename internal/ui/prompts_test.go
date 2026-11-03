@@ -36,6 +36,11 @@ func TestClaudeForTicketPicksIntent(t *testing.T) {
 		m := &Model{gl: gl, jira: js, links: &links.Links{}, seen: seenStore{}, store: claude.NewStore([]claude.Profile{{Name: "work"}}, 0)}
 		m.ix = buildIndex(nil, gl, js, m.links)
 		m.claudeForTicket(key, "")
+		it, ok := m.chooser.selected()
+		if !ok {
+			t.Fatalf("%s: no intent preselected", key)
+		}
+		m.chooser.pick(m, it)
 		if m.chooser == nil || !strings.HasPrefix(m.chooser.title, want) {
 			got := "<none>"
 			if m.chooser != nil {
@@ -54,7 +59,7 @@ func TestSessionTitle(t *testing.T) {
 		{"review", "", "Draft: fix(api)!: drop the old routes", "review: drop the old routes"},
 		{"fix threads", "", "", "fix threads: "},
 	} {
-		if got := m.sessionTitle(c.verb, c.key, c.fallback); got != c.want {
+		if got := m.sessionTitle("review", c.verb, c.key, c.fallback); got != c.want {
 			t.Errorf("%q: got %q", c.want, got)
 		}
 	}

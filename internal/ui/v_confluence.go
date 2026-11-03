@@ -66,10 +66,10 @@ func (m *Model) keyConfluence(k string) (tea.Model, tea.Cmd) {
 	if !ok {
 		return m, nil
 	}
-	switch k {
-	case "enter", "o":
+	switch m.action(k) {
+	case "confluence.open":
 		return m, openURL(p.URL)
-	case "y":
+	case "confluence.copy":
 		return m, copyText(p.URL, "link")
 	}
 	return m, nil

@@ -311,35 +311,36 @@ func (m *Model) detailJira() string {
 }
 
 func (m *Model) keyJira(k string) (tea.Model, tea.Cmd) {
-	switch k {
-	case "a":
+	act := m.action(k)
+	switch act {
+	case "jira.team":
 		m.teamJira = !m.teamJira
 		m.cur[vJira] = cursor{}
 		m.refilter()
 		return m, nil
-	case "d":
+	case "jira.done":
 		m.showDone = !m.showDone
 		m.refilter()
 		return m, nil
-	case "s":
+	case "jira.sort":
 		m.jiraPrefs.Sort = (m.jiraPrefs.Sort + 1) % nSorts
 		m.saveJiraPrefs()
 		m.refilter()
 		m.setFlash("sorted by "+sortNames[m.jiraPrefs.Sort], false)
 		return m, nil
-	case "f":
+	case "jira.statuses":
 		m.chooseStatuses()
 		return m, nil
-	case " ":
+	case "jira.fold":
 		m.toggleFold()
 		return m, nil
-	case "-":
+	case "jira.fold_all":
 		m.foldAll(true)
 		return m, nil
-	case "+", "=":
+	case "jira.unfold_all":
 		m.foldAll(false)
 		return m, nil
-	case "v":
+	case "jira.layout":
 		m.jiraPrefs.Group = (m.jiraPrefs.Group + 1) % nGroups
 		m.saveJiraPrefs()
 		m.refilter()
@@ -350,24 +351,24 @@ func (m *Model) keyJira(k string) (tea.Model, tea.Cmd) {
 	if !ok || m.atl == nil {
 		return m, nil
 	}
-	switch k {
-	case "o":
+	switch act {
+	case "jira.open":
 		return m, openURL(m.atl.IssueURL(is.Key))
-	case "y":
+	case "jira.copy":
 		return m, copyText(is.Key, is.Key)
-	case "enter":
+	case "jira.sessions":
 		if len(m.ix.ticketSess[is.Key]) > 0 {
 			m.chooseSessions(m.ix.ticketSess[is.Key], "sessions for "+is.Key)
 			return m, nil
 		}
 		return m.claudeForTicket(is.Key, is.Summary)
-	case "c":
+	case "jira.claude":
 		return m.claudeForTicket(is.Key, is.Summary)
-	case "b":
+	case "jira.summary":
 		return m.briefSession(is.Key, is.Summary)
-	case "m":
+	case "jira.move":
 		return m, m.loadTransitions(is.Key)
-	case "e":
+	case "jira.copy_brief":
 		return m, m.exportBrief(is.Key, func(path string) tea.Msg {
 			b, err := os.ReadFile(path)
 			if err != nil {
@@ -375,7 +376,7 @@ func (m *Model) keyJira(k string) (tea.Model, tea.Cmd) {
 			}
 			return copyText(string(b), is.Key+" brief (with image paths)")()
 		})
-	case "i":
+	case "jira.images":
 		return m, m.showImages(is.Key)
 	}
 	return m, nil

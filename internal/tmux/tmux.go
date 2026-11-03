@@ -2,6 +2,7 @@ package tmux
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"os/exec"
 	"strconv"
@@ -9,11 +10,12 @@ import (
 )
 
 type Pane struct {
-	PID     int
-	ID      string
-	Session string
-	Window  string
-	Index   string
+	PID      int
+	ID       string
+	Session  string
+	Window   string
+	Index    string
+	WindowID string
 }
 
 func (p Pane) Target() string { return p.Session + ":" + p.Window }
@@ -27,18 +29,18 @@ func Running() bool { return exec.Command("tmux", "has-session").Run() == nil }
 
 func Panes() []Pane {
 	out, err := exec.Command("tmux", "list-panes", "-a", "-F",
-		"#{pane_pid}\t#{pane_id}\t#{session_name}\t#{window_index}\t#{pane_index}").Output()
+		"#{pane_pid}\t#{pane_id}\t#{session_name}\t#{window_index}\t#{pane_index}\t#{window_id}\t#{"+homeOpt+"}").Output()
 	if err != nil {
 		return nil
 	}
 	var panes []Pane
-	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+	for _, line := range strings.Split(strings.TrimRight(string(out), "\n"), "\n") {
 		f := strings.Split(line, "\t")
-		if len(f) != 5 {
-			continue
+		if len(f) != 7 || f[6] != "" && f[6] != f[2] {
+			continue // a borrowed link: the pane belongs to its home session
 		}
 		pid, _ := strconv.Atoi(f[0])
-		panes = append(panes, Pane{PID: pid, ID: f[1], Session: f[2], Window: f[3], Index: f[4]})
+		panes = append(panes, Pane{PID: pid, ID: f[1], Session: f[2], Window: f[3], Index: f[4], WindowID: f[5]})
 	}
 	return panes
 }
@@ -119,9 +121,194 @@ func NewWindow(session, name, dir string, env []string, argv []string) (string, 
 	return strings.TrimSpace(string(out)), nil
 }
 
+// homeOpt tags a window linked into another session with the session it lives in.
+const homeOpt = "@claudia_home"
+
+// ActiveSession is the session of the attached client used most recently.
+func ActiveSession() (string, bool) {
+	out, err := exec.Command("tmux", "list-clients", "-F", "#{client_activity}\t#{session_name}").Output()
+	if err != nil {
+		return "", false
+	}
+	best, name := int64(-1), ""
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		f := strings.SplitN(line, "\t", 2)
+		if len(f) != 2 {
+			continue
+		}
+		if t, _ := strconv.ParseInt(f[0], 10, 64); t > best {
+			best, name = t, f[1]
+		}
+	}
+	return name, name != ""
+}
+
+// Link is a window borrowed into a session other than its home.
+type Link struct {
+	Session, WindowID, Home string
+	Viewed                  bool // the active window of an attached session
+}
+
+func (l Link) Target() string { return "=" + l.Session + ":" + l.WindowID }
+
+// Borrow links the window into another session as a background tab.
+func Borrow(windowID, home, into string) error {
+	if out, err := exec.Command("tmux", "set-option", "-w", "-t", windowID, homeOpt, home).CombinedOutput(); err != nil {
+		return &cmdError{string(out), err}
+	}
+	if out, err := exec.Command("tmux", "link-window", "-d", "-s", windowID, "-t", "="+into+":").CombinedOutput(); err != nil {
+		return &cmdError{string(out), err}
+	}
+	return nil
+}
+
+func Borrowed() []Link {
+	out, err := exec.Command("tmux", "list-windows", "-a", "-F",
+		"#{session_name}\t#{window_id}\t#{window_active}#{session_attached}\t#{"+homeOpt+"}").Output()
+	if err != nil {
+		return nil
+	}
+	var links []Link
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		f := strings.Split(line, "\t")
+		if len(f) != 4 || f[3] == "" || f[3] == f[0] {
+			continue
+		}
+		links = append(links, Link{Session: f[0], WindowID: f[1], Home: f[3], Viewed: f[2][0] == '1' && f[2][1:] != "0"})
+	}
+	return links
+}
+
+// Unborrow drops the link; without -k tmux refuses to unlink a window's last link,
+// so the home session keeps it.
+func Unborrow(l Link) error {
+	return exec.Command("tmux", "unlink-window", "-t", l.Target()).Run()
+}
+
 type cmdError struct {
 	out string
 	err error
 }
 
 func (e *cmdError) Error() string { return strings.TrimSpace(e.out) + ": " + e.err.Error() }
+
+// SplitSession holds the windows claudia tiles several sessions into.
+const SplitSession = "splits"
+
+// Split options remember where a pane came from, so Unsplit can send it back.
+const (
+	splitHomeOpt = "@claudia_split_home"
+	splitNameOpt = "@claudia_split_name"
+)
+
+func tm(args ...string) (string, error) {
+	out, err := exec.Command("tmux", args...).CombinedOutput()
+	if err != nil {
+		return "", &cmdError{string(out), err}
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// JoinSplit tiles the panes into one window of SplitSession and returns its
+// target. Panes already in a split pull the others into that window.
+func JoinSplit(panes []Pane) (string, error) {
+	win := ""
+	for _, p := range panes {
+		if p.Session == SplitSession {
+			win = p.WindowID
+			break
+		}
+	}
+	placeholder := ""
+	if win == "" && !HasSession(SplitSession) {
+		id, err := tm("new-session", "-d", "-s", SplitSession, "-P", "-F", "#{window_id}")
+		if err != nil {
+			return "", err
+		}
+		placeholder = id
+	}
+	for _, p := range panes {
+		if p.Session == SplitSession && p.WindowID == win {
+			continue
+		}
+		name, err := tm("display-message", "-p", "-t", p.ID, "#{window_name}")
+		if err != nil {
+			return "", err
+		}
+		// A borrowed tab would point at a window the pane is about to leave.
+		for _, l := range Borrowed() {
+			if l.WindowID == p.WindowID {
+				_ = Unborrow(l)
+			}
+		}
+		_, _ = tm("set-option", "-wu", "-t", p.WindowID, homeOpt)
+		home := p.Session
+		if home == SplitSession {
+			home, _ = tm("show-options", "-pqv", "-t", p.ID, splitHomeOpt)
+			name, _ = tm("show-options", "-pqv", "-t", p.ID, splitNameOpt)
+		}
+		if _, err := tm("set-option", "-p", "-t", p.ID, splitHomeOpt, home); err != nil {
+			return "", err
+		}
+		if _, err := tm("set-option", "-p", "-t", p.ID, splitNameOpt, name); err != nil {
+			return "", err
+		}
+		if win == "" {
+			win, err = tm("break-pane", "-d", "-s", p.ID, "-t", "="+SplitSession+":", "-n", "✻ split", "-P", "-F", "#{window_id}")
+		} else {
+			_, err = tm("join-pane", "-d", "-s", p.ID, "-t", win)
+		}
+		if err != nil {
+			return "", err
+		}
+		_, _ = tm("select-layout", "-t", win, "tiled")
+	}
+	if placeholder != "" {
+		_, _ = tm("kill-window", "-t", placeholder)
+	}
+	if win == "" {
+		return "", errors.New("nothing to split")
+	}
+	_, _ = tm("set-option", "-w", "-t", win, "pane-border-status", "top")
+	_, _ = tm("set-option", "-w", "-t", win, "pane-border-format", " #{"+splitNameOpt+"} ")
+	return "=" + SplitSession + ":" + win, nil
+}
+
+// Unsplit sends every pane of the split window back to its own window in the
+// session it came from, or keeps it as a window of its own when that's gone.
+func Unsplit(windowID string) error {
+	out, err := tm("list-panes", "-t", windowID, "-F", "#{pane_id}\t#{"+splitHomeOpt+"}\t#{"+splitNameOpt+"}")
+	if err != nil {
+		return err
+	}
+	for _, line := range strings.Split(out, "\n") {
+		f := strings.Split(line, "\t")
+		if len(f) != 3 {
+			continue
+		}
+		dest := f[1]
+		if dest == "" {
+			dest = SplitSession
+		}
+		// A session whose only window went into the split ended with it.
+		placeholder := ""
+		if !HasSession(dest) {
+			if placeholder, err = tm("new-session", "-d", "-s", dest, "-P", "-F", "#{window_id}"); err != nil {
+				return err
+			}
+		}
+		args := []string{"break-pane", "-d", "-s", f[0], "-t", "=" + dest + ":"}
+		if f[2] != "" {
+			args = append(args, "-n", f[2])
+		}
+		if _, err := tm(args...); err != nil {
+			return err
+		}
+		if placeholder != "" {
+			_, _ = tm("kill-window", "-t", placeholder)
+		}
+		_, _ = tm("set-option", "-pu", "-t", f[0], splitHomeOpt)
+		_, _ = tm("set-option", "-pu", "-t", f[0], splitNameOpt)
+	}
+	return nil
+}

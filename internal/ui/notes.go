@@ -511,14 +511,15 @@ func (m *Model) detailNote() string {
 
 func (m *Model) keyNotes(k string) (tea.Model, tea.Cmd) {
 	r, ok := m.currentNoteRow()
-	switch k {
-	case "v":
+	act := m.action(k)
+	switch act {
+	case "notes.layout":
 		m.notesPrefs.Recent = !m.notesPrefs.Recent
 		m.saveNotesPrefs()
 		m.cur[vNotes] = cursor{}
 		m.refilter()
 		return m, nil
-	case " ", "enter":
+	case "notes.fold", "notes.read":
 		if !ok {
 			return m, nil
 		}
@@ -532,22 +533,22 @@ func (m *Model) keyNotes(k string) (tea.Model, tea.Cmd) {
 			m.refilter()
 			return m, nil
 		}
-		if k == "enter" {
+		if act == "notes.read" {
 			m.openReader(r.note)
 		}
-	case "e":
+	case "notes.edit":
 		if ok && !r.isFolder() {
 			return m, m.edit(r.note.Path)
 		}
-	case "o":
+	case "notes.obsidian":
 		if ok && !r.isFolder() {
 			return m, openURL(obsidianURL(m.vault.Root, r.note.Rel))
 		}
-	case "y":
+	case "notes.copy":
 		if ok && !r.isFolder() {
 			return m, copyText(r.note.Path, "note path")
 		}
-	case "J":
+	case "notes.ticket":
 		if ok && !r.isFolder() && len(r.note.Keys) > 0 {
 			return m.gotoTicket(r.note.Keys[0])
 		}

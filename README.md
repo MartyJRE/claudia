@@ -59,8 +59,16 @@ stories' notes). `N` lists them, `enter` reads one, `e` edits it in `$EDITOR`,
 `w` writes a new one into the ticket's folder.
 
 `c` starts the Claude session the item calls for: a review for a review request,
-a drafted reply for a mention, fixes for review threads, an analysis for a new
-ticket. Every view lists its keys in the footer.
+a drafted reply for a mention, fixes for review threads. On a ticket it asks
+which kind (analysis, implementation, general, review, …), with the one that
+fits the ticket's state preselected, so `enter` just goes. Every view lists its
+keys in the footer.
+
+In Sessions, the live ones stay in the order they started, so activity never
+reshuffles the list. `K` closes a session (`R` resumes it later). To see several
+side by side, mark them with `m` and press `S`: they're tiled into one window in
+a `splits` tmux session. `U` sends them back to their own windows, each one in
+the session it came from.
 
 ## Claude can drive it too
 
@@ -99,6 +107,10 @@ set -g allow-passthrough on   # ticket images through tmux
 
 Run `claudia` to open it in its own tmux session.
 
+When a Claude session starts waiting on you while you're in another tmux session,
+it shows up there as an extra tab. The tab goes away once you've answered and
+switched to another tab; the window stays in its repo's session throughout.
+
 ## Configuration
 
 `~/.config/claudia/config.json` (every field is optional):
@@ -112,7 +124,9 @@ Run `claudia` to open it in its own tmux session.
   "code_root": "~/Documents/Code",
   "work_dir": "Work",
   "review_prompt": "/review-mr {urls}",
-  "analysis_prompt": "/story-analysis {key}"
+  "analysis_prompt": "/story-analysis {key}",
+  "session_names": {"analysis": "{key}-analysis", "general": "{key}"},
+  "keys": {"sessions.close": "ctrl+w", "global.down": ["j", "down"]}
 }
 ```
 
@@ -126,8 +140,14 @@ Run `claudia` to open it in its own tmux session.
 - `vault`: an Obsidian vault, e.g. `"~/Documents/Notes"`; `vault_projects` is its
   folder with one subfolder per ticket (default `01 - Projects`).
 - `remote_control`: profiles whose sessions start with Remote Control, e.g. `["work"]`.
-- `review_prompt` and `analysis_prompt` let you point at your own skills; the
-  defaults are plain prompts.
+- `review_prompt`, `analysis_prompt` and `implementation_prompt` let you point at
+  your own skills; the defaults are plain prompts.
+- `session_names` names sessions per intent: `analysis`, `implementation`,
+  `general`, `continue`, `test`, `review`, `fix`, `reply`. `{key}`, `{summary}`
+  and `{verb}` are filled in. Without it, sessions are named `<verb>: <summary>`.
+- `keys` rebinds any key outside text input: an action name to a key or a list
+  of keys. `claudia keys` lists every action with its current keys and points out
+  clashes. claudia also flags clashes when it starts.
 
 Credentials stay in the environment: `ATLASSIAN_EMAIL` and `ATLASSIAN_API_TOKEN`
 (an [Atlassian API token](https://id.atlassian.com/manage-profile/security/api-tokens)).

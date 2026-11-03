@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"os/exec"
+	"slices"
 	"strings"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/MartyJRE/claudia/internal/atlassian"
 	"github.com/MartyJRE/claudia/internal/brief"
 	"github.com/MartyJRE/claudia/internal/claude"
+	"github.com/MartyJRE/claudia/internal/config"
 	"github.com/MartyJRE/claudia/internal/gitlab"
 	"github.com/MartyJRE/claudia/internal/launch"
 	"github.com/MartyJRE/claudia/internal/links"
@@ -66,6 +68,9 @@ func (r row) live() bool { return r.Live != nil }
 type Model struct {
 	opts   Options
 	Result Result
+
+	km     keymap
+	marked map[string]bool // session ids marked for a split
 
 	store  *claude.Store
 	links  *links.Links
@@ -151,6 +156,8 @@ func New(opts Options) *Model {
 		filter:     f,
 		dismissed:  loadDismissed(),
 	}
+	var problems []string
+	m.km, problems = newKeymap(config.Get().Keys)
 	m.atl, m.atlErr = atlassian.New()
 	m.seen, m.seenExisted = loadSeen()
 	m.loadCaches()
@@ -159,6 +166,10 @@ func New(opts Options) *Model {
 	m.reloadBrief()
 	if watch.Notifier() == "" {
 		m.setFlash("notifications open Script Editor when clicked: run `claudia setup` once to install the notification helper", true)
+		m.flashAt = time.Now().Add(20 * time.Second)
+	}
+	if len(problems) > 0 {
+		m.setFlash("config keys: "+strings.Join(problems, "; "), true)
 		m.flashAt = time.Now().Add(20 * time.Second)
 	}
 	return m
@@ -348,52 +359,52 @@ func (m *Model) updateFilter(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m *Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	k := msg.String()
 	c := &m.cur[m.view]
-	switch k {
-	case "q", "ctrl+c":
+	switch m.action(k) {
+	case "global.quit":
 		return m, tea.Quit
-	case "esc":
+	case "global.back":
 		if m.filter.Value() != "" {
 			m.filter.SetValue("")
 			m.refilter()
 			return m, nil
 		}
 		return m, tea.Quit
-	case "up", "k", "ctrl+p":
+	case "global.up":
 		c.pos = max(0, c.pos-1)
 		return m, nil
-	case "down", "j", "ctrl+n":
+	case "global.down":
 		c.pos = min(m.count()-1, c.pos+1)
 		return m, nil
-	case "g", "home":
+	case "global.top":
 		c.pos = 0
 		return m, nil
-	case "G", "end":
+	case "global.bottom":
 		c.pos = m.count() - 1
 		return m, nil
-	case "tab", "right", "l":
+	case "global.next_view":
 		m.switchView((m.view + 1) % nViews)
 		return m, nil
-	case "shift+tab", "left", "h":
+	case "global.prev_view":
 		m.switchView((m.view + nViews - 1) % nViews)
 		return m, nil
-	case "@":
+	case "global.assistant":
 		return m.openAssistant()
-	case "ctrl+u":
+	case "global.update":
 		return m, m.startUpdate()
-	case "u":
+	case "global.open_link":
 		return m, m.askLink()
-	case "N":
+	case "global.ticket_notes":
 		m.chooseNotes()
 		return m, nil
-	case "w":
+	case "global.write_note":
 		return m, m.writeNote()
-	case "n":
+	case "global.new_session":
 		m.newSession()
 		return m, nil
-	case "/":
+	case "global.filter":
 		m.filtering = true
 		return m, m.filter.Focus()
-	case "ctrl+r":
+	case "global.refresh":
 		m.setFlash("refreshing…", false)
 		return m, m.refreshAll()
 	}
@@ -636,26 +647,26 @@ func (m *Model) subtitle() string {
 	switch m.view {
 	case vNotes:
 		if m.notesPrefs.Recent {
-			return sDim.Render("recently edited notes") + "  " + sKey.Render("v") + sDim.Render(" folders")
+			return sDim.Render("recently edited notes") + "  " + sKey.Render(m.key("notes.layout")) + sDim.Render(" folders")
 		}
-		return sDim.Render("your vault") + "  " + sKey.Render("v") + sDim.Render(" recently edited") + "  " + sKey.Render("N") + sDim.Render(" on any ticket lists its notes, ") + sKey.Render("w") + sDim.Render(" writes one")
+		return sDim.Render("your vault") + "  " + sKey.Render(m.key("notes.layout")) + sDim.Render(" recently edited") + "  " + sKey.Render(m.key("global.ticket_notes")) + sDim.Render(" on any ticket lists its notes, ") + sKey.Render(m.key("global.write_note")) + sDim.Render(" writes one")
 	case vInbox:
 		s := "everyone waiting on you, oldest first"
 		if m.showAll {
 			s += " · incl. snoozed"
 		}
-		return sDim.Render(s) + "  " + sKey.Render("x") + sDim.Render(" snooze until it changes  ") + sKey.Render("a") + sDim.Render(" show snoozed")
+		return sDim.Render(s) + "  " + sKey.Render(m.key("inbox.snooze")) + sDim.Render(" snooze until it changes  ") + sKey.Render(m.key("inbox.all")) + sDim.Render(" show snoozed")
 	case vSessions:
 		g := " · " + sessGroupNames[m.sessPrefs.Group]
 		if m.allSessions {
-			return sDim.Render("all sessions, last 7 days"+g) + "  " + sKey.Render("a") + sDim.Render(" live only")
+			return sDim.Render("all sessions, last 7 days"+g) + "  " + sKey.Render(m.key("sessions.all")) + sDim.Render(" live only")
 		}
-		return sDim.Render("live sessions"+g) + "  " + sKey.Render("a") + sDim.Render(" show closed too")
+		return sDim.Render("live sessions"+g) + "  " + sKey.Render(m.key("sessions.all")) + sDim.Render(" show closed too")
 	case vReview:
 		if m.showAll {
-			return sDim.Render("all review requests") + "  " + sKey.Render("a") + sDim.Render(" hide approved")
+			return sDim.Render("all review requests") + "  " + sKey.Render(m.key("mrs.all")) + sDim.Render(" hide approved")
 		}
-		return sDim.Render("review requests not yet approved by you") + "  " + sKey.Render("a") + sDim.Render(" show all")
+		return sDim.Render("review requests not yet approved by you") + "  " + sKey.Render(m.key("mrs.all")) + sDim.Render(" show all")
 	case vMine:
 		return sDim.Render("open, then merged in the last 5 days")
 	case vJira:
@@ -667,10 +678,10 @@ func (m *Model) subtitle() string {
 		if n := len(m.jiraPrefs.Hidden); n > 0 {
 			s += fmt.Sprintf(" · %d statuses hidden", n)
 		}
-		hint := sKey.Render("a") + sDim.Render(" mine/team  ") + sKey.Render("d") + sDim.Render(" done")
+		hint := sKey.Render(m.key("jira.team")) + sDim.Render(" mine/team  ") + sKey.Render(m.key("jira.done")) + sDim.Render(" done")
 		return sDim.Render(s) + "  " + hint
 	case vMentions:
-		hint := sKey.Render("x") + sDim.Render(" dismiss  ") + sKey.Render("a") + sDim.Render(" show handled")
+		hint := sKey.Render(m.key("mentions.dismiss")) + sDim.Render(" dismiss  ") + sKey.Render(m.key("mentions.all")) + sDim.Render(" show handled")
 		return sDim.Render("Jira and Confluence mentions, last 30 days") + "  " + hint
 	case vConfluence:
 		return sDim.Render("pages you edited recently")
@@ -691,7 +702,9 @@ func (m *Model) viewFooter() string {
 		}
 	} else {
 		keys = m.help()
-		keys = append(keys, [2]string{"@", "assistant"}, [2]string{"u", "open link"}, [2]string{"n", "new"}, [2]string{"1-9", "views"}, [2]string{"/", "filter"}, [2]string{"q", "quit"})
+		keys = append(keys, m.hints("global.assistant", "global.open_link", "global.new_session")...)
+		keys = append(keys, [2]string{"1-9", "views"})
+		keys = append(keys, m.hints("global.filter", "global.quit")...)
 	}
 	var parts []string
 	for _, k := range keys {
@@ -711,21 +724,23 @@ func (m *Model) viewFooter() string {
 func (m *Model) help() [][2]string {
 	switch m.view {
 	case vNotes:
-		return [][2]string{{"enter", "read"}, {"space", "fold"}, {"e", "edit"}, {"o", "Obsidian"}, {"v", "recent/tree"}, {"J", "ticket"}}
+		return m.hints("notes.read", "notes.fold", "notes.edit", "notes.obsidian", "notes.layout", "notes.ticket")
 	case vInbox:
-		return [][2]string{{"enter", "open"}, {"R", "brief"}, {"r", "review with claude"}, {"v", "threads"}, {"A", "approve"}, {"B", "rebase"}, {"x", "snooze"}, {"J", "ticket"}, {"c", "claude does what fits"}}
+		return m.hints("inbox.open", "inbox.brief", "inbox.review", "inbox.threads", "inbox.approve", "inbox.rebase", "inbox.snooze", "inbox.ticket", "inbox.claude")
 	case vSessions:
-		return [][2]string{{"enter", "jump"}, {"space", "fold"}, {"v", "group"}, {"R", "resume"}, {"J", "ticket"}, {"t", "set ticket"}, {"o", "MR"}, {"X", "restore"}}
+		return m.hints("sessions.jump", "sessions.fold", "sessions.group", "sessions.resume", "sessions.close", "sessions.mark", "sessions.split", "sessions.unsplit", "sessions.ticket", "sessions.set_ticket", "sessions.mr", "sessions.restore")
 	case vReview:
-		return [][2]string{{"enter", "review with claude"}, {"o", "open"}, {"J", "ticket"}, {"B", "rebase"}, {"A", "approve"}, {"s", "seen"}, {"c", "sessions"}}
+		return append([][2]string{m.hint("mrs.primary", "review with claude")},
+			m.hints("mrs.open", "mrs.ticket", "mrs.rebase", "mrs.approve", "mrs.seen", "mrs.sessions")...)
 	case vMine:
-		return [][2]string{{"enter", "session"}, {"v", "threads"}, {"f", "fix threads"}, {"o", "open"}, {"J", "ticket"}, {"B", "rebase"}, {"p", "pipeline"}, {"s", "seen"}}
+		return append([][2]string{m.hint("mrs.primary", "session")},
+			m.hints("mrs.threads", "mrs.fix", "mrs.open", "mrs.ticket", "mrs.rebase", "mrs.pipeline", "mrs.seen")...)
 	case vJira:
-		return [][2]string{{"space", "fold"}, {"v", "layout"}, {"enter", "sessions"}, {"c", "claude (fits the state)"}, {"b", "summary"}, {"m", "move"}, {"f", "statuses"}, {"s", "sort"}, {"e", "copy brief"}, {"i", "images"}, {"o", "open"}}
+		return m.hints("jira.fold", "jira.layout", "jira.sessions", "jira.claude", "jira.summary", "jira.move", "jira.statuses", "jira.sort", "jira.copy_brief", "jira.images", "jira.open")
 	case vMentions:
-		return [][2]string{{"enter", "open"}, {"x", "dismiss"}, {"J", "ticket"}, {"c", "draft reply"}}
+		return m.hints("mentions.open", "mentions.dismiss", "mentions.ticket", "mentions.reply")
 	case vConfluence:
-		return [][2]string{{"enter", "open"}, {"y", "copy link"}}
+		return m.hints("confluence.open", "confluence.copy")
 	}
 	return nil
 }
@@ -776,7 +791,14 @@ func (m *Model) refilter() {
 	}
 	m.vis.inbox = m.filterInbox(match)
 	m.vis.notes = m.filterNotes(match, len(terms) > 0)
+	selected := ""
+	if c := m.cur[vSessions].pos; c >= 0 && c < len(m.vis.sessions) {
+		selected = m.vis.sessions[c].id()
+	}
 	m.vis.sessions = m.buildSessions(m.filterSessions(match), len(terms) > 0)
+	if i := slices.IndexFunc(m.vis.sessions, func(r srow) bool { return r.id() == selected }); selected != "" && i >= 0 {
+		m.cur[vSessions].pos = i
+	}
 	m.vis.mrs = m.filterMRs(match)
 	m.vis.jira = m.buildJira(m.jiraIssues(match), len(terms) > 0)
 	m.vis.mentions = m.filterMentions(match)

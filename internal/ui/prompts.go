@@ -28,46 +28,115 @@ func briefRef(key, path string, err error) string {
 	return fmt.Sprintf("Read the Jira issue %s exported to %s (it includes the comments; open the images it references)", key, path)
 }
 
-// claudeForTicket picks the session a ticket needs right now.
+// intent is one kind of session claudia can start on a ticket.
+type intent struct {
+	id, label string
+	start     func(m *Model) (tea.Model, tea.Cmd)
+}
+
+// claudeForTicket offers the sessions that fit the ticket, with the cursor on
+// the one its state calls for, so enter does what fits.
 func (m *Model) claudeForTicket(key, summary string) (tea.Model, tea.Cmd) {
+	is, known := m.ix.issues[key]
+	status := strings.ToLower(is.Status)
+	var review, threads *gitlab.MR
 	for _, mr := range m.gl.Review {
-		if mrTicket(mr) == key && !mr.Draft && !mr.ApprovedByMe(m.gl.Me.Username) {
-			return m.reviewWithClaude(mr)
+		if mrTicket(mr) == key && review == nil {
+			review = &mr
 		}
 	}
 	for _, mr := range m.gl.Mine {
-		if mrTicket(mr) == key && mr.OpenThreads() > 0 {
-			return m.addressThreads(mr)
+		if mrTicket(mr) != key {
+			continue
+		}
+		if mr.OpenThreads() > 0 && threads == nil {
+			threads = &mr
+		}
+		if review == nil {
+			review = &mr
 		}
 	}
-	is, known := m.ix.issues[key]
-	status := strings.ToLower(is.Status)
-	switch {
-	case known && (is.Category == "new" || strings.Contains(status, "analysis")):
-		return m.ticketSession(key, summary, "analyse", "analyse "+key+" in", func(path string, err error) string {
-			brief := path
-			if err != nil {
-				brief = "Jira (use the Atlassian MCP)"
-			}
-			return strings.NewReplacer("{key}", key, "{brief}", brief).Replace(config.Get().AnalysisPrompt)
-		})
-	case known && strings.Contains(status, "test"):
-		return m.ticketSession(key, summary, "test plan", "test plan for "+key+" in", func(path string, err error) string {
-			return briefRef(key, path, err) + " and look at the changes that went in for it" + m.mrList(key) +
-				". It's ready for testing: write a test plan for devel from the acceptance criteria, with concrete requests or UI steps, expected results and edge cases. " + noWrites
-		})
-	case known && is.Category == "indeterminate" && is.Mine:
-		return m.ticketSession(key, summary, "continue", "continue "+key+" in", func(path string, err error) string {
-			return briefRef(key, path, err) + ". I'm working on it. Check where the work stands: the branches for " + key +
-				" in this repo and its MRs" + m.mrList(key) + ", against the acceptance criteria. Summarise what's done, what's left, and propose the next steps. Don't change files yet."
-		})
+
+	intents := []intent{
+		{"analysis", "Analysis", func(m *Model) (tea.Model, tea.Cmd) {
+			return m.ticketSession(key, summary, "analysis", "analyse", "analyse "+key+" in", func(path string, err error) string {
+				return fillBrief(config.Get().AnalysisPrompt, key, path, err)
+			})
+		}},
+		{"implementation", "Implementation", func(m *Model) (tea.Model, tea.Cmd) {
+			return m.ticketSession(key, summary, "implementation", "implement", "implement "+key+" in", func(path string, err error) string {
+				return fillBrief(config.Get().ImplementationPrompt, key, path, err)
+			})
+		}},
+		{"general", "General", func(m *Model) (tea.Model, tea.Cmd) { return m.briefSession(key, summary) }},
+		{"continue", "Continue", func(m *Model) (tea.Model, tea.Cmd) {
+			return m.ticketSession(key, summary, "continue", "continue", "continue "+key+" in", func(path string, err error) string {
+				return briefRef(key, path, err) + ". I'm working on it. Check where the work stands: the branches for " + key +
+					" in this repo and its MRs" + m.mrList(key) + ", against the acceptance criteria. Summarise what's done, what's left, and propose the next steps. Don't change files yet."
+			})
+		}},
+		{"test", "Test plan", func(m *Model) (tea.Model, tea.Cmd) {
+			return m.ticketSession(key, summary, "test", "test plan", "test plan for "+key+" in", func(path string, err error) string {
+				return briefRef(key, path, err) + " and look at the changes that went in for it" + m.mrList(key) +
+					". It's ready for testing: write a test plan for devel from the acceptance criteria, with concrete requests or UI steps, expected results and edge cases. " + noWrites
+			})
+		}},
 	}
-	return m.briefSession(key, summary)
+	if review != nil {
+		mr := *review
+		intents = append(intents, intent{"review", fmt.Sprintf("Review !%d %s", mr.IID, mr.Repo()), func(m *Model) (tea.Model, tea.Cmd) { return m.reviewWithClaude(mr) }})
+	}
+	if threads != nil {
+		mr := *threads
+		intents = append(intents, intent{"fix", fmt.Sprintf("Fix threads on !%d %s", mr.IID, mr.Repo()), func(m *Model) (tea.Model, tea.Cmd) { return m.addressThreads(mr) }})
+	}
+
+	fits := "general"
+	pending := false
+	for _, mr := range m.gl.Review {
+		if mrTicket(mr) == key && !mr.Draft && !mr.ApprovedByMe(m.gl.Me.Username) {
+			pending = true
+		}
+	}
+	switch {
+	case pending:
+		fits = "review"
+	case threads != nil:
+		fits = "fix"
+	case known && (is.Category == "new" || strings.Contains(status, "analysis")):
+		fits = "analysis"
+	case known && strings.Contains(status, "test"):
+		fits = "test"
+	case known && is.Category == "indeterminate" && is.Mine:
+		fits = "continue"
+	}
+
+	var items []choice
+	for _, it := range intents {
+		hint := ""
+		if it.id == fits {
+			hint = "fits the ticket's state"
+		}
+		items = append(items, choice{label: it.label, hint: hint, search: it.label, value: it})
+	}
+	m.chooser = newChooser("session for "+key, items, func(m *Model, ch choice) (tea.Model, tea.Cmd) {
+		return ch.value.(intent).start(m)
+	})
+	m.chooser.cur.pos = max(0, slices.IndexFunc(intents, func(it intent) bool { return it.id == fits }))
+	return m, nil
+}
+
+func fillBrief(prompt, key, path string, err error) string {
+	brief := path
+	if err != nil {
+		brief = "Jira (use the Atlassian MCP)"
+	}
+	return strings.NewReplacer("{key}", key, "{brief}", brief).Replace(prompt)
 }
 
 // briefSession is the plain "what is this ticket about" session.
 func (m *Model) briefSession(key, summary string) (tea.Model, tea.Cmd) {
-	return m.ticketSession(key, summary, "about", key+" in", func(path string, err error) string {
+	return m.ticketSession(key, summary, "general", "about", key+" in", func(path string, err error) string {
 		return briefRef(key, path, err) + ". Then look into this repo and summarise: what needs to be done, where in the code, and what is unclear or needs a decision. " + noWrites
 	})
 }
@@ -94,7 +163,7 @@ func (m *Model) replyToMention(x mention) (tea.Model, tea.Cmd) {
 		})
 		return m, nil
 	}
-	return m.ticketSession(x.where, x.title, "reply to "+firstName(x.author), "reply to "+x.author+" in", func(path string, err error) string {
+	return m.ticketSession(x.where, x.title, "reply", "reply to "+firstName(x.author), "reply to "+x.author+" in", func(path string, err error) string {
 		return fmt.Sprintf("%s mentioned me on %s (%s):\n\n%s\n\n%s, and look at the code where it helps to answer. "+
 			"Then draft my reply: answer each of their points, briefly, in the language they wrote in. Don't post anything to Jira; show me the draft.",
 			x.author, x.where, x.url, quote, briefRef(x.where, path, err))
@@ -104,7 +173,7 @@ func (m *Model) replyToMention(x mention) (tea.Model, tea.Cmd) {
 // ticketSession picks a repo (those on the ticket's branch or holding its MRs
 // first) and starts claude paired with the ticket. prompt receives the exported
 // brief; the export runs off the UI thread.
-func (m *Model) ticketSession(key, summary, verb, title string, prompt func(path string, err error) string) (tea.Model, tea.Cmd) {
+func (m *Model) ticketSession(key, summary, intent, verb, title string, prompt func(path string, err error) string) (tea.Model, tea.Cmd) {
 	lower := strings.ToLower(key)
 	onBranch := slices.ContainsFunc(m.repos, func(r repos.Repo) bool { return strings.Contains(strings.ToLower(r.Branch), lower) })
 	mrRepo := map[string]string{}
@@ -128,7 +197,7 @@ func (m *Model) ticketSession(key, summary, verb, title string, prompt func(path
 		}
 		return false, ""
 	}, func(m *Model, dir string, p claude.Profile) (tea.Model, tea.Cmd) {
-		name := m.sessionTitle(verb, key, summary)
+		name := m.sessionTitle(intent, verb, key, summary)
 		atl := m.atl
 		return m, func() tea.Msg {
 			path, err := "", error(nil)
@@ -154,7 +223,7 @@ func (m *Model) reviewWithClaude(mr gitlab.MR) (tea.Model, tea.Cmd) {
 		urls = append(urls, o.WebURL)
 	}
 	m.seen.mark(rel...)
-	name := m.sessionTitle("review", mrTicket(mr), mr.Title)
+	name := m.sessionTitle("review", "review", mrTicket(mr), mr.Title)
 	prompt := strings.ReplaceAll(config.Get().ReviewPrompt, "{urls}", strings.Join(urls, " "))
 	return m.inClone(mr, "review", name, prompt, urls)
 }
@@ -166,7 +235,7 @@ func (m *Model) addressThreads(mr gitlab.MR) (tea.Model, tea.Cmd) {
 		"Read the threads with `glab api projects/%d/merge_requests/%d/discussions`. For each one, decide whether the remark is right: if it is, fix it on this branch; if not, draft a reply explaining why. "+
 		"Then summarise the changes and the replies you propose. Don't push, post replies or resolve threads until I confirm.",
 		mr.WebURL, mr.SourceBranch, mr.SourceBranch, mr.ProjectID, mr.IID)
-	return m.inClone(mr, "fix", m.sessionTitle("fix threads", mrTicket(mr), mr.Title), prompt, []string{mr.WebURL})
+	return m.inClone(mr, "fix", m.sessionTitle("fix", "fix threads", mrTicket(mr), mr.Title), prompt, []string{mr.WebURL})
 }
 
 // inClone starts claude in a local clone of the MR's project, asking which one
@@ -222,8 +291,9 @@ var commitPrefix = regexp.MustCompile(`^(?i)(draft:\s*)?([a-z]+(\([^)]*\))?!?:\s
 
 // sessionTitle names a session after what it's about rather than its ticket
 // key: "review: Expose gender on suggestions". The ticket's summary wins; else
-// the MR title without its "feat(KEY):" prefix.
-func (m *Model) sessionTitle(verb, key, fallback string) string {
+// the MR title without its "feat(KEY):" prefix. session_names in the config
+// overrides the shape per intent.
+func (m *Model) sessionTitle(intent, verb, key, fallback string) string {
 	about := commitPrefix.ReplaceAllString(strings.TrimSpace(fallback), "")
 	if is, ok := m.ix.issues[key]; ok && is.Summary != "" {
 		about = is.Summary
@@ -233,6 +303,12 @@ func (m *Model) sessionTitle(verb, key, fallback string) string {
 	}
 	if r := []rune(about); len(r) > 50 {
 		about = strings.TrimSpace(string(r[:49])) + "…"
+	}
+	if tpl := config.Get().SessionNames[intent]; tpl != "" {
+		name := strings.NewReplacer("{key}", key, "{summary}", about, "{verb}", verb).Replace(tpl)
+		if name = strings.Trim(name, " -:_"); name != "" {
+			return name
+		}
 	}
 	return verb + ": " + about
 }
