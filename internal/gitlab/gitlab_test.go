@@ -220,3 +220,29 @@ func TestReviewState(t *testing.T) {
 		}
 	}
 }
+
+func TestFailedJobs(t *testing.T) {
+	q := "per_page=100&scope%5B%5D=failed"
+	useFakeGlab(t, map[string]string{
+		"GET projects/7/pipelines/1/jobs?" + q: `[{"name":"audit","stage":"install","allow_failure":true},
+			{"name":"bump-version","stage":"git-commit","web_url":"https://j/2"}]`,
+		"GET projects/7/pipelines/2/jobs?" + q:    `[{"name":"audit","stage":"install","allow_failure":true}]`,
+		"GET projects/7/pipelines/2/bridges?" + q: `[{"name":"deploy-child","stage":"deploy","web_url":"https://j/3"}]`,
+	})
+	p := &Pipeline{ID: 1, Status: "failed"}
+	failedJobs(7, p)
+	if len(p.Failed) != 1 || p.Failed[0] != (Job{"bump-version", "git-commit", "https://j/2"}) {
+		t.Errorf("jobs allowed to fail only warn: %+v", p.Failed)
+	}
+	child := &Pipeline{ID: 2, Status: "failed"}
+	failedJobs(7, child)
+	if len(child.Failed) != 1 || child.Failed[0].Name != "deploy-child" {
+		t.Errorf("no failing job of its own: name the child pipeline's trigger, got %+v", child.Failed)
+	}
+	ok := &Pipeline{ID: 3, Status: "success"}
+	failedJobs(7, ok)
+	failedJobs(7, nil)
+	if ok.Failed != nil {
+		t.Error("only failed pipelines are looked into")
+	}
+}

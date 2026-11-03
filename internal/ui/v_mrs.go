@@ -21,7 +21,7 @@ var mrCols = []col{
 	{"TITLE", 0, 0},
 	{"AUTHOR", 16, 110},
 	{"TICKET", 10, 0},
-	{"PIPELINE", 10, 0},
+	{"PIPELINE", 18, 0},
 	{"APPROVALS", 10, 120},
 	{"CHANGES", 24, 95},
 	{"AGE", 5, 0},
@@ -170,7 +170,34 @@ func pipelineText(r mrRow) string {
 	if p == nil {
 		return sDim.Render("—")
 	}
+	if p.Status == "failed" && len(p.Failed) > 0 {
+		s := "✗ " + p.Failed[0].Name
+		if n := len(p.Failed) - 1; n > 0 {
+			s += fmt.Sprintf(" +%d", n)
+		}
+		return sErr.Render(s)
+	}
 	return pipelineStatus(p.Status)
+}
+
+// failedLine lists every job that failed the row's pipeline, for the detail panel.
+func failedLine(r mrRow) string {
+	p := r.Pipeline
+	if r.merged {
+		p = r.MergePipeline
+	}
+	if p == nil || len(p.Failed) == 0 {
+		return ""
+	}
+	var jobs []string
+	for _, j := range p.Failed {
+		jobs = append(jobs, sDim.Render(j.Stage+" › ")+sErr.Render(j.Name))
+	}
+	label := "failed: "
+	if r.merged {
+		label = "failed after merge: "
+	}
+	return sDim.Render(label) + strings.Join(jobs, sDim.Render(", "))
 }
 
 func pipelineStatus(s string) string {
@@ -287,6 +314,9 @@ func (m *Model) detailMR() string {
 	}
 	if ids := m.ix.mrSessions[r.WebURL]; len(ids) > 0 {
 		lines = append(lines, sDim.Render("sessions: ")+m.sessionRefs(ids))
+	}
+	if f := failedLine(r); f != "" {
+		lines = append(lines, f)
 	}
 	if m.view == vMine {
 		if len(r.Reviewers) > 0 {

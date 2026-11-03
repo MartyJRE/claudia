@@ -44,6 +44,13 @@ type Pipeline struct {
 	ID     int    `json:"id"`
 	Status string `json:"status"`
 	WebURL string `json:"web_url"`
+	Failed []Job  `json:"failed_jobs,omitempty"` // the jobs that failed it
+}
+
+type Job struct {
+	Name  string `json:"name"`
+	Stage string `json:"stage"`
+	URL   string `json:"web_url"`
 }
 
 type MR struct {
@@ -176,6 +183,7 @@ func enrich(m *MR) {
 	var full MR
 	if api(fmt.Sprintf("projects/%d/merge_requests/%d", m.ProjectID, m.IID), &full) == nil {
 		m.Pipeline = full.Pipeline
+		failedJobs(m.ProjectID, m.Pipeline)
 		m.MergeStatus = full.MergeStatus
 		m.SHA = full.SHA
 	}
@@ -212,6 +220,29 @@ func reviewState(m *MR, me string) string {
 	return ""
 }
 
+// failedJobs fills in which jobs failed a failed pipeline. Jobs allowed to fail
+// only warn, so they're left out; when no job failed it, a child pipeline did,
+// and its trigger job is named instead.
+func failedJobs(project int, p *Pipeline) {
+	if p == nil || p.Status != "failed" {
+		return
+	}
+	q := url.Values{"scope[]": {"failed"}, "per_page": {"100"}}.Encode()
+	var jobs []struct {
+		Job
+		AllowFailure bool `json:"allow_failure"`
+	}
+	_ = api(fmt.Sprintf("projects/%d/pipelines/%d/jobs?%s", project, p.ID, q), &jobs)
+	for _, j := range jobs {
+		if !j.AllowFailure {
+			p.Failed = append(p.Failed, j.Job)
+		}
+	}
+	if len(p.Failed) == 0 {
+		_ = api(fmt.Sprintf("projects/%d/pipelines/%d/bridges?%s", project, p.ID, q), &p.Failed)
+	}
+}
+
 // mergePipeline finds the pipeline that ran on what the MR merged into the target
 // branch. Some projects (infra) only run CI on the merge commit.
 func mergePipeline(m *MR) {
@@ -223,6 +254,7 @@ func mergePipeline(m *MR) {
 		q := url.Values{"sha": {sha}, "ref": {m.TargetBranch}, "per_page": {"1"}}
 		if api(fmt.Sprintf("projects/%d/pipelines?%s", m.ProjectID, q.Encode()), &ps) == nil && len(ps) > 0 {
 			m.MergePipeline = &ps[0]
+			failedJobs(m.ProjectID, m.MergePipeline)
 			return
 		}
 	}
