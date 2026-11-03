@@ -4,6 +4,8 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/MartyJRE/claudia/internal/config"
 )
 
 // One Dark, as in ~/dot/.tmux/plugins/tmux-onedark-theme plus onedark.nvim's accents.
@@ -34,16 +36,30 @@ var (
 	sErr    = lipgloss.NewStyle().Foreground(red)
 	sOK     = lipgloss.NewStyle().Foreground(green)
 
-	sTabOn  = lipgloss.NewStyle().Foreground(black).Background(blue).Bold(true).Padding(0, 1)
-	sTabOff = lipgloss.NewStyle().Foreground(commentGrey).Background(bg1).Padding(0, 1)
-
 	sBar   = lipgloss.NewStyle().Foreground(purple)
 	sRule  = lipgloss.NewStyle().Foreground(visualGrey)
-	sPanel = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(visualGrey).Padding(0, 1)
+	sPanel = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(commentGrey).Padding(0, 1)
 )
 
+// pill is a label on a coloured background, with rounded ends from the Nerd
+// Font half circles unless rounded_pills is off.
 func pill(fgc, bgc lipgloss.Color, s string) string {
-	return lipgloss.NewStyle().Foreground(fgc).Background(bgc).Bold(true).Padding(0, 1).Render(s)
+	return rounded(lipgloss.NewStyle().Foreground(fgc).Background(bgc).Bold(true), bgc, s)
+}
+
+func tab(label string, on bool) string {
+	if on {
+		return pill(black, blue, label)
+	}
+	return rounded(lipgloss.NewStyle().Foreground(commentGrey).Background(bg1), bg1, label)
+}
+
+func rounded(body lipgloss.Style, bgc lipgloss.Color, s string) string {
+	if !config.Get().RoundedPills() {
+		return body.Padding(0, 1).Render(s)
+	}
+	end := lipgloss.NewStyle().Foreground(bgc)
+	return end.Render("\ue0b6") + body.Render(s) + end.Render("\ue0b4")
 }
 
 func modelColor(family string) lipgloss.Color {

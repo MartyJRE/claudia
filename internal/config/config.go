@@ -62,7 +62,12 @@ type Config struct {
 	// Keys rebinds actions, e.g. {"sessions.close": "ctrl+w"}; a list binds
 	// several keys. `claudia keys` lists the actions.
 	Keys map[string]KeyList `json:"keys"`
+	// RoundedPillsRaw: false draws pills square, for fonts without the Nerd
+	// Font half circles. Ghostty ships them, so they're on by default.
+	RoundedPillsRaw *bool `json:"rounded_pills"`
 }
+
+func (c Config) RoundedPills() bool { return c.RoundedPillsRaw == nil || *c.RoundedPillsRaw }
 
 // KeyList is one key or a list of them.
 type KeyList []string

@@ -575,9 +575,9 @@ func (m *Model) viewHeader() string {
 			label += " " + b
 		}
 		if v == m.view {
-			tabs = append(tabs, sTabOn.Render(label))
+			tabs = append(tabs, tab(label, true))
 		} else {
-			tabs = append(tabs, sTabOff.Render(label))
+			tabs = append(tabs, tab(label, false))
 		}
 	}
 	line := " " + strings.Join(tabs, " ")

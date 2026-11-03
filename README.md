@@ -10,6 +10,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/MartyJRE/claudia/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/MartyJRE/claudia/ci.yml?branch=main&style=flat-square&label=CI" alt="CI"></a>
   <img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FMartyJRE%2Fclaudia%2Fbadges%2Fcoverage.json&style=flat-square" alt="coverage">
   <img src="https://img.shields.io/badge/go-1.24+-61afef?style=flat-square&logo=go&logoColor=white" alt="Go 1.24+">
   <img src="https://img.shields.io/badge/macOS-tmux-c678dd?style=flat-square&logo=apple&logoColor=white" alt="macOS + tmux">
@@ -66,10 +67,24 @@ fits the ticket's state preselected, so `enter` just goes. Every view lists its
 keys in the footer.
 
 In Sessions, the live ones stay in the order they started, so activity never
-reshuffles the list. `K` closes a session (`R` resumes it later). To see several
-side by side, mark them with `m` and press `S`: they're tiled into one window in
-a `splits` tmux session. `U` sends them back to their own windows, each one in
-the session it came from.
+reshuffles the list. Below them, **Recently closed** keeps the last few closed
+sessions a keypress from coming back.
+
+| Key | In Sessions |
+|---|---|
+| `enter` | jump to the session, or resume a closed one |
+| `R` | resume a closed session |
+| `K` | kill a session; the transcript stays, so `R` brings it back |
+| `m` / `S` / `U` | mark sessions, tile the marked ones side by side, send them back |
+| `t` / `J` | set the session's ticket / go to it |
+| `o` / `y` | open its MR / copy its id |
+| `v` / `a` / `space` | group by repo, ticket or flat / show every closed one / fold a group |
+
+`S` tiles the marked sessions (plus the one under the cursor) into one window in
+a `splits` tmux session and takes you there; closing one re-tiles the rest. `U`
+sends each back to a window of its own in the session it came from.
+
+Every key can be rebound, see `keys` under [Configuration](#configuration).
 
 ## Claude can drive it too
 
@@ -82,6 +97,19 @@ claudia ctl here            # this session's MRs, ticket and inbox items, as JSO
 claudia ctl inbox           # the whole inbox
 claudia ctl dismiss --here  # snooze this session's inbox items until they change
 claudia ctl home [--close]  # back to claudia; --close also ends the session
+```
+
+## Commands
+
+```sh
+claudia                 # open claudia in its own tmux session
+claudia open <link>     # hand a link to claudia, as `u` does
+claudia brief           # print a fresh inbox brief
+claudia keys            # every key action, its current keys and any clashes
+claudia update          # install the newest version from GitHub (ctrl+u inside claudia)
+claudia version         # the commit this binary was built from
+claudia setup           # build the native notification helper
+claudia ctl help        # the commands Claude sessions use, see above
 ```
 
 ## Requirements
@@ -146,6 +174,8 @@ switched to another tab; the window stays in its repo's session throughout.
 - `session_names` names sessions per intent: `analysis`, `implementation`,
   `general`, `continue`, `test`, `review`, `fix`, `reply`. `{key}`, `{summary}`
   and `{verb}` are filled in. Without it, sessions are named `<verb>: <summary>`.
+- `rounded_pills: false` draws pills and tabs square, for fonts without the Nerd
+  Font half circles. Ghostty ships those, so the default is rounded.
 - `keys` rebinds any key outside text input: an action name to a key or a list
   of keys. `claudia keys` lists every action with its current keys and points out
   clashes. claudia also flags clashes when it starts.
@@ -165,3 +195,17 @@ fi
 ```
 
 State and caches live in `~/.local/state/claudia`.
+
+## Contributing
+
+Found a bug or have an idea? [Open an issue](https://github.com/MartyJRE/claudia/issues/new/choose).
+The forms ask for what you need to be specific: steps, `claudia version`, your
+setup.
+
+CI runs on every push to `main` and every PR. To check locally before pushing:
+
+```sh
+gofmt -l . && go mod tidy -diff && go vet ./... && go test -race ./...
+```
+
+The tmux tests start a private tmux server, so they never touch your sessions.
