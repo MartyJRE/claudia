@@ -157,7 +157,7 @@ func (m *Model) reloadDismissed() bool {
 }
 
 // Home switches the terminal back to claudia's session.
-func Home() error { return tmux.Switch("=" + tmux.Home) }
+func Home() error { return switchClient("=" + tmux.Home) }
 
 // BriefData is what the inbox brief is written from: compact on purpose, since
 // it goes to Claude on every run.

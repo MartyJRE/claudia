@@ -310,7 +310,7 @@ func (m *Model) closeSession(r row) (tea.Model, tea.Cmd) {
 		m.setFlash("not running", true)
 		return m, nil
 	}
-	if err := syscall.Kill(r.Live.PID, syscall.SIGTERM); err != nil {
+	if err := killProcess(r.Live.PID, syscall.SIGTERM); err != nil {
 		m.setFlash("close "+r.Name()+": "+err.Error(), true)
 		return m, nil
 	}
@@ -357,7 +357,7 @@ func (m *Model) split() (tea.Model, tea.Cmd) {
 		m.setFlash("mark sessions with "+m.key("sessions.mark")+" first, then "+m.key("sessions.split")+" puts them side by side", true)
 		return m, nil
 	}
-	target, err := tmux.JoinSplit(panes)
+	target, err := joinSplit(panes)
 	if err != nil {
 		m.setFlash("split: "+err.Error(), true)
 		return m, nil
@@ -371,7 +371,7 @@ func (m *Model) unsplit(r row) (tea.Model, tea.Cmd) {
 		m.setFlash("not in a split", true)
 		return m, nil
 	}
-	if err := tmux.Unsplit(r.pane.WindowID); err != nil {
+	if err := unsplitWindow(r.pane.WindowID); err != nil {
 		m.setFlash("unsplit: "+err.Error(), true)
 		return m, nil
 	}

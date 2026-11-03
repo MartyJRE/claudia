@@ -332,7 +332,7 @@ func (m *Model) rebase(mr gitlab.MR) (tea.Model, tea.Cmd) {
 	}
 	m.setFlash(fmt.Sprintf("rebasing !%d…", mr.IID), false)
 	return m, func() tea.Msg {
-		if err := gitlab.Rebase(mr); err != nil {
+		if err := rebaseMR(mr); err != nil {
 			return flashMsg{err.Error(), true}
 		}
 		return refreshMsg(srcGitlab)
@@ -428,9 +428,9 @@ func (m *Model) keyMRs(k string) (tea.Model, tea.Cmd) {
 		if !ok || m.view != vReview {
 			return m, nil
 		}
-		verb, fn := "approve", gitlab.Approve
+		verb, fn := "approve", approveMR
 		if act == "mrs.unapprove" {
-			verb, fn = "unapprove", gitlab.Unapprove
+			verb, fn = "unapprove", unapproveMR
 		}
 		if !m.confirm(act+r.WebURL, fmt.Sprintf("%s !%d %s", verb, r.IID, r.Repo())) {
 			return m, nil

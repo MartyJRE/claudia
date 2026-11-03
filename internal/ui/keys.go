@@ -228,7 +228,7 @@ func (m *Model) hint(id, label string) [2]string { return [2]string{m.key(id), l
 // KeyActions lists every action with its keys under the given overrides, for
 // `claudia keys`.
 func KeyActions() string {
-	km, problems := newKeymap(config.Get().Keys)
+	km, problems := newKeymap(getConfig().Keys)
 	var b strings.Builder
 	for _, a := range actions {
 		var ks []string

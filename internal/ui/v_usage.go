@@ -26,7 +26,7 @@ type usageMsg []claude.DayModel
 
 func (m *Model) loadUsage() tea.Cmd {
 	sc := m.usageScanner
-	return func() tea.Msg { return usageMsg(sc.Scan()) }
+	return func() tea.Msg { return usageMsg(scanUsage(sc)) }
 }
 
 func (m *Model) usageRows() []usageRow {

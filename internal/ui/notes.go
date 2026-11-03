@@ -32,7 +32,7 @@ import (
 var onedarkStyle []byte
 
 func newVault() *vault.Index {
-	c := config.Get()
+	c := getConfig()
 	if c.Vault == "" {
 		return nil
 	}
@@ -197,7 +197,7 @@ func (m *Model) edit(path string) tea.Cmd {
 	if editor == "" {
 		editor = "nvim"
 	}
-	return tea.ExecProcess(exec.Command(editor, path), func(err error) tea.Msg { return editedMsg{path, err} })
+	return execProcess(exec.Command(editor, path), func(err error) tea.Msg { return editedMsg{path, err} })
 }
 
 func obsidianURL(root, rel string) string {

@@ -288,7 +288,7 @@ func (m *Model) keyInbox(k string) (tea.Model, tea.Cmd) {
 			}
 			mr := it.mr
 			return m, func() tea.Msg {
-				if err := gitlab.Approve(mr); err != nil {
+				if err := approveMR(mr); err != nil {
 					return flashMsg{err.Error(), true}
 				}
 				return refreshMsg(srcGitlab)
