@@ -46,6 +46,9 @@ func TestSplitRoundTrip(t *testing.T) {
 		t.Fatalf("after split: %v (target %s)", split, target)
 	}
 	win := strings.TrimPrefix(target, "="+SplitSession+":")
+	if out, _ := exec.Command("tmux", "list-panes", "-t", target, "-F", "#{pane_top}").Output(); len(strings.Fields(string(out))) != 2 || strings.Fields(string(out))[0] != strings.Fields(string(out))[1] {
+		t.Errorf("panes should sit side by side, tops: %q", out)
+	}
 	if err := Unsplit(win); err != nil {
 		t.Fatal(err)
 	}

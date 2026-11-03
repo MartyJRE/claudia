@@ -261,7 +261,7 @@ func JoinSplit(panes []Pane) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		_, _ = tm("select-layout", "-t", win, "tiled")
+		_, _ = tm("select-layout", "-t", win, "even-horizontal")
 	}
 	if placeholder != "" {
 		_, _ = tm("kill-window", "-t", placeholder)
