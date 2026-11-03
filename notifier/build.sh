@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds Claudia.app (the native notification helper) into ~/Applications.
+# Builds Claudia.app (the native notification helper) into ~/Applications, or the given path.
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
@@ -7,11 +7,12 @@ app="${1:-$HOME/Applications/Claudia.app}"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
+swift build -c release --package-path "$here"
+bin="$(swift build -c release --package-path "$here" --show-bin-path)"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
-swiftc -O -swift-version 5 -o "$app/Contents/MacOS/claudia-notify" "$here/main.swift"
+cp "$bin/claudia-notify" "$app/Contents/MacOS/claudia-notify"
 
-swiftc -swift-version 5 -o "$work/icon" "$here/icon.swift"
-"$work/icon" "$work/icon.png"
+"$bin/claudia-icon" "$work/icon.png"
 iconset="$work/claudia.iconset"
 mkdir "$iconset"
 for s in 16 32 128 256 512; do
