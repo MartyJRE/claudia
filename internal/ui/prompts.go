@@ -243,7 +243,7 @@ func (m *Model) addressThreads(mr gitlab.MR) (tea.Model, tea.Cmd) {
 // when there are several and falling back to the repo picker when there is none.
 func (m *Model) inClone(mr gitlab.MR, verb, name, prompt string, urls []string) (tea.Model, tea.Cmd) {
 	launchIn := func(m *Model, dir string) (tea.Model, tea.Cmd) {
-		sp, id := launch.New(dir, launch.WorkProfile(m.store.Profiles), name, prompt)
+		sp, id := launch.New(dir, launch.ProfileFor(dir, m.store.Profiles), name, prompt)
 		sp.Kind = verb
 		if err := m.links.AddMRs(id, urls); err != nil {
 			m.setFlash(err.Error(), true)

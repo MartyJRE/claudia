@@ -59,6 +59,7 @@ jobs:
   # executables that wire it to AppKit.
   swift:
     runs-on: macos-latest
+    timeout-minutes: 10
     outputs:
       pct: ${{ steps.coverage.outputs.pct }}
     steps:

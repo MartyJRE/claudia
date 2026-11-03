@@ -1,11 +1,13 @@
 package ui
 
 import (
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/MartyJRE/claudia/internal/atlassian"
+	"github.com/MartyJRE/claudia/internal/claude"
 	"github.com/MartyJRE/claudia/internal/config"
 	"github.com/MartyJRE/claudia/internal/launch"
 	"github.com/MartyJRE/claudia/internal/repos"
@@ -137,5 +139,23 @@ func TestClaudeForInboxFull(t *testing.T) {
 	}
 	if _, cmd := m.claudeForInbox(inboxItem{kind: inboxKind(99)}); cmd != nil {
 		t.Error("an unknown kind does nothing")
+	}
+}
+
+func TestReviewUsesTheRepoFoldersProfile(t *testing.T) {
+	m := newModelShell(t)
+	started := fakeStart(t, "payments:1", nil)
+	m.store.Profiles = []claude.Profile{{Name: "work", Dir: "/p/work"}, {Name: "personal", Dir: "/p/personal"}}
+	mr := m.gl.Review[0]
+	root := config.Get().CodeRoot
+	for _, c := range []struct{ dir, profile string }{
+		{filepath.Join(root, "Personal", "payments"), "personal"},
+		{filepath.Join(root, "Work", "payments"), "work"},
+	} {
+		m.repos = []repos.Repo{{Dir: c.dir, Project: mr.Project()}}
+		m.reviewWithClaude(mr)
+		if got := (*started)[len(*started)-1]; got.Dir != c.dir || got.Profile.Name != c.profile {
+			t.Errorf("review in %s ran with %q, want %q", c.dir, got.Profile.Name, c.profile)
+		}
 	}
 }
