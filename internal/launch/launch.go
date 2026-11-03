@@ -113,7 +113,7 @@ func windowName(name string) string {
 	if len(r) > 32 {
 		r = append(r[:31], '…')
 	}
-	return fmt.Sprintf("✻ %s", string(r))
+	return tmux.Icon + " " + string(r)
 }
 
 // ProfileFor guesses which Claude profile a directory belongs to: the work

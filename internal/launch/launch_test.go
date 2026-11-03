@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/MartyJRE/claudia/internal/claude"
+	"github.com/MartyJRE/claudia/internal/tmux"
 )
 
 var (
@@ -54,11 +55,11 @@ func TestProfileFor(t *testing.T) {
 }
 
 func TestWindowName(t *testing.T) {
-	if got := windowName("fix it"); got != "✻ fix it" {
+	if got := windowName("fix it"); got != tmux.Icon+" fix it" {
 		t.Errorf("got %q", got)
 	}
 	long := strings.Repeat("é", 40)
-	if got := windowName(long); got != "✻ "+strings.Repeat("é", 31)+"…" {
+	if got := windowName(long); got != tmux.Icon+" "+strings.Repeat("é", 31)+"…" {
 		t.Errorf("got %q", got)
 	}
 }
@@ -200,7 +201,7 @@ func TestStart(t *testing.T) {
 		}
 		return strings.TrimSpace(string(out))
 	}
-	if got := show(target, "#{window_name}"); got != "✻ fix-it" {
+	if got := show(target, "#{window_name}"); got != tmux.Icon+" fix-it" {
 		t.Errorf("window name %q", got)
 	}
 	// pane_current_path isn't reliable on Linux right after start; the process reports its own.

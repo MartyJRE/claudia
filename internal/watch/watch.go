@@ -91,6 +91,7 @@ func Run(makeBrief func()) error {
 		return err
 	}
 	defer os.Remove(state.Path(pidFile))
+	tmux.Retitle()
 
 	w := &watcher{
 		store:    claude.NewStore(claude.DefaultProfiles(), time.Hour),

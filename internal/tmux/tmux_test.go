@@ -155,6 +155,9 @@ func TestUnsplitWhenHomeIsGone(t *testing.T) {
 	if HasSession("pay") || HasSession("bill") {
 		t.Fatal("sessions whose only window was split should end")
 	}
+	if name, _ := tm("display-message", "-p", "-t", target, "#{window_name}"); name != Icon+" bill │ pay" && name != Icon+" pay │ bill" {
+		t.Errorf("split tab should name its sessions, got %q", name)
+	}
 	// Splitting the split again is a no-op that keeps the window.
 	again, err := JoinSplit(Panes())
 	if err != nil || again != target {
@@ -167,7 +170,7 @@ func TestUnsplitWhenHomeIsGone(t *testing.T) {
 		t.Error("homes not recreated")
 	}
 	out, _ := tm("list-windows", "-a", "-F", "#{session_name}:#{window_name}")
-	if strings.Contains(out, ":"+"✻ split") {
+	if strings.Contains(out, SplitSession+":") {
 		t.Errorf("split window left: %s", out)
 	}
 	if _, err := JoinSplit(nil); err == nil {
@@ -186,5 +189,19 @@ func TestInside(t *testing.T) {
 	t.Setenv("TMUX", "/tmp/x,1,0")
 	if !Inside() {
 		t.Error("not inside with TMUX")
+	}
+}
+
+func TestRetitle(t *testing.T) {
+	privateServer(t)
+	for _, n := range []string{"✻ old", "zsh"} {
+		if _, err := tm("new-session", "-d", "-s", strings.Fields(n)[len(strings.Fields(n))-1], "-n", n, "sleep 60"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	Retitle()
+	out, _ := tm("list-windows", "-a", "-F", "#{window_name}")
+	if got := strings.Split(out, "\n"); len(got) != 2 || got[0] != Icon+" old" || got[1] != "zsh" {
+		t.Errorf("got %q", got)
 	}
 }

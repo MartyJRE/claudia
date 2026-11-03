@@ -192,6 +192,23 @@ type cmdError struct {
 
 func (e *cmdError) Error() string { return strings.TrimSpace(e.out) + ": " + e.err.Error() }
 
+// Icon marks the windows claudia opens Claude in: Nerd Font's robot (md-robot).
+const Icon = "\U000F06A9"
+
+// Retitle swaps the "✻ " older claudia versions put on window names for Icon.
+func Retitle() {
+	out, err := tm("list-windows", "-a", "-F", "#{window_id}\t#{window_name}")
+	if err != nil {
+		return
+	}
+	for _, line := range strings.Split(out, "\n") {
+		id, name, _ := strings.Cut(line, "\t")
+		if rest, ok := strings.CutPrefix(name, "✻ "); ok {
+			_, _ = tm("rename-window", "-t", id, Icon+" "+rest)
+		}
+	}
+}
+
 // SplitSession holds the windows claudia tiles several sessions into.
 const SplitSession = "splits"
 
@@ -254,7 +271,7 @@ func JoinSplit(panes []Pane) (string, error) {
 			return "", err
 		}
 		if win == "" {
-			win, err = tm("break-pane", "-d", "-s", p.ID, "-t", "="+SplitSession+":", "-n", "✻ split", "-P", "-F", "#{window_id}")
+			win, err = tm("break-pane", "-d", "-s", p.ID, "-t", "="+SplitSession+":", "-n", Icon+" split", "-P", "-F", "#{window_id}")
 		} else {
 			_, err = tm("join-pane", "-d", "-s", p.ID, "-t", win)
 		}
@@ -268,6 +285,14 @@ func JoinSplit(panes []Pane) (string, error) {
 	}
 	if win == "" {
 		return "", errors.New("nothing to split")
+	}
+	// Name the tab after what's in it, so the status bar says which sessions are tiled.
+	if names, err := tm("list-panes", "-t", win, "-F", "#{"+splitNameOpt+"}"); err == nil {
+		var short []string
+		for _, n := range strings.Split(names, "\n") {
+			short = append(short, strings.TrimPrefix(strings.TrimPrefix(n, "✻ "), Icon+" "))
+		}
+		_, _ = tm("rename-window", "-t", win, Icon+" "+strings.Join(short, " │ "))
 	}
 	_, _ = tm("set-option", "-w", "-t", win, "pane-border-status", "top")
 	_, _ = tm("set-option", "-w", "-t", win, "pane-border-format", " #{"+splitNameOpt+"} ")
