@@ -35,6 +35,7 @@ type Transcript struct {
 	TicketBranch string
 	AITitle      string
 	CustomTitle  string
+	Color        string // set with /color; "" for the default
 	FirstPrompt  string
 	LastPrompt   string
 	Model        string
@@ -69,6 +70,7 @@ type entry struct {
 	AITitle     string    `json:"aiTitle"`
 	CustomTitle string    `json:"customTitle"`
 	LastPrompt  string    `json:"lastPrompt"`
+	AgentColor  string    `json:"agentColor"`
 	PRLink
 	Message struct {
 		Model   string          `json:"model"`
@@ -172,6 +174,8 @@ func (t *Transcript) apply(line []byte) {
 		t.CustomTitle = e.CustomTitle
 	case "last-prompt":
 		t.LastPrompt = e.LastPrompt
+	case "agent-color":
+		t.Color = strings.TrimPrefix(e.AgentColor, "default")
 	case "pr-link":
 		for _, p := range t.PRs {
 			if p.URL == e.URL {

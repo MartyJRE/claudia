@@ -286,3 +286,75 @@ func TestNoExecutable(t *testing.T) {
 		t.Errorf("note %q", sp.Args[5])
 	}
 }
+
+func TestWithColorScript(t *testing.T) {
+	dir := t.TempDir()
+	log := filepath.Join(dir, "calls")
+	fake := filepath.Join(dir, "claude")
+	// The fake logs each call; the headless /color run fails when FAIL_COLOR is set.
+	script := "#!/bin/sh\nprintf '%s|' \"$@\" >> " + log + "\necho >> " + log + "\n" +
+		"[ \"$1\" = -p ] && [ -n \"$FAIL_COLOR\" ] && exit 1\nexit 0\n"
+	if err := os.WriteFile(fake, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	run := func(sp Spec, argv []string) []string {
+		os.Remove(log)
+		cmd := withColor(fake, sp, argv)
+		if cmd[0] != "sh" || cmd[1] != "-c" {
+			t.Fatalf("argv %q", cmd)
+		}
+		if err := exec.Command(cmd[0], cmd[1:]...).Run(); err != nil {
+			t.Fatal(err)
+		}
+		b, _ := os.ReadFile(log)
+		return strings.Split(strings.TrimSpace(string(b)), "\n")
+	}
+
+	sp, id := New("/repo", work, "it's new", "fix it")
+	sp.Color = "pink"
+	calls := run(sp, append([]string{fake}, sp.Args...))
+	if len(calls) != 2 || calls[0] != "-p|--session-id|"+id+"|/color pink|" ||
+		!strings.HasPrefix(calls[1], "--resume|"+id+"|-n|it's new|") || !strings.HasSuffix(calls[1], "|fix it|") {
+		t.Errorf("new session calls:\n%s", strings.Join(calls, "\n"))
+	}
+
+	res := Spec{ID: "s1", Color: "cyan", Args: []string{"--resume", "s1"}}
+	if calls := run(res, []string{fake, "--resume", "s1"}); len(calls) != 2 || calls[0] != "-p|--resume|s1|/color cyan|" || calls[1] != "--resume|s1|" {
+		t.Errorf("resumed session calls %q", calls)
+	}
+
+	t.Setenv("FAIL_COLOR", "1")
+	if calls := run(sp, append([]string{fake}, sp.Args...)); len(calls) != 2 || !strings.HasPrefix(calls[1], "--session-id|"+id+"|") {
+		t.Errorf("a failed colour step must still start the session as before: %q", calls)
+	}
+}
+
+func TestStartWithColor(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("no tmux")
+	}
+	t.Setenv("TMUX", "")
+	sock, err := os.MkdirTemp("/tmp", "cl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(sock) })
+	t.Setenv("TMUX_TMPDIR", sock)
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	t.Cleanup(func() { _ = exec.Command("tmux", "kill-server").Run() })
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "claude"), []byte("#!/bin/sh\nexec sleep 60\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+":"+os.Getenv("PATH"))
+	sp, _ := New(gitRepo(t, "pay"), personal, "tinted", "")
+	sp.Color = "green"
+	target, err := Start(sp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, _ := exec.Command("tmux", "display-message", "-p", "-t", target, "#{pane_start_command}").Output()
+	if !strings.Contains(string(out), "sh -c") || !strings.Contains(string(out), "/color green") {
+		t.Errorf("start command %q", out)
+	}
+}

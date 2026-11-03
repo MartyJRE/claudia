@@ -823,12 +823,37 @@ func (m *Model) refilter() {
 
 // start opens a claude window and jumps to it.
 func (m *Model) start(sp launch.Spec) (tea.Model, tea.Cmd) {
+	sp = m.colored(sp, nil)
 	target, err := startSession(sp)
 	if err != nil {
 		m.setFlash(err.Error(), true)
 		return m, nil
 	}
 	return m.goTo(target)
+}
+
+// colored gives a session without a colour the one least used among live
+// sessions (and those in also), so the ones running side by side differ.
+func (m *Model) colored(sp launch.Spec, also []string) launch.Spec {
+	used := map[string]int{}
+	for _, c := range also {
+		used[c]++
+	}
+	for _, r := range m.sessions {
+		if r.ID == sp.ID && r.Transcript != nil && r.Color != "" {
+			return sp
+		}
+		if r.live() && r.Transcript != nil && r.Color != "" {
+			used[r.Color]++
+		}
+	}
+	sp.Color = launch.Colors[0]
+	for _, c := range launch.Colors {
+		if used[c] < used[sp.Color] {
+			sp.Color = c
+		}
+	}
+	return sp
 }
 
 // goTo switches the tmux client, or outside tmux hands the target to main to attach.

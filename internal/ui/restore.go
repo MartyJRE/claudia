@@ -101,12 +101,14 @@ func (m *Model) restoreAll() (tea.Model, tea.Cmd) {
 		}
 	}
 	var first string
+	var given []string
 	n := 0
 	for _, it := range m.restore {
 		if live[it.ID] {
 			continue
 		}
-		sp := launch.Spec{Dir: it.Dir, Profile: launch.Profile(it.Profile, m.store.Profiles), Name: it.Name, Args: []string{"--resume", it.ID}, ID: it.ID}
+		sp := m.colored(launch.Spec{Dir: it.Dir, Profile: launch.Profile(it.Profile, m.store.Profiles), Name: it.Name, Args: []string{"--resume", it.ID}, ID: it.ID}, given)
+		given = append(given, sp.Color)
 		target, err := startSession(sp)
 		if err != nil {
 			m.setFlash(err.Error(), true)

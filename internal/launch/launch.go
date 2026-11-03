@@ -26,7 +26,11 @@ type Spec struct {
 	Session string // tmux session; defaults to the repo's name
 	ID      string // the Claude session id, when known
 	Kind    string // what it was started for; picks the window's icon
+	Color   string // a /color name to give the session, if any
 }
+
+// Colors are the names Claude's /color accepts.
+var Colors = []string{"red", "blue", "green", "yellow", "purple", "orange", "pink", "cyan"}
 
 // Nerd Font (Material Design) icons per kind; anything else gets tmux.Icon.
 var kindIcons = map[string]string{
@@ -107,12 +111,36 @@ func Start(sp Spec) (string, error) {
 		argv = append(argv, "--remote-control", sp.Name)
 	}
 	argv = append(argv, sp.Args...)
+	if sp.Color != "" && sp.ID != "" {
+		argv = withColor(bin, sp, argv)
+	}
 	env := []string{"CLAUDE_CONFIG_DIR=" + sp.Profile.Dir}
 	session := sp.Session
 	if session == "" {
 		session = SessionName(sp.Dir)
 	}
 	return tmux.NewWindow(session, windowName(rememberKind(sp), sp.Name), sp.Dir, env, argv)
+}
+
+// withColor sets the colour with a headless /color run first (it costs no model
+// call), then resumes the session interactively; Claude restores the colour on
+// resume. Should the colour step fail, the session starts as it would have.
+func withColor(bin string, sp Spec, argv []string) []string {
+	flag, resume := "--resume", slices.Clone(argv)
+	if i := slices.Index(resume, "--session-id"); i >= 0 {
+		flag, resume[i] = "--session-id", "--resume"
+	}
+	script := "if " + shellJoin(bin, "-p", flag, sp.ID, "/color "+sp.Color) + " >/dev/null 2>&1; then exec " +
+		shellJoin(resume...) + "; else exec " + shellJoin(argv...) + "; fi"
+	return []string{"sh", "-c", script}
+}
+
+func shellJoin(args ...string) string {
+	q := make([]string, len(args))
+	for i, a := range args {
+		q[i] = "'" + strings.ReplaceAll(a, "'", `'\''`) + "'"
+	}
+	return strings.Join(q, " ")
 }
 
 // rememberKind records what a new session is for, and looks it up when one is

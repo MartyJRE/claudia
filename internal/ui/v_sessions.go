@@ -101,11 +101,29 @@ func sessionTitle(r row, selected bool) string {
 	if selected || r.live() {
 		st = sBold
 	}
-	s := st.Render(r.Name())
+	s := colorDot(r) + st.Render(r.Name())
 	if r.Profile.Name == "personal" {
 		s += sDim.Render(" ·personal")
 	}
 	return s
+}
+
+// sessionColors draws Claude's /color names in the One Dark palette.
+var sessionColors = map[string]lipgloss.Color{
+	"red": red, "blue": blue, "green": green, "yellow": yellow,
+	"purple": purple, "orange": orange, "pink": lipgloss.Color("#f5a3c7"), "cyan": cyan,
+}
+
+// colorDot is a dot in the session's /color, so it's easy to find in tmux.
+func colorDot(r row) string {
+	if r.Transcript == nil {
+		return ""
+	}
+	c, ok := sessionColors[r.Color]
+	if !ok {
+		return ""
+	}
+	return lipgloss.NewStyle().Foreground(c).Render("●") + " "
 }
 
 func (m *Model) where(r row) string {
@@ -168,7 +186,7 @@ func (m *Model) detailSession() string {
 	if !ok {
 		return m.panel(nil)
 	}
-	head := sBold.Render(r.Name())
+	head := colorDot(r) + sBold.Render(r.Name())
 	if t := m.ix.sessionTicket[r.ID]; t != "" {
 		head += "  " + sTicket.Render(t)
 		if is, ok := m.ix.issues[t]; ok {

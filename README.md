@@ -145,6 +145,10 @@ Claude windows are named with a Nerd Font icon for what they were started for
 (review, fixing threads, a reply, analysis, implementation, a link, or a robot
 for anything else), and get a bell after the name while they need you.
 
+Each session claudia starts or resumes without a colour gets one with Claude's
+`/color`, picking the one least used among live sessions, so the prompt bars of
+sessions running side by side differ. The Sessions list shows it as a dot.
+
 ## Configuration
 
 `~/.config/claudia/config.json` (every field is optional):
