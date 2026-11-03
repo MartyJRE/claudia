@@ -205,3 +205,34 @@ func TestRetitle(t *testing.T) {
 		t.Errorf("got %q", got)
 	}
 }
+
+func TestResplitFixesOldLayoutAndLabels(t *testing.T) {
+	privateServer(t)
+	for _, s := range []string{"pay", "bill"} {
+		if _, err := tm("new-session", "-d", "-s", s, "-x", "200", "-y", "50", "-n", "✻ "+s, "sleep 60"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	target, err := JoinSplit(Panes())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// What an older claudia left behind: stacked panes labelled with "✻ ".
+	_, _ = tm("select-layout", "-t", target, "even-vertical")
+	panes, _ := tm("list-panes", "-t", target, "-F", "#{pane_id}")
+	for _, id := range strings.Fields(panes) {
+		_, _ = tm("set-option", "-p", "-t", id, splitNameOpt, "✻ old")
+	}
+
+	if _, err := JoinSplit(Panes()); err != nil {
+		t.Fatal(err)
+	}
+	tops, _ := tm("list-panes", "-t", target, "-F", "#{pane_top}")
+	if f := strings.Fields(tops); len(f) != 2 || f[0] != f[1] {
+		t.Errorf("re-split should lay panes side by side, tops %q", tops)
+	}
+	labels, _ := tm("list-panes", "-t", target, "-F", "#{"+splitNameOpt+"}")
+	if labels != Icon+" old\n"+Icon+" old" {
+		t.Errorf("labels %q", labels)
+	}
+}

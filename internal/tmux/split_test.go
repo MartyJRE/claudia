@@ -54,7 +54,7 @@ func TestSplitRoundTrip(t *testing.T) {
 	}
 	out, _ := tm("list-windows", "-a", "-F", "#{session_name}:#{window_name}")
 	got := strings.Fields(strings.ReplaceAll(out, "\n", " "))
-	for _, want := range []string{"pay:✻", "bill:✻"} {
+	for _, want := range []string{"pay:" + Icon + " pay", "bill:" + Icon + " bill"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("after unsplit, windows %v miss %s", got, want)
 		}

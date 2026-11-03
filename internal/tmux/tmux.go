@@ -278,7 +278,6 @@ func JoinSplit(panes []Pane) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		_, _ = tm("select-layout", "-t", win, "even-horizontal")
 	}
 	if placeholder != "" {
 		_, _ = tm("kill-window", "-t", placeholder)
@@ -286,11 +285,17 @@ func JoinSplit(panes []Pane) (string, error) {
 	if win == "" {
 		return "", errors.New("nothing to split")
 	}
-	// Name the tab after what's in it, so the status bar says which sessions are tiled.
-	if names, err := tm("list-panes", "-t", win, "-F", "#{"+splitNameOpt+"}"); err == nil {
+	// Also on a re-split: panes already in the window may come from an older layout.
+	_, _ = tm("select-layout", "-t", win, "even-horizontal")
+	// Name the tab after what's in it, so the status bar says which sessions are
+	// tiled; labels from before the icon lose their "✻ ".
+	if out, err := tm("list-panes", "-t", win, "-F", "#{pane_id}\t#{"+splitNameOpt+"}"); err == nil {
 		var short []string
-		for _, n := range strings.Split(names, "\n") {
-			short = append(short, strings.TrimPrefix(strings.TrimPrefix(n, "✻ "), Icon+" "))
+		for _, line := range strings.Split(out, "\n") {
+			id, n, _ := strings.Cut(line, "\t")
+			n = strings.TrimPrefix(strings.TrimPrefix(n, "✻ "), Icon+" ")
+			short = append(short, n)
+			_, _ = tm("set-option", "-p", "-t", id, splitNameOpt, Icon+" "+n)
 		}
 		_, _ = tm("rename-window", "-t", win, Icon+" "+strings.Join(short, " │ "))
 	}
