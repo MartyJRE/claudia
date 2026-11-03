@@ -36,6 +36,14 @@ type srow struct {
 	waiting   int
 }
 
+// id identifies the row across rebuilds, so the cursor can stay on it.
+func (r srow) id() string {
+	if r.isSess {
+		return "s:" + r.sess.ID
+	}
+	return "h:" + r.key
+}
+
 type sessionPrefs struct {
 	Group     int      `json:"group"`
 	Collapsed []string `json:"collapsed"`
@@ -96,17 +104,33 @@ func (g *sgroup) stats() (n, live, waiting int, last time.Time) {
 	return
 }
 
-// sortGroups: groups needing you first, then ones with live sessions, then
-// by last activity.
+// started is the newest start among the group's live sessions.
+func (g *sgroup) started() time.Time {
+	var t time.Time
+	for _, r := range g.sessions {
+		if r.live() && r.Started().After(t) {
+			t = r.Started()
+		}
+	}
+	for _, s := range g.subs {
+		if st := s.started(); st.After(t) {
+			t = st
+		}
+	}
+	return t
+}
+
+// sortGroups: groups with live sessions first, by when their newest one
+// started, so activity doesn't reshuffle them; the rest by last activity.
 func sortGroups(gs []*sgroup) {
 	slices.SortStableFunc(gs, func(a, b *sgroup) int {
-		_, al, aw, at := a.stats()
-		_, bl, bw, bt := b.stats()
+		_, al, _, at := a.stats()
+		_, bl, _, bt := b.stats()
 		switch {
-		case (aw > 0) != (bw > 0):
-			return boolCmp(bw > 0, aw > 0)
 		case (al > 0) != (bl > 0):
 			return boolCmp(bl > 0, al > 0)
+		case al > 0:
+			return b.started().Compare(a.started())
 		}
 		return bt.Compare(at)
 	})

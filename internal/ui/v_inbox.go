@@ -239,12 +239,13 @@ func (m *Model) detailInbox() string {
 }
 
 func (m *Model) keyInbox(k string) (tea.Model, tea.Cmd) {
-	switch k {
-	case "a":
+	act := m.action(k)
+	switch act {
+	case "inbox.all":
 		m.showAll = !m.showAll
 		m.refilter()
 		return m, nil
-	case "R":
+	case "inbox.brief":
 		if err := brief.Request(); err != nil {
 			m.setFlash(err.Error(), true)
 		} else {
@@ -256,8 +257,8 @@ func (m *Model) keyInbox(k string) (tea.Model, tea.Cmd) {
 	if !ok {
 		return m, nil
 	}
-	switch k {
-	case "enter", "o":
+	switch act {
+	case "inbox.open":
 		switch it.kind {
 		case kClaude:
 			return m.jumpTo(it.sess)
@@ -265,19 +266,19 @@ func (m *Model) keyInbox(k string) (tea.Model, tea.Cmd) {
 			m.seen.mark(it.mr)
 		}
 		return m, openURL(it.url)
-	case "r":
+	case "inbox.review":
 		if it.kind == kReview {
 			return m.reviewWithClaude(it.mr)
 		}
-	case "v":
+	case "inbox.threads":
 		if it.kind == kThreads {
 			m.chooseThreads(it.mr)
 		}
-	case "B":
+	case "inbox.rebase":
 		if it.kind == kReview || it.kind == kThreads {
 			return m.rebase(it.mr)
 		}
-	case "A":
+	case "inbox.approve":
 		if it.kind == kReview {
 			if !m.confirm("A"+it.mr.WebURL, fmt.Sprintf("approve !%d %s", it.mr.IID, it.mr.Repo())) {
 				return m, nil
@@ -290,12 +291,12 @@ func (m *Model) keyInbox(k string) (tea.Model, tea.Cmd) {
 				return refreshMsg(srcGitlab)
 			}
 		}
-	case "x":
+	case "inbox.snooze":
 		m.dismissed.toggle(it.id)
 		m.refilter()
-	case "J":
+	case "inbox.ticket":
 		return m.gotoTicket(it.ticket)
-	case "c":
+	case "inbox.claude":
 		return m.claudeForInbox(it)
 	}
 	return m, nil
@@ -314,9 +315,9 @@ func (m *Model) viewBrief() string {
 			when = "written just now"
 		}
 		head += sDim.Render("  " + when + "  ·  ")
-		head += sKey.Render("R") + sDim.Render(" refresh")
+		head += sKey.Render(m.key("inbox.brief")) + sDim.Render(" refresh")
 	default:
-		head += sDim.Render("  ") + sKey.Render("R") + sDim.Render(" asks Claude for a summary of what's waiting")
+		head += sDim.Render("  ") + sKey.Render(m.key("inbox.brief")) + sDim.Render(" asks Claude for a summary of what's waiting")
 	}
 	lines := []string{head}
 	if b.Text != "" {

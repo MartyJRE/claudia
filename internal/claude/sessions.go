@@ -92,6 +92,18 @@ func (s Session) LastActive() time.Time {
 	return t
 }
 
+// Started is when the session's current process started; it orders live
+// sessions, which would jump around if ordered by activity.
+func (s Session) Started() time.Time {
+	if s.Live != nil && s.Live.StartedAt > 0 {
+		return time.UnixMilli(s.Live.StartedAt)
+	}
+	if s.Transcript != nil {
+		return s.Transcript.Started
+	}
+	return time.Time{}
+}
+
 // Ticket follows the order branch → title → last ticket branch; the last one
 // covers sessions that end back on devel after pushing.
 func (s Session) Ticket() string {
@@ -117,8 +129,8 @@ func NewStore(profiles []Profile, window time.Duration) *Store {
 	return &Store{Profiles: profiles, Window: window, cache: map[string]*Transcript{}}
 }
 
-// Sessions returns live sessions plus every session touched within Window,
-// most recently active first.
+// Sessions returns live sessions, newest started first, then every session
+// touched within Window, most recently active first.
 func (s *Store) Sessions() []Session {
 	cutoff := time.Now().Add(-s.Window)
 	var out []Session
@@ -157,6 +169,9 @@ func (s *Store) Sessions() []Session {
 	sort.SliceStable(out, func(i, j int) bool {
 		if (out[i].Live != nil) != (out[j].Live != nil) {
 			return out[i].Live != nil
+		}
+		if out[i].Live != nil {
+			return out[i].Started().After(out[j].Started())
 		}
 		return out[i].LastActive().After(out[j].LastActive())
 	})

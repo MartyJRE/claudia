@@ -150,6 +150,7 @@ func (w *watcher) sessions() {
 	first := !w.baseline[0]
 	w.baseline[0] = true
 	seen := map[string]bool{}
+	waiting := map[string]bool{} // window ids with a waiting Claude
 	for _, s := range w.store.Sessions() {
 		if s.Live == nil {
 			continue
@@ -157,6 +158,10 @@ func (w *watcher) sessions() {
 		seen[s.ID] = true
 		prev, had := w.status[s.ID]
 		w.status[s.ID] = s.Live.Status
+		p, inTmux := loc.Pane(s.Live.PID)
+		if inTmux && s.Live.Status == claude.StatusWaiting {
+			waiting[p.WindowID] = true
+		}
 		if first || !had || prev == s.Live.Status || s.Live.Status != claude.StatusWaiting {
 			continue
 		}
@@ -164,11 +169,12 @@ func (w *watcher) sessions() {
 		if s.Transcript != nil && s.LastPrompt != "" {
 			n.body += " · " + oneLine(s.LastPrompt)
 		}
-		if p, ok := loc.Pane(s.Live.PID); ok {
+		if inTmux {
 			n.target = p.Target() + "." + p.Index
-			if looking(n.target) {
+			if looking(n.target) || lookingAtBorrowed(p.WindowID) {
 				continue
 			}
+			n.borrowed = borrow(p)
 		}
 		notify(n)
 	}
@@ -177,6 +183,32 @@ func (w *watcher) sessions() {
 			delete(w.status, id)
 		}
 	}
+	for _, l := range tmux.Borrowed() {
+		if !waiting[l.WindowID] && !l.Viewed {
+			_ = tmux.Unborrow(l)
+		}
+	}
+}
+
+// borrow links a waiting session's window into the session you're in, so it's a
+// tab away; the cleanup in sessions() unlinks it once answered and left. It
+// returns the tab's target, or "" when nothing was linked.
+func borrow(p tmux.Pane) string {
+	into, ok := tmux.ActiveSession()
+	if !ok || into == tmux.Home || into == p.Session {
+		return ""
+	}
+	l := tmux.Link{Session: into, WindowID: p.WindowID}
+	for _, b := range tmux.Borrowed() {
+		if b.Session == into && b.WindowID == p.WindowID {
+			return l.Target()
+		}
+	}
+	if err := tmux.Borrow(p.WindowID, p.Session, into); err != nil {
+		fmt.Fprintln(os.Stderr, time.Now().Format(time.TimeOnly), "borrow:", err)
+		return ""
+	}
+	return l.Target()
 }
 
 func (w *watcher) gitlab(s gitlab.Snapshot) {
@@ -228,6 +260,7 @@ type note struct {
 	thread                string // groups notifications of one kind in Notification Center
 	id                    string // a newer notification with the same id replaces the old one
 	target                string // tmux pane to jump to on click
+	borrowed              string // or first the tab it was linked into in your session
 	url                   string // or a link to open
 }
 
@@ -243,12 +276,16 @@ func Notifier() string {
 
 // clickCommand jumps to the pane and brings Ghostty forward. It runs from the
 // helper app with launchd's minimal PATH, hence the absolute tmux path.
-func clickCommand(target string) string {
+func clickCommand(n note) string {
 	tm, err := exec.LookPath("tmux")
 	if err != nil {
 		tm = "tmux"
 	}
-	return fmt.Sprintf("%q switch-client -t %q; open -a Ghostty", tm, target)
+	jump := fmt.Sprintf("%q switch-client -t %q", tm, n.target)
+	if n.borrowed != "" {
+		jump = fmt.Sprintf("%q switch-client -t %q || %s", tm, n.borrowed, jump)
+	}
+	return jump + "; open -a Ghostty"
 }
 
 // looking reports whether the pane is the one on screen, so a session you are
@@ -259,6 +296,20 @@ func looking(target string) bool {
 	if err != nil || !strings.HasPrefix(st, "11") || st == "110" {
 		return false
 	}
+	return ghosttyInFront()
+}
+
+// lookingAtBorrowed: the window is on screen as a tab borrowed into your session.
+func lookingAtBorrowed(windowID string) bool {
+	for _, l := range tmux.Borrowed() {
+		if l.WindowID == windowID && l.Viewed {
+			return ghosttyInFront()
+		}
+	}
+	return false
+}
+
+func ghosttyInFront() bool {
 	asn, _ := exec.Command("lsappinfo", "front").Output()
 	front, _ := exec.Command("lsappinfo", "info", "-only", "name", strings.TrimSpace(string(asn))).Output()
 	return strings.HasPrefix(string(front), `"Ghostty"`)
@@ -269,7 +320,7 @@ func notify(n note) {
 		args := []string{"post", "--title", n.title, "--subtitle", n.subtitle, "--body", n.body, "--thread", n.thread, "--id", n.id}
 		switch {
 		case n.target != "":
-			args = append(args, "--exec", clickCommand(n.target))
+			args = append(args, "--exec", clickCommand(n))
 		case n.url != "":
 			args = append(args, "--url", n.url)
 		}
@@ -283,7 +334,7 @@ func notify(n note) {
 		args := []string{"-title", n.title, "-subtitle", n.subtitle, "-message", n.body, "-group", n.id}
 		switch {
 		case n.target != "":
-			args = append(args, "-execute", clickCommand(n.target))
+			args = append(args, "-execute", clickCommand(n))
 		case n.url != "":
 			args = append(args, "-open", n.url)
 		}

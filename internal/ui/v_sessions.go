@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -14,6 +15,7 @@ import (
 	"github.com/MartyJRE/claudia/internal/claude"
 	"github.com/MartyJRE/claudia/internal/launch"
 	"github.com/MartyJRE/claudia/internal/repos"
+	"github.com/MartyJRE/claudia/internal/tmux"
 )
 
 var sessionCols = []col{
@@ -46,7 +48,7 @@ func (m *Model) listSessions(h int) string {
 	}
 	if len(m.restore) > 0 {
 		banner := pill(black, yellow, fmt.Sprintf("%d sessions were running before the restart", len(m.restore))) +
-			"  " + sKey.Render("X") + sDim.Render(" restore all  ") + sKey.Render("ctrl+x") + sDim.Render(" forget")
+			"  " + sKey.Render(m.key("sessions.restore")) + sDim.Render(" restore all  ") + sKey.Render(m.key("sessions.forget_restore")) + sDim.Render(" forget")
 		return " " + banner + "\n" + m.listSessionsTable(h-1)
 	}
 	return m.listSessionsTable(h)
@@ -77,6 +79,9 @@ func (m *Model) listSessionsTable(h int) string {
 }
 
 func (m *Model) status(r row) string {
+	if m.marked[r.ID] {
+		return sAccent.Render("✓ marked")
+	}
 	if !r.live() {
 		return sDim.Render("○ closed")
 	}
@@ -104,6 +109,8 @@ func sessionTitle(r row, selected bool) string {
 
 func (m *Model) where(r row) string {
 	switch {
+	case r.pane != nil && r.pane.Session == tmux.SplitSession:
+		return sOK.Render("split")
 	case r.pane != nil:
 		return sOK.Render("tmux ") + sDim.Render(r.pane.Target())
 	case r.live() && r.host != "":
@@ -214,61 +221,151 @@ func (m *Model) mrRef(u string) string {
 }
 
 func (m *Model) keySessions(k string) (tea.Model, tea.Cmd) {
-	switch k {
-	case " ":
+	switch m.action(k) {
+	case "sessions.fold":
 		m.toggleSessionFold()
 		return m, nil
-	case "-":
+	case "sessions.fold_all":
 		m.foldAllSessions(true)
 		return m, nil
-	case "+", "=":
+	case "sessions.unfold_all":
 		m.foldAllSessions(false)
 		return m, nil
-	case "v":
+	case "sessions.group":
 		m.sessPrefs.Group = (m.sessPrefs.Group + 1) % nSessGroups
 		m.saveSessionPrefs()
 		m.refilter()
 		m.setFlash("sessions "+sessGroupNames[m.sessPrefs.Group], false)
 		return m, nil
-	case "a":
+	case "sessions.all":
 		m.allSessions = !m.allSessions
 		m.refilter()
-	case "enter":
+	case "sessions.jump":
 		if c := m.cur[vSessions].pos; c >= 0 && c < len(m.vis.sessions) && !m.vis.sessions[c].isSess {
 			m.toggleSessionFold()
 			return m, nil
 		}
 		return m.jumpSession()
-	case "R":
+	case "sessions.resume":
 		r, ok := m.currentSession()
 		if ok {
 			return m.resume(r)
 		}
-	case "t":
+	case "sessions.close":
+		if r, ok := m.currentSession(); ok {
+			return m.closeSession(r)
+		}
+	case "sessions.mark":
+		if r, ok := m.currentSession(); ok {
+			m.toggleMark(r)
+		}
+	case "sessions.split":
+		return m.split()
+	case "sessions.unsplit":
+		if r, ok := m.currentSession(); ok {
+			return m.unsplit(r)
+		}
+	case "sessions.set_ticket":
 		if r, ok := m.currentSession(); ok {
 			m.pickTicket(r)
 		}
-	case "J":
+	case "sessions.ticket":
 		if r, ok := m.currentSession(); ok {
 			return m.gotoTicket(m.ix.sessionTicket[r.ID])
 		}
-	case "o":
+	case "sessions.mr":
 		r, ok := m.currentSession()
 		if ok && len(m.ix.sessionMRs[r.ID]) > 0 {
 			urls := m.ix.sessionMRs[r.ID]
 			return m, openURL(urls[len(urls)-1])
 		}
 		m.setFlash("no MR linked to this session", true)
-	case "y":
+	case "sessions.copy_id":
 		if r, ok := m.currentSession(); ok {
 			return m, copyText(r.ID, "session id")
 		}
-	case "X":
+	case "sessions.restore":
 		return m.restoreAll()
-	case "ctrl+x":
+	case "sessions.forget_restore":
 		m.forgetRestore()
 	}
 	return m, nil
+}
+
+// closeSession ends the claude process; a window claudia opened goes with it,
+// and the transcript stays for resuming.
+func (m *Model) closeSession(r row) (tea.Model, tea.Cmd) {
+	if !r.live() {
+		m.setFlash("not running", true)
+		return m, nil
+	}
+	if err := syscall.Kill(r.Live.PID, syscall.SIGTERM); err != nil {
+		m.setFlash("close "+r.Name()+": "+err.Error(), true)
+		return m, nil
+	}
+	delete(m.marked, r.ID)
+	m.setFlash("closed "+r.Name()+" · "+m.key("sessions.resume")+" resumes it", false)
+	return m, m.loadSessions()
+}
+
+func (m *Model) toggleMark(r row) {
+	if r.pane == nil {
+		m.setFlash("only live sessions in tmux can be split", true)
+		return
+	}
+	if m.marked == nil {
+		m.marked = map[string]bool{}
+	}
+	if m.marked[r.ID] {
+		delete(m.marked, r.ID)
+	} else {
+		m.marked[r.ID] = true
+	}
+	m.cur[vSessions].pos = min(m.cur[vSessions].pos+1, len(m.vis.sessions)-1)
+}
+
+// split tiles the marked sessions, plus the one under the cursor, into one window.
+func (m *Model) split() (tea.Model, tea.Cmd) {
+	var panes []tmux.Pane
+	seen := map[string]bool{}
+	add := func(r row) {
+		if r.pane != nil && !seen[r.pane.ID] {
+			seen[r.pane.ID] = true
+			panes = append(panes, *r.pane)
+		}
+	}
+	if r, ok := m.currentSession(); ok {
+		add(r)
+	}
+	for _, r := range m.sessions {
+		if m.marked[r.ID] {
+			add(r)
+		}
+	}
+	if len(panes) < 2 {
+		m.setFlash("mark sessions with "+m.key("sessions.mark")+" first, then "+m.key("sessions.split")+" puts them side by side", true)
+		return m, nil
+	}
+	target, err := tmux.JoinSplit(panes)
+	if err != nil {
+		m.setFlash("split: "+err.Error(), true)
+		return m, nil
+	}
+	m.marked = nil
+	return m.goTo(target)
+}
+
+func (m *Model) unsplit(r row) (tea.Model, tea.Cmd) {
+	if r.pane == nil || r.pane.Session != tmux.SplitSession {
+		m.setFlash("not in a split", true)
+		return m, nil
+	}
+	if err := tmux.Unsplit(r.pane.WindowID); err != nil {
+		m.setFlash("unsplit: "+err.Error(), true)
+		return m, nil
+	}
+	m.setFlash("sent the split's sessions back to their windows", false)
+	return m, m.loadSessions()
 }
 
 func (m *Model) pickTicket(r row) {
