@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/MartyJRE/claudia/internal/claude"
 )
@@ -165,7 +166,9 @@ func TestStart(t *testing.T) {
 	t.Cleanup(func() { _ = exec.Command("tmux", "kill-server").Run() })
 
 	bin := t.TempDir()
-	if err := os.WriteFile(filepath.Join(bin, "claude"), []byte("#!/bin/sh\nexec sleep 60\n"), 0o755); err != nil {
+	cwdLog := filepath.Join(bin, "cwd")
+	t.Setenv("CLAUDE_CWD_LOG", cwdLog)
+	if err := os.WriteFile(filepath.Join(bin, "claude"), []byte("#!/bin/sh\npwd > \"$CLAUDE_CWD_LOG\"\nexec sleep 60\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", bin+":"+os.Getenv("PATH"))
@@ -200,7 +203,13 @@ func TestStart(t *testing.T) {
 	if got := show(target, "#{window_name}"); got != "✻ fix-it" {
 		t.Errorf("window name %q", got)
 	}
-	if got := show(target, "#{pane_current_path}"); !strings.HasSuffix(got, "pay") {
+	// pane_current_path isn't reliable on Linux right after start; the process reports its own.
+	var cwd []byte
+	for i := 0; i < 200 && len(cwd) == 0; i++ {
+		time.Sleep(10 * time.Millisecond)
+		cwd, _ = os.ReadFile(cwdLog)
+	}
+	if got := strings.TrimSpace(string(cwd)); !strings.HasSuffix(got, "pay") {
 		t.Errorf("cwd %q", got)
 	}
 	cmd := show(target, "#{pane_start_command}")
