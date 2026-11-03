@@ -86,24 +86,27 @@ func (m *Model) table(cols []col, n int, cur *cursor, h int, cell func(i int, se
 	// The cursor lights up the row's main column (the one that stretches).
 	main := slices.IndexFunc(cols, func(c col) bool { return c.w == 0 })
 	for i := cur.offset; i < min(n, cur.offset+rows); i++ {
-		sel := i == cur.pos
+		sel, picked := i == cur.pos, m.inVisual(i)
 		cells := cell(i, sel)
 		hl := -1
-		if sel {
+		if sel || picked {
 			hl = main
 		}
 		line := joinCells(ws, cells, hl)
 		if len(cells) == 1 {
 			// A single cell is a group header spanning the whole row.
 			line = fit(cells[0], m.width-4)
-			if sel && main >= 0 {
+			if (sel || picked) && main >= 0 {
 				line = highlightSpan(line, colStart(ws, main), ws[main])
 			}
 		}
 		b.WriteString("\n")
-		if sel {
+		switch {
+		case sel:
 			b.WriteString(sBar.Render(" ▌ ") + line)
-		} else {
+		case picked:
+			b.WriteString(sAccent.Render(" ▏ ") + line)
+		default:
 			b.WriteString("   " + line)
 		}
 	}

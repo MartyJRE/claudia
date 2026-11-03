@@ -33,6 +33,10 @@ var actions = []action{
 	{"global.new_session", []string{"n"}, "new"},
 	{"global.filter", []string{"/"}, "filter"},
 	{"global.refresh", []string{"ctrl+r"}, "refresh"},
+	{"global.visual", []string{"V"}, "select rows"},
+
+	{"visual.claude", []string{"c"}, "claude on the selection"},
+	{"visual.claude_bg", []string{"C"}, "claude on the selection, in the background"},
 
 	{"notes.read", []string{"enter"}, "read"},
 	{"notes.fold", []string{" "}, "fold"},

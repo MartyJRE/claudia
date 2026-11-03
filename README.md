@@ -65,7 +65,13 @@ stories' notes). `N` lists them, `enter` reads one, `e` edits it in `$EDITOR`,
 a drafted reply for a mention, fixes for review threads. On a ticket it asks
 which kind (analysis, implementation, general, review, …), with the one that
 fits the ticket's state preselected, so `enter` just goes. `C` does the same in
-the background: you stay in claudia and get a ping when it needs you. Every view lists its
+the background: you stay in claudia and get a ping when it needs you.
+
+`V` selects several rows, like vim's line-wise visual mode: `j`/`k` extend it,
+`c` (or `C` for the background) asks what to do with them, e.g. "close all of
+these", and hands the lot to one Claude session. It lists what it will do and
+waits for your go-ahead before anything that can't be undone. Works in the
+Inbox, Review, My MRs, Jira, Mentions and Confluence. Every view lists its
 keys in the footer.
 
 In Sessions, the live ones stay in the order they started, so activity never

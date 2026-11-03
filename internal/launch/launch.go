@@ -42,6 +42,7 @@ var kindIcons = map[string]string{
 	"test":           "\U000F0668", // md-test_tube
 	"continue":       "\U000F040A", // md-play
 	"look":           "\U000F0337", // md-link
+	"batch":          "\U000F0756", // md-format_list_checks
 }
 
 const kindsFile = "session-kinds.json"

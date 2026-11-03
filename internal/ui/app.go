@@ -74,7 +74,8 @@ type Model struct {
 	links      *links.Links
 	atl        *atlassian.Client
 	atlErr     error
-	background bool // the action being run was C: start claude without switching to it
+	visual     *visualSel // rows picked with V
+	background bool       // the action being run was C: start claude without switching to it
 
 	sessions     []row
 	usage        []claude.DayModel
@@ -361,7 +362,19 @@ func (m *Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	c := &m.cur[m.view]
 	// Holds through the repo or intent chooser the action may open.
 	m.background = strings.HasSuffix(m.action(k), "_bg")
+	if m.visual != nil {
+		if mm, cmd, done := m.updateVisual(k); done {
+			return mm, cmd
+		}
+	}
 	switch m.action(k) {
+	case "global.visual":
+		if !visualView(m.view) || m.count() == 0 {
+			m.setFlash("nothing to select here", true)
+			return m, nil
+		}
+		m.visual = &visualSel{view: m.view, anchor: c.pos}
+		return m, nil
 	case "global.quit":
 		return m, tea.Quit
 	case "global.back":
@@ -438,6 +451,7 @@ func (m *Model) switchView(v view) {
 		return
 	}
 	m.view = v
+	m.visual = nil
 	m.filter.SetValue("")
 	m.refilter()
 }
@@ -702,6 +716,9 @@ func (m *Model) viewFooter() string {
 		if it, ok := m.chooser.selected(); ok && m.chooser.status != nil {
 			keys = append(keys, [2]string{"tab", m.chooser.status(m, it)})
 		}
+	} else if lo, hi, ok := m.visualRange(); ok {
+		keys = [][2]string{{"j/k", "extend"}, m.hint("visual.claude", fmt.Sprintf("claude on these %d", hi-lo+1)),
+			m.hint("visual.claude_bg", "in the background"), {"esc", "cancel"}}
 	} else {
 		keys = m.help()
 		keys = append(keys, m.hints("global.assistant", "global.open_link", "global.new_session")...)
