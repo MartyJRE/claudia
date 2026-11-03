@@ -1,0 +1,53 @@
+name: Bug report
+description: Something in claudia doesn't work the way it should
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you saw. Screenshots of the TUI help a lot.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Which view, which keys, how many sessions were open, etc.
+      placeholder: |
+        1. Open Sessions (2) with two live sessions
+        2. Send a prompt in one of them
+        3. …
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: claudia version
+      description: Output of `claudia version`
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      description: macOS version, terminal, `tmux -V`, `claude --version`
+      placeholder: macOS 26.1, Ghostty 1.2, tmux 3.5a, Claude Code 2.1.3
+  - type: textarea
+    id: config
+    attributes:
+      label: Relevant config
+      description: The parts of `~/.config/claudia/config.json` that matter. Leave out tokens and URLs you don't want public.
+      render: json
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or error messages
+      description: Error flashes in the footer, output of the failing `claudia` command
+      render: text
