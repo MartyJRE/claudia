@@ -19,7 +19,7 @@
 </p>
 
 <p align="center">
-  <img src="assets/preview.svg" width="860" alt="claudia's Inbox: everyone waiting on you, oldest first">
+  <img src="assets/inbox.svg" width="860" alt="claudia's Inbox: everyone waiting on you, oldest first">
 </p>
 
 claudia lists review requests, Jira and Confluence mentions, review threads on
@@ -43,6 +43,22 @@ switches between those sessions.
 | 7 | Confluence | Pages you edited recently |
 | 8 | Notes | Your Obsidian vault as a folder tree, or recently edited first |
 | 9 | Usage | Tokens and API-equivalent cost per day, plan limits |
+
+**Sessions**, grouped by repo, each with its `/color` dot:
+
+<img src="assets/sessions.svg" width="860" alt="Sessions grouped by repo, with recently closed ones below">
+
+**My MRs**, with pipelines, approvals and what changed since you last looked:
+
+<img src="assets/mrs.svg" width="860" alt="My MRs: open ones, then recently merged">
+
+**Jira**, your sprint as sprint › epic › story:
+
+<img src="assets/jira.svg" width="860" alt="Jira: the sprint as a tree of epics and stories">
+
+**Usage**, cost per day split by model, and plan limits:
+
+<img src="assets/usage.svg" width="860" alt="Usage: tokens and cost per day, bars split by model">
 
 `u` opens any link in Claude (also `claudia open <link>` from a shell): an MR
 link gets reviewed in your local clone even if it isn't assigned to you, a Jira
@@ -225,6 +241,12 @@ gofmt -l . && go mod tidy -diff && go vet ./... && go test -race ./...
 ```
 
 The tmux tests start a private tmux server, so they never touch your sessions.
+
+The screenshots in `assets/` are rendered from the real UI with demo data:
+
+```sh
+CLAUDIA_PREVIEWS=assets go test ./internal/ui -run TestWritePreviews
+```
 
 The notification helper in `notifier/` is a Swift package: its logic lives in
 `NotifierCore`, with the AppKit and UserNotifications wiring in the thin
