@@ -31,13 +31,14 @@ jobs:
         run: go test -race ./...
 
   # Publishes the total to the "badges" branch as a shields.io endpoint, which
-  # the README badge reads. Jobs writing that branch share one concurrency group.
+  # the README badge reads. Each badge job has its own group (one pending job per group
+  # survives); publish-badge.sh retries when the two push at once.
   coverage:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    concurrency: badges
+    concurrency: badge-coverage
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -80,7 +81,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    concurrency: badges
+    concurrency: badge-swift
     steps:
       - uses: actions/checkout@v4
       - name: publish badge
