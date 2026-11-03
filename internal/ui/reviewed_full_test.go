@@ -39,3 +39,27 @@ func TestReviewedMRsLeaveTheInbox(t *testing.T) {
 		t.Error("back in the inbox once the author asks for another review")
 	}
 }
+
+func TestReviewPillMatchesTheInbox(t *testing.T) {
+	m := newModelShell(t)
+	before := m.pendingReviews()
+	if before == 0 {
+		t.Fatal("fixture: expected a pending review")
+	}
+	m.gl.Review[0].MyReview = "requested_changes"
+	if got := m.pendingReviews(); got != before-1 {
+		t.Errorf("a review I've done still counts: %d, want %d", got, before-1)
+	}
+	m.gl.Review[0].MyReview = ""
+	for _, it := range m.inbox() {
+		if it.kind == kReview {
+			m.dismissed.toggle(it.id)
+		}
+	}
+	if got := m.pendingReviews(); got != 0 {
+		t.Errorf("snoozed reviews still count: %d", got)
+	}
+	if strings.Contains(plainShell(m.viewHeader()), "to review") {
+		t.Error("no pill when nothing's left to review")
+	}
+}

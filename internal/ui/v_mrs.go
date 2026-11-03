@@ -27,10 +27,12 @@ var mrCols = []col{
 	{"AGE", 5, 0},
 }
 
+// pendingReviews counts the reviews the inbox shows: not drafts, not done by me,
+// not snoozed.
 func (m *Model) pendingReviews() int {
 	n := 0
-	for _, mr := range m.gl.Review {
-		if !mr.Draft && !mr.ApprovedByMe(m.gl.Me.Username) {
+	for _, it := range m.inbox() {
+		if _, snoozed := m.dismissed[it.id]; it.kind == kReview && !snoozed {
 			n++
 		}
 	}
