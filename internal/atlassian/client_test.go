@@ -302,7 +302,7 @@ func TestFetchConfluence(t *testing.T) {
 				io.WriteString(w, `{"results":[{"content":{"id":"9","type":"comment","container":{"id":"7"}},"lastModified":"2026-11-03T17:28:25Z"}]}`)
 				return
 			}
-			io.WriteString(w, `{"results":[{"content":{"id":"1","type":"comment","space":{"key":"ENG"},"container":{"id":"7"}},
+			io.WriteString(w, `{"results":[{"content":{"id":"1","type":"comment","space":{"key":"ENG"},"container":{"id":7}},
 				"title":"Q&amp;A","excerpt":"hi","url":"/spaces/ENG/pages/1","lastModified":"2026-11-01T12:00:00Z"},
 				{"content":{"id":"2","type":"page","space":{"key":"OPS"}},"title":"Runbook","url":"/x","lastModified":"junk"}]}`)
 		},

@@ -218,3 +218,12 @@ func TestFetchConfluenceCommentsQueryFails(t *testing.T) {
 		t.Errorf("got %+v %v", s, err)
 	}
 }
+
+func TestFlexID(t *testing.T) {
+	for in, want := range map[string]string{`"7"`: "7", `7`: "7", `null`: ""} {
+		var f flexID
+		if err := f.UnmarshalJSON([]byte(in)); err != nil || string(f) != want {
+			t.Errorf("%s: %q %v", in, f, err)
+		}
+	}
+}

@@ -4,6 +4,7 @@ import (
 	"html"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -25,6 +26,17 @@ type ConfluenceSnapshot struct {
 	FetchedAt time.Time `json:"fetched_at"`
 }
 
+// flexID takes an id Confluence sends as a string or, for some containers, a number.
+type flexID string
+
+func (f *flexID) UnmarshalJSON(b []byte) error {
+	*f = flexID(strings.Trim(string(b), `"`))
+	if *f == "null" {
+		*f = ""
+	}
+	return nil
+}
+
 func (c *Client) cql(cql string, limit int) ([]Page, error) {
 	q := url.Values{"cql": {cql}, "limit": {strconv.Itoa(limit)}, "expand": {"content.space,content.container"}}
 	var res struct {
@@ -37,7 +49,7 @@ func (c *Client) cql(cql string, limit int) ([]Page, error) {
 					Key string `json:"key"`
 				} `json:"space"`
 				Container struct {
-					ID string `json:"id"`
+					ID flexID `json:"id"`
 				} `json:"container"`
 			} `json:"content"`
 			Title        string `json:"title"`
@@ -61,7 +73,7 @@ func (c *Client) cql(cql string, limit int) ([]Page, error) {
 			OnPage:  r.Content.ID,
 		}
 		if p.Comment && r.Content.Container.ID != "" {
-			p.OnPage = r.Content.Container.ID
+			p.OnPage = string(r.Content.Container.ID)
 		}
 		p.Modified, _ = time.Parse(time.RFC3339, r.LastModified)
 		out = append(out, p)
