@@ -29,3 +29,34 @@ jobs:
         run: go build ./...
       - name: test
         run: go test -race ./...
+
+  # Publishes the total to the orphan "badges" branch as a shields.io endpoint,
+  # which the README badge reads.
+  coverage:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency: coverage-badge
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: tmux for the tmux tests
+        run: sudo apt-get install -y tmux
+      - name: test with coverage
+        run: go test -coverprofile=cover.out ./...
+      - name: publish badge
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          pct=$(go tool cover -func=cover.out | awk '/^total:/ { sub("%", "", $NF); print $NF }')
+          color=$(awk -v p="$pct" 'BEGIN { print (p >= 80 ? "brightgreen" : p >= 60 ? "green" : p >= 40 ? "yellow" : p >= 20 ? "orange" : "red") }')
+          echo "Coverage: $pct%" >> "$GITHUB_STEP_SUMMARY"
+          mkdir badge && cd badge
+          printf '{"schemaVersion":1,"label":"coverage","message":"%s%%","color":"%s"}\n' "$pct" "$color" > coverage.json
+          git init -q -b badges
+          git add coverage.json
+          git -c user.name=github-actions -c user.email=github-actions@github.com commit -q -m "coverage $pct%"
+          git push -q --force "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:badges
