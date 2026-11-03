@@ -70,10 +70,11 @@ type Model struct {
 	km     keymap
 	marked map[string]bool // session ids marked for a split
 
-	store  *claude.Store
-	links  *links.Links
-	atl    *atlassian.Client
-	atlErr error
+	store      *claude.Store
+	links      *links.Links
+	atl        *atlassian.Client
+	atlErr     error
+	background bool // the action being run was C: start claude without switching to it
 
 	sessions     []row
 	usage        []claude.DayModel
@@ -283,6 +284,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case imagesMsg:
 		return m, m.openImages(msg)
 	case startMsg:
+		m.background = msg.background
 		return m.start(msg.sp)
 	case transitionsMsg:
 		m.showTransitions(msg)
@@ -357,6 +359,8 @@ func (m *Model) updateFilter(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m *Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	k := msg.String()
 	c := &m.cur[m.view]
+	// Holds through the repo or intent chooser the action may open.
+	m.background = strings.HasSuffix(m.action(k), "_bg")
 	switch m.action(k) {
 	case "global.quit":
 		return m, tea.Quit
@@ -735,19 +739,19 @@ func (m *Model) help() [][2]string {
 	case vNotes:
 		return m.hints("notes.read", "notes.fold", "notes.edit", "notes.obsidian", "notes.layout", "notes.ticket")
 	case vInbox:
-		return m.hints("inbox.open", "inbox.brief", "inbox.review", "inbox.threads", "inbox.approve", "inbox.rebase", "inbox.snooze", "inbox.ticket", "inbox.claude")
+		return m.hints("inbox.open", "inbox.brief", "inbox.review", "inbox.threads", "inbox.approve", "inbox.rebase", "inbox.snooze", "inbox.ticket", "inbox.claude", "inbox.claude_bg")
 	case vSessions:
 		return m.hints("sessions.jump", "sessions.fold", "sessions.group", "sessions.resume", "sessions.close", "sessions.mark", "sessions.split", "sessions.unsplit", "sessions.ticket", "sessions.set_ticket", "sessions.mr", "sessions.restore")
 	case vReview:
-		return append([][2]string{m.hint("mrs.primary", "review with claude")},
+		return append([][2]string{m.hint("mrs.primary", "review with claude"), m.hint("mrs.claude_bg", "review in the background")},
 			m.hints("mrs.open", "mrs.ticket", "mrs.rebase", "mrs.approve", "mrs.seen", "mrs.sessions")...)
 	case vMine:
 		return append([][2]string{m.hint("mrs.primary", "session")},
-			m.hints("mrs.threads", "mrs.fix", "mrs.open", "mrs.ticket", "mrs.rebase", "mrs.pipeline", "mrs.seen")...)
+			m.hints("mrs.threads", "mrs.fix", "mrs.claude_bg", "mrs.open", "mrs.ticket", "mrs.rebase", "mrs.pipeline", "mrs.seen")...)
 	case vJira:
-		return m.hints("jira.fold", "jira.layout", "jira.sessions", "jira.claude", "jira.summary", "jira.move", "jira.statuses", "jira.sort", "jira.copy_brief", "jira.images", "jira.open")
+		return m.hints("jira.fold", "jira.layout", "jira.sessions", "jira.claude", "jira.claude_bg", "jira.summary", "jira.move", "jira.statuses", "jira.sort", "jira.copy_brief", "jira.images", "jira.open")
 	case vMentions:
-		return m.hints("mentions.open", "mentions.dismiss", "mentions.ticket", "mentions.reply")
+		return m.hints("mentions.open", "mentions.dismiss", "mentions.ticket", "mentions.reply", "mentions.reply_bg")
 	case vConfluence:
 		return m.hints("confluence.open", "confluence.copy")
 	}
@@ -828,6 +832,11 @@ func (m *Model) start(sp launch.Spec) (tea.Model, tea.Cmd) {
 	if err != nil {
 		m.setFlash(err.Error(), true)
 		return m, nil
+	}
+	if m.background {
+		m.background = false
+		m.setFlash("started "+sp.Name+" in the background · you'll get a ping when it needs you", false)
+		return m, m.loadSessions()
 	}
 	return m.goTo(target)
 }

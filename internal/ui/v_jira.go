@@ -362,7 +362,7 @@ func (m *Model) keyJira(k string) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		return m.claudeForTicket(is.Key, is.Summary)
-	case "jira.claude":
+	case "jira.claude", "jira.claude_bg":
 		return m.claudeForTicket(is.Key, is.Summary)
 	case "jira.summary":
 		return m.briefSession(is.Key, is.Summary)
@@ -396,7 +396,10 @@ func (m *Model) exportBrief(key string, then func(path string) tea.Msg) tea.Cmd 
 	}
 }
 
-type startMsg struct{ sp launch.Spec }
+type startMsg struct {
+	sp         launch.Spec
+	background bool
+}
 
 type transitionsMsg struct {
 	key string

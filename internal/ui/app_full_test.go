@@ -231,7 +231,7 @@ func TestFrameAndOtherMsgsFull(t *testing.T) {
 func TestStartAndGoToFull(t *testing.T) {
 	m := newModelShell(t)
 	started := fakeStart(t, "", errors.New("no tmux"))
-	_, cmd := m.Update(startMsg{launch.Spec{Dir: "/code/x", Name: "x"}})
+	_, cmd := m.Update(startMsg{sp: launch.Spec{Dir: "/code/x", Name: "x"}})
 	if cmd != nil || !m.flashErr || m.flash != "no tmux" || len(*started) != 1 || (*started)[0].Dir != "/code/x" {
 		t.Errorf("a failed start is flashed: %q %v", m.flash, *started)
 	}

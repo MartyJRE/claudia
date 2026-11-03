@@ -299,7 +299,7 @@ func (m *Model) keyInbox(k string) (tea.Model, tea.Cmd) {
 		m.refilter()
 	case "inbox.ticket":
 		return m.gotoTicket(it.ticket)
-	case "inbox.claude":
+	case "inbox.claude", "inbox.claude_bg":
 		return m.claudeForInbox(it)
 	}
 	return m, nil

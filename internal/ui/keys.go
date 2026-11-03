@@ -52,6 +52,7 @@ var actions = []action{
 	{"inbox.snooze", []string{"x"}, "snooze"},
 	{"inbox.ticket", []string{"J"}, "ticket"},
 	{"inbox.claude", []string{"c"}, "claude does what fits"},
+	{"inbox.claude_bg", []string{"C"}, "same, in the background"},
 
 	{"sessions.jump", []string{"enter"}, "jump"},
 	{"sessions.fold", []string{" "}, "fold"},
@@ -84,6 +85,7 @@ var actions = []action{
 	{"mrs.ticket", []string{"J"}, "ticket"},
 	{"mrs.approve", []string{"A"}, "approve"},
 	{"mrs.unapprove", []string{"U"}, "unapprove"},
+	{"mrs.claude_bg", []string{"C"}, "fix threads in the background"},
 
 	{"jira.sessions", []string{"enter"}, "sessions"},
 	{"jira.team", []string{"a"}, "mine/team"},
@@ -97,6 +99,7 @@ var actions = []action{
 	{"jira.open", []string{"o"}, "open"},
 	{"jira.copy", []string{"y"}, "copy key"},
 	{"jira.claude", []string{"c"}, "claude"},
+	{"jira.claude_bg", []string{"C"}, "claude in the background"},
 	{"jira.summary", []string{"b"}, "summary"},
 	{"jira.move", []string{"m"}, "move"},
 	{"jira.copy_brief", []string{"e"}, "copy brief"},
@@ -108,6 +111,7 @@ var actions = []action{
 	{"mentions.ticket", []string{"J"}, "ticket"},
 	{"mentions.copy", []string{"y"}, "copy link"},
 	{"mentions.reply", []string{"c"}, "draft reply"},
+	{"mentions.reply_bg", []string{"C"}, "draft reply in the background"},
 
 	{"confluence.open", []string{"enter", "o"}, "open"},
 	{"confluence.copy", []string{"y"}, "copy link"},

@@ -195,7 +195,7 @@ func (m *Model) keyMentions(k string) (tea.Model, tea.Cmd) {
 		}
 	case "mentions.copy":
 		return m, copyText(x.url, "link")
-	case "mentions.reply":
+	case "mentions.reply", "mentions.reply_bg":
 		return m.replyToMention(x)
 	}
 	return m, nil

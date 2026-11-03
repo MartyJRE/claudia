@@ -198,7 +198,7 @@ func (m *Model) ticketSession(key, summary, intent, verb, title string, prompt f
 		return false, ""
 	}, func(m *Model, dir string, p claude.Profile) (tea.Model, tea.Cmd) {
 		name := m.sessionTitle(intent, verb, key, summary)
-		atl := m.atl
+		atl, bg := m.atl, m.background
 		return m, func() tea.Msg {
 			path, err := "", error(nil)
 			if atl != nil {
@@ -209,7 +209,7 @@ func (m *Model) ticketSession(key, summary, intent, verb, title string, prompt f
 			sp, id := launch.New(dir, p, name, prompt(path, err))
 			sp.Kind = intent
 			_ = m.links.SetTicket(id, key)
-			return startMsg{sp}
+			return startMsg{sp, bg}
 		}
 	})
 	return m, nil

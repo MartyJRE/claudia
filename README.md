@@ -64,7 +64,8 @@ stories' notes). `N` lists them, `enter` reads one, `e` edits it in `$EDITOR`,
 `c` starts the Claude session the item calls for: a review for a review request,
 a drafted reply for a mention, fixes for review threads. On a ticket it asks
 which kind (analysis, implementation, general, review, …), with the one that
-fits the ticket's state preselected, so `enter` just goes. Every view lists its
+fits the ticket's state preselected, so `enter` just goes. `C` does the same in
+the background: you stay in claudia and get a ping when it needs you. Every view lists its
 keys in the footer.
 
 In Sessions, the live ones stay in the order they started, so activity never

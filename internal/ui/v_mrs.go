@@ -424,6 +424,14 @@ func (m *Model) keyMRs(k string) (tea.Model, tea.Cmd) {
 			return m, openURL(r.WebURL)
 		}
 		return m.reviewWithClaude(r.MR)
+	case "mrs.claude_bg":
+		if !ok {
+			return m, nil
+		}
+		if m.view == vMine {
+			return m.addressThreads(r.MR)
+		}
+		return m.reviewWithClaude(r.MR)
 	case "mrs.approve", "mrs.unapprove":
 		if !ok || m.view != vReview {
 			return m, nil
