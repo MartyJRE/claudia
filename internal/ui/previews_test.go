@@ -169,7 +169,7 @@ func demoGitlab(now time.Time) gitlab.Snapshot {
 	wip.Draft = true
 
 	decimals := demoMR("billing", 87, "feat(ABC-401): invoice line items in decimals", "jordan", "feat/ABC-401/decimal-lines", 30*h, 25*time.Minute)
-	decimals.Pipeline = &gitlab.Pipeline{Status: "failed"}
+	decimals.Pipeline = &gitlab.Pipeline{Status: "failed", Failed: []gitlab.Job{{Name: "unit-tests", Stage: "test"}}}
 	decimals.Reviewers = []gitlab.User{{Username: "priya.n"}, {Username: "tom.reed"}}
 	decimals.ApprovedBy, decimals.ApprovalsLeft = []string{"tom.reed"}, 1
 	decimals.DiscussionsResolved = false

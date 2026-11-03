@@ -21,8 +21,8 @@ var mrCols = []col{
 	{"TITLE", 0, 0},
 	{"AUTHOR", 16, 110},
 	{"TICKET", 10, 0},
-	{"PIPELINE", 18, 0},
-	{"APPROVALS", 10, 120},
+	{"PIPELINE", 16, 0},
+	{"APPROVALS", 10, 140},
 	{"CHANGES", 24, 95},
 	{"AGE", 5, 0},
 }
@@ -107,7 +107,7 @@ func (m *Model) listMRs(h int) string {
 	}
 	cols := slices.Clone(mrCols)
 	if m.view == vMine {
-		cols[2].title, cols[2].w = "REVIEWERS", 22
+		cols[2].title, cols[2].w = "REVIEWERS", 18
 	}
 	return m.table(cols, len(rows), &m.cur[m.view], h, func(i int, sel bool) []string {
 		r := rows[i]
