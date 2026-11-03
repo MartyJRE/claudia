@@ -166,8 +166,8 @@ func TestChipsShell(t *testing.T) {
 	if got := plainShell(m.chipsText(mrRow{mr, false})); got != "conflict" {
 		t.Errorf("conflict: %q", got)
 	}
-	if got := m.chipsText(mrRow{mr, true}); got != "" {
-		t.Errorf("merged MRs have no chips: %q", got)
+	if got := plainShell(m.chipsText(mrRow{mr, true})); got != "merged" {
+		t.Errorf("merged MRs say so instead of showing chips: %q", got)
 	}
 
 	m.view = vMine

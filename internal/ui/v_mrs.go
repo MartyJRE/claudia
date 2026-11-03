@@ -112,9 +112,11 @@ func (m *Model) listMRs(h int) string {
 		if sel {
 			st = sBold
 		}
+		if r.Draft || r.merged {
+			st = sDim
+		}
 		if r.Draft {
 			title = "Draft: " + strings.TrimPrefix(title, "Draft: ")
-			st = sDim
 		}
 		second := sDim.Render(r.Author.Username)
 		if m.view == vMine {
@@ -199,7 +201,7 @@ func mrState(mr gitlab.MR) string {
 
 func (m *Model) chipsText(r mrRow) string {
 	if r.merged {
-		return ""
+		return lipgloss.NewStyle().Foreground(purple).Render("merged")
 	}
 	var parts []string
 	for _, c := range m.seen.changes(r.MR) {
