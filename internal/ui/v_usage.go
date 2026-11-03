@@ -96,7 +96,7 @@ func (m *Model) listUsage(h int) string {
 		}
 		bar := ""
 		if peak > 0 {
-			bar = sBar.Render(strings.Repeat("━", int(r.cost/peak*float64(barW))))
+			bar = stackedBar(r, int(r.cost/peak*float64(barW)))
 		}
 		cost := money(r.cost)
 		if r.unknown {
@@ -115,6 +115,30 @@ func (m *Model) listUsage(h int) string {
 		}
 	}, empty)
 	return top + table
+}
+
+// stackedBar splits a day's bar by model, each segment as long as that model's
+// share of the cost and in its colour. Cumulative rounding keeps the total exact.
+func stackedBar(r usageRow, w int) string {
+	if r.cost <= 0 {
+		return ""
+	}
+	var b strings.Builder
+	done, sum := 0, 0.0
+	for _, dm := range r.models {
+		c, ok := dm.Cost(dm.Model)
+		if !ok {
+			continue
+		}
+		sum += c
+		end := int(sum / r.cost * float64(w))
+		if n := end - done; n > 0 {
+			f, _ := modelName(dm.Model)
+			b.WriteString(lipgloss.NewStyle().Foreground(modelColor(f)).Render(strings.Repeat("━", n)))
+		}
+		done = end
+	}
+	return b.String()
 }
 
 func money(v float64) string {

@@ -2,6 +2,7 @@ package ui
 
 import (
 	"encoding/json"
+	"github.com/charmbracelet/lipgloss"
 	"os"
 	"path/filepath"
 	"strings"
@@ -138,5 +139,29 @@ func TestMoney(t *testing.T) {
 		if got := money(v); got != want {
 			t.Errorf("money(%v) = %s, want %s", v, got, want)
 		}
+	}
+}
+
+func TestStackedBarByModel(t *testing.T) {
+	prev := lipgloss.ColorProfile()
+	t.Cleanup(func() { lipgloss.SetColorProfile(prev) })
+	lipgloss.SetColorProfile(0) // termenv.TrueColor
+
+	m := usageModelViews(t)
+	today := m.usageRows()[0]
+	bar := stackedBar(today, 40)
+	if got := []rune(plainViews(bar)); len(got) != 40 {
+		t.Errorf("segments add up to the whole bar, got %d", len(got))
+	}
+	// One coloured run per model: each segment opens with its own escape sequence.
+	if n := strings.Count(bar, "\x1b[38;"); n != len(today.models) {
+		t.Errorf("want %d coloured segments, got %d: %q", len(today.models), n, bar)
+	}
+	other := usageRow{cost: 1, models: []claude.DayModel{{Model: "gpt-x", Tokens: claude.Tokens{Input: 1}}}}
+	if stackedBar(other, 10) != "" {
+		t.Error("models without a price draw nothing")
+	}
+	if stackedBar(usageRow{}, 10) != "" {
+		t.Error("no cost, no bar")
 	}
 }
