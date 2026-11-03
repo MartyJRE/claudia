@@ -19,7 +19,7 @@ func TestStaleShell(t *testing.T) {
 	m.fetchedAt[srcJira] = time.Now().Add(-3 * time.Minute)
 	m.fetchedAt[srcConfluence] = time.Now().Add(-3 * time.Minute)
 	m.busy[srcRepos] = true
-	for s, want := range map[source]bool{srcGitlab: false, srcJira: true, srcConfluence: false, srcRepos: false} {
+	for s, want := range map[source]bool{srcGitlab: false, srcJira: true, srcConfluence: false, srcRepos: false, srcTeams: false} {
 		if got := m.stale(s); got != want {
 			t.Errorf("%s: stale %v, want %v", viewSource(s), got, want)
 		}
@@ -35,8 +35,8 @@ func TestRefreshAllShell(t *testing.T) {
 		t.Fatal("refreshAll fetches")
 	}
 	for s := source(0); s < nSources; s++ {
-		if !m.busy[s] {
-			t.Errorf("%s should be fetching", viewSource(s))
+		if want := s != srcTeams; m.busy[s] != want {
+			t.Errorf("%s: fetching %v, want %v (Teams isn't set up)", viewSource(s), m.busy[s], want)
 		}
 	}
 	if m.fetchedAt[srcRepos].IsZero() {

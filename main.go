@@ -54,6 +54,12 @@ func run(args []string) {
 		}
 		return
 	}
+	if len(args) > 0 && args[0] == "teams" {
+		if err := teamsCmd(args[1:]); err != nil {
+			fail(err)
+		}
+		return
+	}
 	if len(args) > 1 && args[0] == "open" {
 		// Hand the link to claudia's session and switch there; it picks it up
 		// on its next tick (or right after starting).

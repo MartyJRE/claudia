@@ -14,7 +14,7 @@ func TestMain(m *testing.M) {
 	os.Setenv("CLAUDIA_GITLAB_HOST", "gitlab.example.com")
 	os.MkdirAll(filepath.Join(dir, "claudia"), 0o755)
 	os.WriteFile(filepath.Join(dir, "claudia", "config.json"),
-		[]byte(`{"code_root": "/code", "remote_control": ["work"], "vault": "/notes"}`), 0o600)
+		[]byte(`{"code_root": "/code", "remote_control": ["work"], "vault": "/notes", "teams": {"tenant": "t", "client_id": "c"}}`), 0o600)
 	code := m.Run()
 	os.RemoveAll(dir)
 	os.Exit(code)

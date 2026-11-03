@@ -46,9 +46,10 @@ func TakeRequest() bool {
 }
 
 const instructions = `You write a short status brief for a software developer, shown at the top of their terminal dashboard.
-You get their current state as JSON: inbox (people waiting on them, with waiting_since), their sprint tickets, their open and recently merged MRs, and their Claude sessions, plus your previous brief.
+You get their current state as JSON: inbox (people waiting on them, with waiting_since), their sprint tickets, their open and recently merged MRs, their Claude sessions and the rest of today's meetings, plus your previous brief.
 Write at most 4 short sentences, under 80 words in total, plain English, no headings, no lists, no preamble, no sign-off. Pick only what matters most:
 - who has been waiting on them longest and for what (people unblock first),
+- the next meeting when it's soon, since it bounds what they can start,
 - anything failing or stuck (pipelines, rebases, unanswered questions),
 - what changed since the previous brief, if anything,
 - the one or two things you'd do next.

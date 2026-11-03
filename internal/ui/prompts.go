@@ -225,7 +225,7 @@ func (m *Model) reviewWithClaude(mr gitlab.MR) (tea.Model, tea.Cmd) {
 	}
 	m.seen.mark(rel...)
 	name := m.sessionTitle("review", "review", mrTicket(mr), mr.Title)
-	prompt := strings.ReplaceAll(getConfig().ReviewPrompt, "{urls}", strings.Join(urls, " "))
+	prompt := strings.ReplaceAll(getConfig().ReviewPrompt, "{urls}", strings.Join(urls, " ")) + m.teamsReplyNote(urls)
 	return m.inClone(mr, "review", name, prompt, urls)
 }
 
@@ -285,6 +285,10 @@ func (m *Model) claudeForInbox(it inboxItem) (tea.Model, tea.Cmd) {
 		return m.replyToMention(it.ment)
 	case kClaude:
 		return m.jumpTo(it.sess)
+	case kTeams:
+		return m.replyInTeams(it.tw)
+	case kInvite:
+		m.answerInvite(it.tw)
 	}
 	return m, nil
 }

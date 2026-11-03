@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"syscall"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/MartyJRE/claudia/internal/gitlab"
 	"github.com/MartyJRE/claudia/internal/launch"
 	"github.com/MartyJRE/claudia/internal/repos"
+	"github.com/MartyJRE/claudia/internal/teams"
 	"github.com/MartyJRE/claudia/internal/tmux"
 	"github.com/MartyJRE/claudia/internal/update"
 	"github.com/MartyJRE/claudia/internal/watch"
@@ -39,6 +41,7 @@ var (
 	execProcess       = tea.ExecProcess
 	executable        = os.Executable
 	tickAfter         = tea.Tick
+	clockNow          = time.Now
 
 	fetchGitlab = gitlab.Fetch
 	fetchMR     = gitlab.FetchMR
@@ -52,6 +55,10 @@ var (
 	exportJiraBrief = (*atlassian.Client).ExportBrief
 	jiraTransitions = (*atlassian.Client).Transitions
 	transitionIssue = (*atlassian.Client).Transition
+
+	newTeams     = teams.New
+	fetchTeams   = (*teams.Client).Fetch
+	respondTeams = (*teams.Client).Respond
 
 	updateAvailable = update.Available
 	fetchUpdate     = update.Fetch

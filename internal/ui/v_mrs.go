@@ -250,6 +250,11 @@ func (m *Model) chipsText(r mrRow) string {
 	case "conflict":
 		parts = append(parts, sErr.Render("conflict"))
 	}
+	if m.view == vReview {
+		if c := m.teamsChip(r.MR); c != "" {
+			parts = append(parts, c)
+		}
+	}
 	if m.view == vMine {
 		if n := r.OpenThreads(); n > 0 {
 			parts = append(parts, lipgloss.NewStyle().Foreground(yellow).Render(fmt.Sprintf("%d open threads", n)))
@@ -313,6 +318,7 @@ func (m *Model) detailMR() string {
 	} else if len(r.ApprovedBy) > 0 {
 		lines = append(lines, sDim.Render("approved by "+strings.Join(r.ApprovedBy, ", ")))
 	}
+	lines = append(lines, m.teamsLines(r.MR)...)
 	return m.panel(m.withNotes(lines, mrTicket(r.MR)))
 }
 
@@ -454,6 +460,10 @@ func (m *Model) keyMRs(k string) (tea.Model, tea.Cmd) {
 	case "mrs.ticket":
 		if ok {
 			return m.gotoTicket(mrTicket(r.MR))
+		}
+	case "mrs.teams":
+		if ok {
+			return m.openTeamsPost(r.MR)
 		}
 	case "mrs.primary":
 		if !ok {

@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"errors"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -9,6 +10,7 @@ import (
 	"github.com/MartyJRE/claudia/internal/gitlab"
 	"github.com/MartyJRE/claudia/internal/repos"
 	"github.com/MartyJRE/claudia/internal/state"
+	"github.com/MartyJRE/claudia/internal/teams"
 )
 
 type source int
@@ -18,6 +20,7 @@ const (
 	srcJira
 	srcConfluence
 	srcRepos
+	srcTeams
 	nSources
 )
 
@@ -26,12 +29,14 @@ var sourceEvery = [nSources]time.Duration{
 	srcJira:       2 * time.Minute,
 	srcConfluence: 5 * time.Minute,
 	srcRepos:      time.Minute,
+	srcTeams:      3 * time.Minute,
 }
 
 var cacheFile = [nSources]string{
 	srcGitlab:     "cache-gitlab.json",
 	srcJira:       "cache-jira.json",
 	srcConfluence: "cache-confluence.json",
+	srcTeams:      "cache-teams.json",
 }
 
 type fetched struct {
@@ -63,7 +68,7 @@ func (m *Model) loadSessions() tea.Cmd {
 }
 
 func (m *Model) fetch(src source) tea.Cmd {
-	atl, atlErr := m.atl, m.atlErr
+	atl, atlErr, tm := m.atl, m.atlErr, m.tm
 	return func() tea.Msg {
 		f := fetched{src: src}
 		switch src {
@@ -81,6 +86,11 @@ func (m *Model) fetch(src source) tea.Cmd {
 			f.data, f.err = fetchConfluence(atl)
 		case srcRepos:
 			f.data = findRepos(repos.Root())
+		case srcTeams:
+			f.data, f.err = fetchTeams(tm)
+			if errors.Is(f.err, teams.ErrNoChannel) {
+				f.err = nil // DMs and mentions still work without the review channel
+			}
 		}
 		if f.err == nil && cacheFile[src] != "" {
 			_ = state.Save(cacheFile[src], f.data)
@@ -101,9 +111,15 @@ func (m *Model) loadCaches() {
 	if state.Load(cacheFile[srcConfluence], &m.conf) {
 		m.fetchedAt[srcConfluence] = m.conf.FetchedAt
 	}
+	if state.Load(cacheFile[srcTeams], &m.teams) {
+		m.fetchedAt[srcTeams] = m.teams.FetchedAt
+	}
 }
 
 func (m *Model) stale(src source) bool {
+	if src == srcTeams && m.tm == nil {
+		return false
+	}
 	return !m.busy[src] && time.Since(m.fetchedAt[src]) >= sourceEvery[src]
 }
 
@@ -128,6 +144,8 @@ func (m *Model) applyFetched(f fetched) {
 		m.conf = d
 	case []repos.Repo:
 		m.repos = d
+	case teams.Snapshot:
+		m.teams = d
 	}
 }
 

@@ -32,6 +32,8 @@ type CtlMR struct {
 	State    string `json:"state,omitempty"` // opened, merged, closed; empty if claudia doesn't track it
 	Pipeline string `json:"pipeline,omitempty"`
 	Approved bool   `json:"approved,omitempty"`
+	// TeamsPosts are the Teams posts asking for its review, newest first.
+	TeamsPosts []string `json:"teams_posts,omitempty"`
 }
 
 type CtlTicket struct {
@@ -119,6 +121,9 @@ func (m *Model) CtlHere(r row) CtlHere {
 		if g, ok := m.ix.mrs[u]; ok {
 			mr.Title, mr.State, mr.Pipeline, mr.Approved = g.Title, g.State, g.PipelineStatus(), g.Approved
 		}
+		for _, p := range m.teams.ForMR(u) {
+			mr.TeamsPosts = append(mr.TeamsPosts, p.ID)
+		}
 		h.MRs = append(h.MRs, mr)
 	}
 	for _, n := range m.notesFor(m.ix.sessionTicket[r.ID]) {
@@ -173,12 +178,14 @@ func (m *Model) BriefData() any {
 		NeedsRebase                  bool     `json:",omitempty"`
 	}
 	type sess struct{ Name, Status, Ticket string }
+	type meeting struct{ Subject, Start, End, Response string }
 	var out struct {
 		Inbox    []CtlItem
 		Sprint   []issue
 		MyMRs    []mr
 		Merged   []mr
 		Sessions []sess
+		Meetings []meeting `json:",omitempty"` // the rest of today
 	}
 	for _, it := range m.CtlInbox("") {
 		if !it.Snoozed {
@@ -216,6 +223,12 @@ func (m *Model) BriefData() any {
 	for _, r := range m.sessions {
 		if r.live() {
 			out.Sessions = append(out.Sessions, sess{r.Name(), string(r.Live.Status), m.ix.sessionTicket[r.ID]})
+		}
+	}
+	y, mo, d := clockNow().Date()
+	for _, e := range m.teams.Events {
+		if s := e.Start.Local(); e.End.After(clockNow()) && s.Year() == y && s.Month() == mo && s.Day() == d && e.Response != "declined" {
+			out.Meetings = append(out.Meetings, meeting{e.Subject, s.Format("15:04"), e.End.Local().Format("15:04"), e.Response})
 		}
 	}
 	return out

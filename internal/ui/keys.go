@@ -55,6 +55,7 @@ var actions = []action{
 	{"inbox.approve", []string{"A"}, "approve"},
 	{"inbox.snooze", []string{"x"}, "snooze"},
 	{"inbox.ticket", []string{"J"}, "ticket"},
+	{"inbox.teams", []string{"T"}, "teams post"},
 	{"inbox.claude", []string{"c"}, "claude does what fits"},
 	{"inbox.claude_bg", []string{"C"}, "same, in the background"},
 
@@ -87,6 +88,7 @@ var actions = []action{
 	{"mrs.fix", []string{"f"}, "fix threads"},
 	{"mrs.rebase", []string{"B"}, "rebase"},
 	{"mrs.ticket", []string{"J"}, "ticket"},
+	{"mrs.teams", []string{"T"}, "teams post"},
 	{"mrs.approve", []string{"A"}, "approve"},
 	{"mrs.unapprove", []string{"U"}, "unapprove"},
 	{"mrs.claude_bg", []string{"C"}, "fix threads in the background"},

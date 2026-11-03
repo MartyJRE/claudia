@@ -3,6 +3,7 @@ package ui
 import (
 	"encoding/json"
 	"os"
+	"reflect"
 	"testing"
 	"time"
 
@@ -58,7 +59,7 @@ func TestCtlHereShell(t *testing.T) {
 	if h.Ticket == nil || *h.Ticket != (CtlTicket{Key: "ABC-1", Title: "Payments export", Status: "Dev in progress"}) {
 		t.Errorf("ticket: %+v", h.Ticket)
 	}
-	if len(h.MRs) != 2 || h.MRs[0] != (CtlMR{URL: m.gl.Review[0].WebURL, Title: "feat(ABC-1): add payments export", State: "opened", Pipeline: "success"}) || h.MRs[1] != (CtlMR{URL: "https://elsewhere/mr/1"}) {
+	if len(h.MRs) != 2 || !reflect.DeepEqual(h.MRs[0], CtlMR{URL: m.gl.Review[0].WebURL, Title: "feat(ABC-1): add payments export", State: "opened", Pipeline: "success"}) || !reflect.DeepEqual(h.MRs[1], CtlMR{URL: "https://elsewhere/mr/1"}) {
 		t.Errorf("MRs: %+v", h.MRs)
 	}
 	if len(h.Items) != 3 {

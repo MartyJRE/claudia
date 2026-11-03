@@ -22,8 +22,8 @@
   <img src="assets/inbox.svg" width="860" alt="claudia's Inbox: everyone waiting on you, oldest first">
 </p>
 
-claudia lists review requests, Jira and Confluence mentions, review threads on
-your MRs and Claude sessions that need input, oldest first, and jumps you into the
+claudia lists review requests, Jira and Confluence mentions, Teams messages,
+review threads on your MRs and Claude sessions that need input, oldest first, and jumps you into the
 right Claude Code session for each: a review, a drafted reply, the fixes.
 
 Claude itself always runs as the real `claude` CLI in tmux windows, so nothing
@@ -110,6 +110,24 @@ sends each back to a window of its own in the session it came from.
 
 Every key can be rebound, see `keys` under [Configuration](#configuration).
 
+## Teams
+
+With [Teams set up](#teams-setup), the Inbox also lists Microsoft Teams chats
+where someone else had the last word, and @mentions of you in any channel you
+haven't answered in the thread. They stay until you reply or snooze them with
+`x`, even after you've read them in Teams, so nothing slips. `enter` opens the
+message in Teams; `c` starts a session that reads the conversation and drafts
+your reply, and sends it only after you OK the text.
+
+Meeting invites you haven't answered show up too; `c` on one asks accept,
+tentative or decline. The brief knows the rest of today's meetings.
+
+Review requests posted in your code-review channel are matched to their MRs (a
+post can cover several MRs, and an MR can be posted more than once). The Review
+row shows a `teams` chip, `teams ✓` once you've replied in the thread, and `T`
+opens the post. A review session is told about the post, so when it's done it
+proposes a reply or a ✅ for the thread.
+
 ## Claude can drive it too
 
 Every session claudia starts or resumes is told about `claudia ctl`, so you can
@@ -134,6 +152,7 @@ claudia update          # install the newest version from GitHub (ctrl+u inside 
 claudia version         # the commit this binary was built from
 claudia setup           # build the native notification helper
 claudia ctl help        # the commands Claude sessions use, see above
+claudia teams help      # Teams: login, waiting, show, reply, react, see below
 ```
 
 ## Requirements
@@ -142,7 +161,7 @@ claudia ctl help        # the commands Claude sessions use, see above
 - [`glab`](https://gitlab.com/gitlab-org/cli), logged in (claudia uses its login)
 - Claude Code
 - Optional: Ghostty (images, notification click-through), a Swift toolchain for
-  the native notification helper
+  the native notification helper, an Entra app for [Teams](#teams-setup)
 
 ## Install
 
@@ -227,6 +246,55 @@ fi
 ```
 
 State and caches live in `~/.local/state/claudia`.
+
+### Teams setup
+
+claudia reads and writes Teams through Microsoft Graph as you, with an Entra app
+registration of your own:
+
+1. Register an app (single tenant) and turn on **Allow public client flows**
+   under Authentication.
+2. Give it the delegated Microsoft Graph permissions `User.Read`,
+   `User.ReadBasic.All`, `Chat.ReadWrite`, `Chat.Create`, `ChannelMessage.Read.All`,
+   `ChannelMessage.Send`, `Team.ReadBasic.All`, `Channel.ReadBasic.All`,
+   `Files.ReadWrite.All`, `Calendars.ReadWrite` and `offline_access`, and have an
+   admin grant consent (`ChannelMessage.Read.All` always needs one).
+3. Add it to the config and sign in once:
+
+```json
+"teams": {
+  "tenant": "<directory (tenant) id>",
+  "client_id": "<application (client) id>",
+  "me": "Your Teams Name",
+  "team_id": "<team id>",
+  "channel_id": "<code-review channel id>"
+}
+```
+
+```sh
+claudia teams login       # device code; the token is kept in claudia's state dir
+claudia teams channels    # your teams and channels, to fill in team_id / channel_id
+```
+
+`team_id` and `channel_id` are only for the review channel; chats and mentions
+work without them. `me` tells your replies apart from others'.
+
+```sh
+claudia teams waiting                       # chats, @mentions and invites waiting on you, as JSON
+claudia teams show <ref>                    # the conversation, oldest first, with its files
+claudia teams posts [--mr <url>]            # review-channel posts, or the ones about an MR
+claudia teams reply <ref|mr-url> <text>     # into the chat or thread
+claudia teams react <ref|mr-url> ✅
+claudia teams chat <who>[,<who>] <text>     # start a chat (names or emails); several make a group
+claudia teams post <Team/Channel> <text>    # start a new thread in a channel
+claudia teams who <name|email>              # find a person
+claudia teams download <file-url> [dir]     # save a file shared in Teams
+claudia teams calendar [days]               # your meetings from now
+claudia teams respond <event-ref> accept|tentative|decline [comment]
+```
+
+`reply`, `chat` and `post` take `--file <path>` (repeatable): files go to your
+OneDrive's Teams chat folder for a chat, or the channel's own files folder.
 
 ## Contributing
 

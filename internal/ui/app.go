@@ -19,6 +19,7 @@ import (
 	"github.com/MartyJRE/claudia/internal/launch"
 	"github.com/MartyJRE/claudia/internal/links"
 	"github.com/MartyJRE/claudia/internal/repos"
+	"github.com/MartyJRE/claudia/internal/teams"
 	"github.com/MartyJRE/claudia/internal/tmux"
 	"github.com/MartyJRE/claudia/internal/vault"
 	"github.com/MartyJRE/claudia/internal/watch"
@@ -89,6 +90,8 @@ type Model struct {
 	gl           gitlab.Snapshot
 	jira         atlassian.JiraSnapshot
 	conf         atlassian.ConfluenceSnapshot
+	teams        teams.Snapshot
+	tm           *teams.Client
 	repos        []repos.Repo
 	ix           index
 	seen         seenStore
@@ -159,6 +162,7 @@ func New(opts Options) *Model {
 	var problems []string
 	m.km, problems = newKeymap(getConfig().Keys)
 	m.atl, m.atlErr = atlassian.New()
+	m.tm, _ = newTeams()
 	m.seen, m.seenExisted = loadSeen()
 	m.loadCaches()
 	m.restore = pendingRestore()
@@ -329,7 +333,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func viewSource(s source) string {
-	return [...]string{"GitLab", "Jira", "Confluence", "repos"}[s]
+	return [...]string{"GitLab", "Jira", "Confluence", "repos", "Teams"}[s]
 }
 
 func (m *Model) setFlash(s string, err bool) {

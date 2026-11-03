@@ -65,6 +65,21 @@ type Config struct {
 	// RoundedPillsRaw: false draws pills square, for fonts without the Nerd
 	// Font half circles. Ghostty ships them, so they're on by default.
 	RoundedPillsRaw *bool `json:"rounded_pills"`
+	// Teams links review requests posted in a Teams channel to their MRs.
+	Teams Teams `json:"teams"`
+}
+
+type Teams struct {
+	// Tenant and ClientID name the Entra app claudia signs in with (device
+	// code, delegated ChannelMessage.Read.All and ChannelMessage.Send).
+	Tenant   string `json:"tenant"`
+	ClientID string `json:"client_id"`
+	// TeamID and ChannelID are the channel review requests are posted in;
+	// both are in the channel's "Get link to channel" URL.
+	TeamID    string `json:"team_id"`
+	ChannelID string `json:"channel_id"`
+	// Me is your Teams display name, to tell your replies from others'.
+	Me string `json:"me"`
 }
 
 func (c Config) RoundedPills() bool { return c.RoundedPillsRaw == nil || *c.RoundedPillsRaw }

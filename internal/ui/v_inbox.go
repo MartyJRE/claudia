@@ -13,6 +13,7 @@ import (
 	"github.com/MartyJRE/claudia/internal/brief"
 	"github.com/MartyJRE/claudia/internal/claude"
 	"github.com/MartyJRE/claudia/internal/gitlab"
+	"github.com/MartyJRE/claudia/internal/teams"
 )
 
 type inboxKind int
@@ -23,6 +24,8 @@ const (
 	kMention
 	kPage
 	kClaude
+	kTeams
+	kInvite
 )
 
 var kindLabel = map[inboxKind]string{
@@ -31,6 +34,8 @@ var kindLabel = map[inboxKind]string{
 	kMention: "mention",
 	kPage:    "page",
 	kClaude:  "claude",
+	kTeams:   "teams",
+	kInvite:  "invite",
 }
 
 // inboxItem is anything someone (or a session) is waiting on you for.
@@ -46,6 +51,7 @@ type inboxItem struct {
 	mr     gitlab.MR
 	sess   row
 	ment   mention
+	tw     teams.Waiting
 }
 
 func (m *Model) inbox() []inboxItem {
@@ -103,6 +109,20 @@ func (m *Model) inbox() []inboxItem {
 		}
 		out = append(out, it)
 	}
+	for _, w := range m.teams.Waiting {
+		if m.onReviewRow(w) {
+			continue
+		}
+		text, k, since := w.Text, kTeams, w.At
+		if w.Unread {
+			text = "● " + text
+		}
+		if w.Kind == "invite" {
+			// An invite waits from when it arrived, which Graph doesn't say; list it now.
+			k, since = kInvite, m.teams.FetchedAt
+		}
+		out = append(out, inboxItem{id: "tm:" + w.Ref, kind: k, where: w.Where, who: w.From, text: text, since: since, url: w.WebURL, tw: w})
+	}
 	for _, r := range m.sessions {
 		if !r.live() || r.Live.Status != claude.StatusWaiting {
 			continue
@@ -158,6 +178,10 @@ func kindStyle(k inboxKind) lipgloss.Style {
 		return lipgloss.NewStyle().Foreground(purple)
 	case kPage:
 		return lipgloss.NewStyle().Foreground(blue)
+	case kTeams:
+		return lipgloss.NewStyle().Foreground(cyan)
+	case kInvite:
+		return lipgloss.NewStyle().Foreground(red)
 	}
 	return lipgloss.NewStyle().Foreground(green)
 }
@@ -225,6 +249,7 @@ func (m *Model) detailInbox() string {
 	switch it.kind {
 	case kReview:
 		lines = append(lines, sText.Render(it.mr.Title), pipelineText(mrRow{it.mr, false})+"  "+m.approvalText(it.mr)+"  "+m.chipsText(mrRow{it.mr, false}))
+		lines = append(lines, m.teamsLines(it.mr)...)
 	case kThreads:
 		for _, t := range it.mr.Threads {
 			if !t.Resolved {
@@ -299,6 +324,10 @@ func (m *Model) keyInbox(k string) (tea.Model, tea.Cmd) {
 		m.refilter()
 	case "inbox.ticket":
 		return m.gotoTicket(it.ticket)
+	case "inbox.teams":
+		if it.kind == kReview || it.kind == kThreads {
+			return m.openTeamsPost(it.mr)
+		}
 	case "inbox.claude", "inbox.claude_bg":
 		return m.claudeForInbox(it)
 	}

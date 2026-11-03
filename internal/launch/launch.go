@@ -64,7 +64,8 @@ func hint() []string {
 			"`%[1]s ctl here` prints, as JSON, what this session is about: its MRs, its Jira ticket and the claudia inbox items waiting on the user for it. "+
 			"When the user asks whether the thing is done or closed, check it (glab, Jira) and answer. "+
 			"When it's handled, or the user wants to go back to claudia, run `%[1]s ctl dismiss --here` to clear its inbox items and `%[1]s ctl home` to switch the terminal back to claudia "+
-			"(`%[1]s ctl home --close` also ends this session; only use it when the user asks to close it). `%[1]s ctl help` lists the rest.", self)}
+			"(`%[1]s ctl home --close` also ends this session; only use it when the user asks to close it). `%[1]s ctl help` lists the rest. "+
+			"`%[1]s teams help` reads and answers Microsoft Teams chats and threads, starts chats and posts, sends files and reads the calendar; send nothing there without the user's OK on the exact text.", self)}
 }
 
 // New starts a fresh session with a known id, so claudia can pair it with an MR or
@@ -228,7 +229,10 @@ func Assistant(p claude.Profile, id string, resume bool) Spec {
 	if c.Vault != "" {
 		note += " Their notes are an Obsidian vault at " + c.Vault + "; " + c.VaultProjects + "/<TICKET>/ holds a ticket's notes."
 	}
-	note += " Be brief and concrete and name tickets and MRs. Ask before anything that writes to GitLab, Jira or Confluence: approving, transitioning, commenting, posting or pushing."
+	if c.Teams.ClientID != "" {
+		note += " `" + self + " teams waiting` lists Teams chats, @mentions and meeting invites waiting on them, `" + self + " teams calendar` their meetings; `" + self + " teams help` shows how to read, answer, start chats and send files."
+	}
+	note += " Be brief and concrete and name tickets and MRs. Ask before anything that writes to GitLab, Jira, Confluence or Teams: approving, transitioning, commenting, posting, sending or pushing."
 	args := []string{"--session-id", id, "-n", "assistant"}
 	if resume {
 		args = []string{"--resume", id}

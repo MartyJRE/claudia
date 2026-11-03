@@ -160,7 +160,7 @@ func TestAssistant(t *testing.T) {
 		t.Errorf("args %q", sp.Args)
 	}
 	note := sp.Args[5]
-	for _, want := range []string{"/state/claudia/brief.json", "Obsidian vault at /notes", "01 - Projects/<TICKET>/", "Ask before"} {
+	for _, want := range []string{"/state/claudia/brief.json", "Obsidian vault at /notes", "01 - Projects/<TICKET>/", "teams waiting` lists Teams chats", "Confluence or Teams", "Ask before"} {
 		if !strings.Contains(note, want) {
 			t.Errorf("note misses %q: %s", want, note)
 		}
