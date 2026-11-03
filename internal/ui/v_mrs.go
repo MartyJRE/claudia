@@ -165,6 +165,12 @@ func (m *Model) approvalText(mr gitlab.MR) string {
 	if mr.ApprovedByMe(m.gl.Me.Username) {
 		return sOK.Render("✓ you")
 	}
+	switch mr.MyReview {
+	case "requested_changes":
+		return lipgloss.NewStyle().Foreground(yellow).Render("changes requested")
+	case "reviewed":
+		return lipgloss.NewStyle().Foreground(blue).Render("reviewed")
+	}
 	if mr.Approved {
 		return sOK.Render(fmt.Sprintf("✓ %d", len(mr.ApprovedBy)))
 	}

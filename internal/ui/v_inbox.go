@@ -51,7 +51,7 @@ type inboxItem struct {
 func (m *Model) inbox() []inboxItem {
 	var out []inboxItem
 	for _, mr := range m.gl.Review {
-		if mr.Draft || mr.ApprovedByMe(m.gl.Me.Username) {
+		if mr.Draft || mr.ApprovedByMe(m.gl.Me.Username) || mr.ReviewedByMe() {
 			continue
 		}
 		out = append(out, inboxItem{

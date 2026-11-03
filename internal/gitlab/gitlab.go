@@ -65,6 +65,7 @@ type MR struct {
 	UserNotesCount      int       `json:"user_notes_count"`
 	Author              User      `json:"author"`
 	Reviewers           []User    `json:"reviewers"`
+	MyReview            string    `json:"my_review,omitempty"` // my reviewer state: unreviewed, reviewed, requested_changes, …
 	UpdatedAt           time.Time `json:"updated_at"`
 	CreatedAt           time.Time `json:"created_at"`
 	MergedAt            time.Time `json:"merged_at"`
@@ -98,6 +99,12 @@ func (m MR) Project() string {
 func (m MR) Repo() string {
 	p := m.Project()
 	return p[strings.LastIndex(p, "/")+1:]
+}
+
+// ReviewedByMe: I reviewed it without approving (left comments or asked for
+// changes). GitLab resets that when the author asks for another review.
+func (m MR) ReviewedByMe() bool {
+	return m.MyReview == "requested_changes" || m.MyReview == "reviewed"
 }
 
 func (m MR) ApprovedByMe(me string) bool {
@@ -156,7 +163,7 @@ func Fetch() (Snapshot, error) {
 			}(&list[i])
 		}
 	}
-	each(s.Review, enrich)
+	each(s.Review, func(m *MR) { enrich(m); m.MyReview = reviewState(m, s.Me.Username) })
 	each(s.Mine, func(m *MR) { enrich(m); m.Threads = threads(m) })
 	each(s.Merged, mergePipeline)
 	wg.Wait()
@@ -186,6 +193,23 @@ func enrich(m *MR) {
 			m.ApprovedBy = append(m.ApprovedBy, a.User.Username)
 		}
 	}
+}
+
+// reviewState is my state among the MR's reviewers.
+func reviewState(m *MR, me string) string {
+	var rs []struct {
+		User  User   `json:"user"`
+		State string `json:"state"`
+	}
+	if api(fmt.Sprintf("projects/%d/merge_requests/%d/reviewers", m.ProjectID, m.IID), &rs) != nil {
+		return ""
+	}
+	for _, r := range rs {
+		if r.User.Username == me {
+			return r.State
+		}
+	}
+	return ""
 }
 
 // mergePipeline finds the pipeline that ran on what the MR merged into the target

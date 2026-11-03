@@ -60,6 +60,7 @@ func TestFetch(t *testing.T) {
 		"GET projects/7/merge_requests/5":                          `{"head_pipeline":{"id":90,"status":"failed","web_url":"https://p/90"},"detailed_merge_status":"mergeable","sha":"abc"}`,
 		"GET projects/7/merge_requests/5/approvals":                `{"approved":true,"approvals_left":0,"approved_by":[{"user":{"username":"ann"}},{"user":{"username":"me"}}]}`,
 		"GET projects/7/merge_requests/6/approvals":                `{"approved":false,"approvals_left":1,"approved_by":[]}`,
+		"GET projects/7/merge_requests/5/reviewers":                `[{"user":{"username":"ann"},"state":"approved"},{"user":{"username":"me"},"state":"requested_changes"}]`,
 		"GET projects/7/merge_requests/6/discussions?per_page=100": discussions,
 		"GET projects/7/pipelines?per_page=1&ref=main&sha=m1":      `[]`,
 		"GET projects/7/pipelines?per_page=1&ref=main&sha=s1":      `[{"id":91,"status":"success","web_url":"https://p/91"}]`,
@@ -78,6 +79,9 @@ func TestFetch(t *testing.T) {
 	}
 	if r.Threads != nil {
 		t.Error("threads fetched for a review MR")
+	}
+	if r.MyReview != "requested_changes" || !r.ReviewedByMe() {
+		t.Errorf("my review state %q", r.MyReview)
 	}
 	m := s.Mine[0]
 	if m.Pipeline != nil || m.Approved || m.ApprovalsLeft != 1 {
@@ -197,5 +201,22 @@ func TestFetchMR(t *testing.T) {
 	}
 	if _, err := FetchMR("acme/none", 1); err == nil {
 		t.Error("missing MR")
+	}
+}
+
+func TestReviewState(t *testing.T) {
+	useFakeGlab(t, map[string]string{
+		"GET projects/7/merge_requests/1/reviewers": `[{"user":{"username":"ann"},"state":"reviewed"}]`,
+	})
+	if got := reviewState(&MR{ProjectID: 7, IID: 1}, "me"); got != "" {
+		t.Errorf("not a reviewer: %q", got)
+	}
+	if got := reviewState(&MR{ProjectID: 7, IID: 2}, "me"); got != "" {
+		t.Errorf("failed call: %q", got)
+	}
+	for state, want := range map[string]bool{"reviewed": true, "requested_changes": true, "unreviewed": false, "approved": false, "": false} {
+		if (MR{MyReview: state}).ReviewedByMe() != want {
+			t.Errorf("ReviewedByMe(%q) != %v", state, want)
+		}
 	}
 }
