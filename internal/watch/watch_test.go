@@ -2,6 +2,8 @@ package watch
 
 import (
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -17,13 +19,32 @@ import (
 	"github.com/MartyJRE/claudia/internal/state"
 )
 
+// jira answers the Atlassian site, which config reads once per process, so its
+// handler is swapped per test instead.
+var jira struct {
+	sync.Mutex
+	handler http.HandlerFunc
+}
+
 func TestMain(m *testing.M) {
 	dir, _ := os.MkdirTemp("", "claudia-test")
 	os.Setenv("XDG_CONFIG_HOME", dir)
 	os.Setenv("XDG_STATE_HOME", dir)
 	os.Setenv("CLAUDIA_GITLAB_HOST", "gitlab.example.com")
 	os.Setenv("HOME", dir)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		jira.Lock()
+		h := jira.handler
+		jira.Unlock()
+		if h == nil {
+			http.NotFound(w, r)
+			return
+		}
+		h(w, r)
+	}))
+	os.Setenv("ATLASSIAN_BASE_URL", srv.URL)
 	code := m.Run()
+	srv.Close()
 	os.RemoveAll(dir)
 	os.Exit(code)
 }

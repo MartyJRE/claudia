@@ -26,10 +26,15 @@ const (
 
 var repoAPI = "https://api.github.com/repos/MartyJRE/claudia"
 
+var (
+	buildInfo   = debug.ReadBuildInfo
+	execCommand = exec.Command
+)
+
 // Current is the commit this binary was built from, if it was installed from
 // the module proxy; ok is false for local builds.
 func Current() (sha string, ok bool) {
-	bi, found := debug.ReadBuildInfo()
+	bi, found := buildInfo()
 	if !found {
 		return "", false
 	}
@@ -178,7 +183,7 @@ func Fetch() (Plan, error) {
 // just-pushed commit doesn't wait for the module proxy. Each line of go's
 // output goes to line as it happens.
 func Install(line func(string)) error {
-	cmd := exec.Command("go", "install", "-v", module+"@latest")
+	cmd := execCommand("go", "install", "-v", module+"@latest")
 	cmd.Env = append(os.Environ(), "GOPROXY=direct")
 	pr, pw := io.Pipe()
 	cmd.Stdout, cmd.Stderr = pw, pw

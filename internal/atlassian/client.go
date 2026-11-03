@@ -25,11 +25,13 @@ type Client struct {
 	sprintID   string
 }
 
+var siteConfig = config.Get
+
 var ErrNoCredentials = errors.New("set ATLASSIAN_EMAIL and ATLASSIAN_API_TOKEN")
 
 func New() (*Client, error) {
 	c := &Client{
-		Base:  config.Get().AtlassianURL,
+		Base:  siteConfig().AtlassianURL,
 		email: os.Getenv("ATLASSIAN_EMAIL"),
 		token: os.Getenv("ATLASSIAN_API_TOKEN"),
 		http:  &http.Client{Timeout: 30 * time.Second},

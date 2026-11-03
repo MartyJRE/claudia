@@ -3,6 +3,7 @@ package kitty
 import (
 	"bytes"
 	"encoding/base64"
+	"errors"
 	"image"
 	"image/color"
 	"image/png"
@@ -12,7 +13,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charmbracelet/x/term"
+	"golang.org/x/sys/unix"
 )
 
 func TestWrap(t *testing.T) {
@@ -99,10 +100,14 @@ func TestClear(t *testing.T) {
 	}
 }
 
+func noWinsize(t *testing.T) {
+	old := winsize
+	winsize = func(int, uint) (*unix.Winsize, error) { return nil, errors.New("not a terminal") }
+	t.Cleanup(func() { winsize = old })
+}
+
 func TestFit(t *testing.T) {
-	if term.IsTerminal(os.Stdout.Fd()) {
-		t.Skip("cell size comes from the terminal")
-	}
+	noWinsize(t)
 	for _, c := range []struct {
 		w, h, cols, rows int
 		wc, wr           int
@@ -116,6 +121,36 @@ func TestFit(t *testing.T) {
 		if gc, gr := fit(img, c.cols, c.rows); gc != c.wc || gr != c.wr {
 			t.Errorf("%d×%d in %d×%d: got %d×%d want %d×%d", c.w, c.h, c.cols, c.rows, gc, gr, c.wc, c.wr)
 		}
+	}
+}
+
+func TestFitRealCellSize(t *testing.T) {
+	old := winsize
+	t.Cleanup(func() { winsize = old })
+	// 10×20 pixel cells: a square image is twice as many columns as rows.
+	winsize = func(int, uint) (*unix.Winsize, error) {
+		return &unix.Winsize{Row: 10, Col: 10, Xpixel: 100, Ypixel: 200}, nil
+	}
+	if c, r := fit(image.NewRGBA(image.Rect(0, 0, 400, 400)), 100, 10); c != 20 || r != 10 {
+		t.Errorf("got %d×%d", c, r)
+	}
+	// Zero pixel size (tmux) falls back to the 1:2 guess.
+	winsize = func(int, uint) (*unix.Winsize, error) { return &unix.Winsize{Row: 10, Col: 10}, nil }
+	if c, r := fit(image.NewRGBA(image.Rect(0, 0, 1000, 500)), 40, 40); c != 40 || r != 10 {
+		t.Errorf("fallback got %d×%d", c, r)
+	}
+}
+
+type failWriter struct{}
+
+func (failWriter) Write([]byte) (int, error) { return 0, errors.New("closed") }
+
+func TestDrawErrors(t *testing.T) {
+	if err := draw(&bytes.Buffer{}, image.NewRGBA(image.Rect(0, 0, 0, 0)), 1, 1); err == nil {
+		t.Error("empty image encoded")
+	}
+	if err := draw(failWriter{}, image.NewRGBA(image.Rect(0, 0, 1, 1)), 1, 1); err == nil || err.Error() != "closed" {
+		t.Errorf("write error: %v", err)
 	}
 }
 
@@ -136,8 +171,5 @@ func TestLoad(t *testing.T) {
 	}
 	if _, err := load(filepath.Join(dir, "missing.png")); err == nil {
 		t.Error("missing file")
-	}
-	if err := View(nil); err != nil {
-		t.Errorf("view of nothing: %v", err)
 	}
 }

@@ -8,6 +8,8 @@ import (
 	"github.com/MartyJRE/claudia/internal/config"
 )
 
+var siteConfig = config.Get
+
 var (
 	ticketOnce sync.Once
 	ticketRe   *regexp.Regexp
@@ -25,7 +27,7 @@ func TicketRegexp() *regexp.Regexp {
 // any upper-case KEY-123.
 func TicketFrom(s string) string {
 	ticketOnce.Do(func() {
-		if keys := config.Get().TicketKeys; len(keys) > 0 {
+		if keys := siteConfig().TicketKeys; len(keys) > 0 {
 			ticketRe = regexp.MustCompile(`(?i)\b(` + strings.Join(keys, "|") + `)-(\d+)\b`)
 		} else {
 			ticketRe = regexp.MustCompile(`\b([A-Z][A-Z0-9]+)-(\d+)\b`)

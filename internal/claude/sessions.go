@@ -6,8 +6,6 @@ import (
 	"sort"
 	"strings"
 	"time"
-
-	"github.com/MartyJRE/claudia/internal/config"
 )
 
 // Profile is one Claude Code config dir, selected with CLAUDE_CONFIG_DIR.
@@ -20,7 +18,7 @@ type Profile struct {
 // ~/.claude-<name> dir that holds sessions.
 func DefaultProfiles() []Profile {
 	var out []Profile
-	if ps := config.Get().Profiles; len(ps) > 0 {
+	if ps := siteConfig().Profiles; len(ps) > 0 {
 		for name, dir := range ps {
 			if st, err := os.Stat(dir); err == nil && st.IsDir() {
 				out = append(out, Profile{name, dir})

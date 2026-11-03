@@ -72,4 +72,12 @@ func TestSaveErrors(t *testing.T) {
 	if err := Save("x.json", 1); err == nil {
 		t.Error("saved under a file")
 	}
+	os.Remove(filepath.Join(dir, "claudia"))
+	// A directory where the temp file goes.
+	if err := os.MkdirAll(filepath.Join(dir, "claudia", "y.json.tmp"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := Save("y.json", 1); err == nil {
+		t.Error("saved over a directory")
+	}
 }

@@ -44,6 +44,19 @@ func TestPath(t *testing.T) {
 	}
 }
 
+func TestGitLabHostFromGlab(t *testing.T) {
+	fresh(t, "")
+	bin := t.TempDir()
+	glab := "#!/bin/sh\n[ \"$*\" = \"config get host\" ] && printf ' gitlab.acme.io\\n'\n"
+	if err := os.WriteFile(filepath.Join(bin, "glab"), []byte(glab), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin)
+	if got := Get().GitLabHost; got != "gitlab.acme.io" {
+		t.Errorf("got %q", got)
+	}
+}
+
 func TestDefaults(t *testing.T) {
 	home := fresh(t, "")
 	c := Get()

@@ -96,3 +96,17 @@ func TestGenerateErrors(t *testing.T) {
 		t.Error("unmarshalable data")
 	}
 }
+
+func TestGenerateFallsBackToLocalBin(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("PATH", t.TempDir())
+	bin := filepath.Join(home, ".local", "bin")
+	os.MkdirAll(bin, 0o755)
+	if err := os.WriteFile(filepath.Join(bin, "claude"), []byte("#!/bin/sh\nprintf 'from ~/.local/bin'\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := Generate(nil, "", ""); err != nil || got != "from ~/.local/bin" {
+		t.Errorf("got %q %v", got, err)
+	}
+}

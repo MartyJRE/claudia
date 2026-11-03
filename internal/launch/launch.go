@@ -25,13 +25,15 @@ type Spec struct {
 	Session string // tmux session; defaults to the repo's name
 }
 
+var executable = os.Executable
+
 func Resume(s claude.Session) Spec {
 	return Spec{Dir: s.Dir(), Profile: s.Profile, Name: s.Name(), Args: append([]string{"--resume", s.ID}, hint()...)}
 }
 
 // hint tells the session it can operate claudia itself.
 func hint() []string {
-	self, err := os.Executable()
+	self, err := executable()
 	if err != nil {
 		self = "claudia"
 	}
@@ -148,7 +150,7 @@ const AssistantSession = "assistant"
 // Assistant is the long-lived helper session claudia opens on @: it knows the
 // dashboard's own commands and asks before writing anywhere. id resumes it.
 func Assistant(p claude.Profile, id string, resume bool) Spec {
-	self, err := os.Executable()
+	self, err := executable()
 	if err != nil {
 		self = "claudia"
 	}

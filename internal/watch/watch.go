@@ -24,6 +24,16 @@ import (
 
 const pidFile = "watch.pid"
 
+// Seams for tests.
+var (
+	executable   = os.Executable
+	execCommand  = exec.Command // lsappinfo, which only macOS has
+	currentBuild = update.Current
+	checkUpdate  = update.Check
+	pollEvery    = 3 * time.Second
+	stopRun      chan struct{} // closing it ends Run; nil never does
+)
+
 // Running reports whether a watcher process is alive.
 func Running() bool {
 	b, err := os.ReadFile(state.Path(pidFile))
@@ -51,7 +61,7 @@ func Spawn() {
 	if Running() {
 		return
 	}
-	self, err := os.Executable()
+	self, err := executable()
 	if err != nil {
 		return
 	}
@@ -110,8 +120,8 @@ func Run(makeBrief func()) error {
 	}
 	briefing := make(chan struct{}, 1)
 	for {
-		if _, ok := update.Current(); ok && update.Due(time.Hour) {
-			go update.Check()
+		if _, ok := currentBuild(); ok && update.Due(time.Hour) {
+			go checkUpdate()
 		}
 		every := config.Get().BriefEvery
 		due := every > 0 && time.Since(lastBrief) >= every
@@ -142,7 +152,11 @@ func Run(makeBrief func()) error {
 				fmt.Fprintln(os.Stderr, time.Now().Format(time.TimeOnly), err)
 			}
 		}
-		time.Sleep(3 * time.Second)
+		select {
+		case <-stopRun:
+			return nil
+		case <-time.After(pollEvery):
+		}
 	}
 }
 
@@ -311,8 +325,8 @@ func lookingAtBorrowed(windowID string) bool {
 }
 
 func ghosttyInFront() bool {
-	asn, _ := exec.Command("lsappinfo", "front").Output()
-	front, _ := exec.Command("lsappinfo", "info", "-only", "name", strings.TrimSpace(string(asn))).Output()
+	asn, _ := execCommand("lsappinfo", "front").Output()
+	front, _ := execCommand("lsappinfo", "info", "-only", "name", strings.TrimSpace(string(asn))).Output()
 	return strings.HasPrefix(string(front), `"Ghostty"`)
 }
 

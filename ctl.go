@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 
 	"github.com/MartyJRE/claudia/internal/ui"
 )
@@ -68,7 +67,7 @@ func ctl(args []string) error {
 			// Kill the pane a moment later so this command can return first.
 			pane := os.Getenv("TMUX_PANE")
 			if pane != "" {
-				return exec.Command("tmux", "run-shell", "-b", "sleep 1; tmux kill-pane -t '"+pane+"'").Run()
+				return execCommand("tmux", "run-shell", "-b", "sleep 1; tmux kill-pane -t '"+pane+"'").Run()
 			}
 		}
 		return nil

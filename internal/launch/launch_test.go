@@ -153,7 +153,9 @@ func TestAssistant(t *testing.T) {
 	}
 }
 
-func TestStart(t *testing.T) {
+// privateTmux points tmux at a server of the test's own, never the user's.
+func privateTmux(t *testing.T) {
+	t.Helper()
 	if _, err := exec.LookPath("tmux"); err != nil {
 		t.Skip("no tmux")
 	}
@@ -165,6 +167,10 @@ func TestStart(t *testing.T) {
 	t.Cleanup(func() { _ = os.RemoveAll(sock) })
 	t.Setenv("TMUX_TMPDIR", sock)
 	t.Cleanup(func() { _ = exec.Command("tmux", "kill-server").Run() })
+}
+
+func TestStart(t *testing.T) {
+	privateTmux(t)
 
 	bin := t.TempDir()
 	cwdLog := filepath.Join(bin, "cwd")
@@ -219,5 +225,42 @@ func TestStart(t *testing.T) {
 	}
 	if cmd := show(second, "#{pane_start_command}"); strings.Contains(cmd, "--remote-control") {
 		t.Errorf("remote control for personal: %q", cmd)
+	}
+}
+
+func TestStartFallsBackToLocalBin(t *testing.T) {
+	privateTmux(t)
+	tm, _ := exec.LookPath("tmux")
+	bin := t.TempDir()
+	if err := os.Symlink(tm, filepath.Join(bin, "tmux")); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	claudeBin := filepath.Join(home, ".local", "bin", "claude")
+	os.MkdirAll(filepath.Dir(claudeBin), 0o755)
+	if err := os.WriteFile(claudeBin, []byte("#!/bin/sh\nexec /bin/sleep 60\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	target, err := Start(Spec{Dir: t.TempDir(), Profile: personal, Name: "n", Session: "s"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, _ := exec.Command("tmux", "display-message", "-p", "-t", target, "#{pane_start_command}").Output()
+	if !strings.Contains(string(out), claudeBin) {
+		t.Errorf("command %q", out)
+	}
+}
+
+func TestNoExecutable(t *testing.T) {
+	old := executable
+	executable = func() (string, error) { return "", os.ErrNotExist }
+	t.Cleanup(func() { executable = old })
+	if sp, _ := New("/x", work, "n", ""); !strings.Contains(sp.Args[5], "`claudia ctl here`") {
+		t.Errorf("hint %q", sp.Args[5])
+	}
+	if sp := Assistant(work, "id", false); !strings.Contains(sp.Args[5], "`claudia ctl inbox`") {
+		t.Errorf("note %q", sp.Args[5])
 	}
 }

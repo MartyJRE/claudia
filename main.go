@@ -22,8 +22,26 @@ import (
 	"github.com/MartyJRE/claudia/internal/watch"
 )
 
-func main() {
-	args := os.Args[1:]
+// Seams for tests: what replaces or ends the process, and what would run for
+// real (the TUI, the watcher, setup, GitHub).
+var (
+	exit          = os.Exit
+	syscallExec   = syscall.Exec
+	executable    = os.Executable
+	lookPath      = exec.LookPath
+	execCommand   = exec.Command
+	newProgram    = tea.NewProgram
+	runWatch      = watch.Run
+	runSetup      = setup
+	fetchUpdate   = update.Fetch
+	installLatest = update.Install
+	currentBuild  = update.Current
+	buildInfo     = debug.ReadBuildInfo
+)
+
+func main() { run(os.Args[1:]) }
+
+func run(args []string) {
 	if len(args) > 0 && args[0] == "img" {
 		if err := kitty.View(args[1:]); err != nil {
 			fail(err)
@@ -55,7 +73,7 @@ func main() {
 		return
 	}
 	if len(args) > 0 && args[0] == "update" {
-		p, err := update.Fetch()
+		p, err := fetchUpdate()
 		switch {
 		case err != nil:
 			fmt.Println("couldn't ask GitHub what's new:", err)
@@ -68,7 +86,7 @@ func main() {
 			}
 		}
 		fmt.Println("downloading and building…")
-		if err := update.Install(func(l string) {
+		if err := installLatest(func(l string) {
 			if !strings.HasPrefix(l, "get ") {
 				fmt.Println("  " + l)
 			}
@@ -88,13 +106,13 @@ func main() {
 		return
 	}
 	if len(args) > 0 && args[0] == "setup" {
-		if err := setup(); err != nil {
+		if err := runSetup(); err != nil {
 			fail(err)
 		}
 		return
 	}
 	if len(args) > 0 && args[0] == "watch" {
-		if err := watch.Run(makeBrief); err != nil {
+		if err := runWatch(makeBrief); err != nil {
 			fail(err)
 		}
 		return
@@ -105,23 +123,23 @@ func main() {
 	}
 	watch.Spawn()
 	m := ui.New(ui.Options{Popup: args[0] == "popup"})
-	if _, err := tea.NewProgram(m, tea.WithAltScreen()).Run(); err != nil {
+	if _, err := newProgram(m, tea.WithAltScreen()).Run(); err != nil {
 		fail(err)
 	}
 	if m.Result.Restart {
 		// The binary on disk was just replaced: start it in place of this one.
-		self, err := os.Executable()
+		self, err := executable()
 		if err != nil {
 			fail(err)
 		}
-		fail(syscall.Exec(self, os.Args, os.Environ()))
+		fail(syscallExec(self, os.Args, os.Environ()))
 	}
 	if t := m.Result.Attach; t != "" {
-		bin, err := exec.LookPath("tmux")
+		bin, err := lookPath("tmux")
 		if err != nil {
 			fail(err)
 		}
-		fail(syscall.Exec(bin, []string{"tmux", "attach-session", "-t", t}, os.Environ()))
+		fail(syscallExec(bin, []string{"tmux", "attach-session", "-t", t}, os.Environ()))
 	}
 }
 
@@ -129,14 +147,14 @@ func main() {
 // claudia lives there so jumping to a Claude session never closes it, and
 // prefix + C toggles between it and wherever you were.
 func home() {
-	self, err := os.Executable()
+	self, err := executable()
 	if err != nil {
 		fail(err)
 	}
 	cmd := fmt.Sprintf("%q ui", self)
 	if tmux.Inside() {
 		if !tmux.HasSession(tmux.Home) {
-			if err := exec.Command("tmux", "new-session", "-d", "-s", tmux.Home, cmd).Run(); err != nil {
+			if err := execCommand("tmux", "new-session", "-d", "-s", tmux.Home, cmd).Run(); err != nil {
 				fail(err)
 			}
 		}
@@ -145,11 +163,11 @@ func home() {
 		}
 		return
 	}
-	bin, err := exec.LookPath("tmux")
+	bin, err := lookPath("tmux")
 	if err != nil {
 		fail(err)
 	}
-	fail(syscall.Exec(bin, []string{"tmux", "new-session", "-A", "-s", tmux.Home, cmd}, os.Environ()))
+	fail(syscallExec(bin, []string{"tmux", "new-session", "-A", "-s", tmux.Home, cmd}, os.Environ()))
 }
 
 // makeBrief rewrites the inbox brief; on failure the previous text stays, with
@@ -167,10 +185,10 @@ func makeBrief() {
 }
 
 func version() string {
-	if sha, ok := update.Current(); ok {
+	if sha, ok := currentBuild(); ok {
 		return sha
 	}
-	bi, ok := debug.ReadBuildInfo()
+	bi, ok := buildInfo()
 	if !ok {
 		return "unknown"
 	}
@@ -191,5 +209,5 @@ func version() string {
 
 func fail(err error) {
 	fmt.Fprintln(os.Stderr, "claudia:", err)
-	os.Exit(1)
+	exit(1)
 }

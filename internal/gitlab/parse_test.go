@@ -17,6 +17,7 @@ func TestParseMRURL(t *testing.T) {
 		"https://gitlab.example.com/acme/infra/-/merge_requests/95/diffs?commit_id=abc": {"acme/infra", 95, true},
 		"https://gitlab.other.com/acme/infra/-/merge_requests/95":                       {"", 0, false},
 		"https://gitlab.example.com/acme/infra/-/issues/3":                              {"", 0, false},
+		"https://gitlab.example.com/acme/infra/-/merge_requests/new":                    {"", 0, false},
 	} {
 		p, iid, ok := ParseMRURL(in)
 		if p != want.project || iid != want.iid || ok != want.ok {

@@ -176,6 +176,13 @@ func TestActions(t *testing.T) {
 	}
 }
 
+func TestThreadsWhenGlabFails(t *testing.T) {
+	useFakeGlab(t, map[string]string{})
+	if got := threads(&MR{ProjectID: 7, IID: 5}); got != nil {
+		t.Errorf("got %+v", got)
+	}
+}
+
 func TestFetchMR(t *testing.T) {
 	useFakeGlab(t, map[string]string{
 		"GET projects/acme%2Finfra/merge_requests/9": `{"iid":9,"project_id":3,"title":"infra"}`,

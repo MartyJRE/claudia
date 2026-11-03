@@ -66,3 +66,49 @@ func TestFind(t *testing.T) {
 		t.Errorf("touched %v %v", got[0].Touched, got[1].Touched)
 	}
 }
+
+// fakeFd puts an fd on PATH that logs its arguments and prints out, or fails
+// when out is "fail".
+func fakeFd(t *testing.T, out string) string {
+	t.Helper()
+	bin := t.TempDir()
+	log := filepath.Join(bin, "args")
+	script := "#!/bin/sh\nfor a; do printf '%s\\n' \"$a\"; done > " + log + "\n"
+	if out == "fail" {
+		script += "exit 1\n"
+	} else {
+		script += "printf '%s' '" + out + "'\n"
+	}
+	if err := os.WriteFile(filepath.Join(bin, "fd"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin)
+	return log
+}
+
+func TestFindReadsWhatFdLists(t *testing.T) {
+	root := t.TempDir()
+	pay := filepath.Join(root, "Work", "pay")
+	os.MkdirAll(filepath.Join(pay, ".git"), 0o755)
+	os.WriteFile(filepath.Join(pay, ".git", "HEAD"), []byte("ref: refs/heads/main\n"), 0o600)
+	os.WriteFile(filepath.Join(pay, ".git", "index"), nil, 0o600)
+	bare := filepath.Join(root, "bare")
+	log := fakeFd(t, bare+"\n"+pay+"\n")
+	got := Find(root)
+	if len(got) != 2 || got[0].Dir != pay || got[0].Branch != "main" || got[1].Dir != bare || got[1].Branch != "" ||
+		got[0].Touched.IsZero() || !got[1].Touched.IsZero() {
+		t.Errorf("got %+v", got)
+	}
+	args, _ := os.ReadFile(log)
+	if want := "-H\n-t\nd\n^\\.git$\n" + root + "\n--format\n{//}\n"; string(args) != want {
+		t.Errorf("args %q want %q", args, want)
+	}
+	fakeFd(t, "")
+	if got := Find(root); got != nil {
+		t.Errorf("nothing found: %+v", got)
+	}
+	fakeFd(t, "fail")
+	if got := Find(root); got != nil {
+		t.Errorf("fd failed: %+v", got)
+	}
+}

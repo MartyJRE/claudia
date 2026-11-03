@@ -10,6 +10,8 @@ func TestProjectFromURL(t *testing.T) {
 		"git@gitlab.example.com:acme/backend/payments.git": "acme/backend/payments",
 		"https://gitlab.example.com/acme/infra.git":        "acme/infra",
 		"ssh://git@gitlab.com:2222/me/x.git":               "me/x",
+		"https://gitlab.example.com":                       "",
+		"just-a-name":                                      "",
 	} {
 		if got := ProjectFromURL(in); got != want {
 			t.Errorf("%s: got %q want %q", in, got, want)
@@ -27,5 +29,15 @@ func TestByPreference(t *testing.T) {
 	got := ByPreference(in, "/c")
 	if got[0].Dir != "/c/Work/new" || got[1].Dir != "/c/Work/old" || got[2].Dir != "/c/Personal/a" {
 		t.Errorf("got %v", got)
+	}
+	got = ByPreference([]Repo{in[1], in[0]}, "/c")
+	if got[0].Dir != "/c/Work/old" || got[1].Dir != "/c/Personal/a" {
+		t.Errorf("work first already: %v", got)
+	}
+}
+
+func TestRoot(t *testing.T) {
+	if got := Root(); got != "/code" {
+		t.Errorf("got %q", got)
 	}
 }

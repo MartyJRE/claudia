@@ -37,3 +37,54 @@ func TestIndex(t *testing.T) {
 		t.Error("new note not indexed")
 	}
 }
+
+func TestRefreshEdges(t *testing.T) {
+	root := t.TempDir()
+	re := regexp.MustCompile(`(?i)\b(ABC)-(\d+)\b`)
+	missing := New(filepath.Join(root, "missing"), "P", re)
+	if missing.Refresh(); len(missing.All()) != 0 {
+		t.Error("notes from a missing vault")
+	}
+	os.MkdirAll(filepath.Join(root, "P", "ABC-1"), 0o755)
+	gone := filepath.Join(root, "P", "ABC-1", "Gone.md")
+	os.WriteFile(gone, []byte("x"), 0o644)
+	os.WriteFile(filepath.Join(root, "P", "ABC-1", "pic.png"), nil, 0o644)
+	// Listed but not searchable: its notes can't be stat'ed.
+	locked := filepath.Join(root, "locked")
+	os.Mkdir(locked, 0o755)
+	os.WriteFile(filepath.Join(locked, "Hidden.md"), []byte("ABC-1"), 0o644)
+	os.Chmod(locked, 0o400)
+	t.Cleanup(func() { os.Chmod(locked, 0o755) })
+	ix := New(root, "P", re)
+	ix.Refresh()
+	all := ix.All()
+	if len(all) != 1 || all[0].Title != "Gone" || all[0].Folder() != filepath.Join("P", "ABC-1") {
+		t.Fatalf("got %+v", all)
+	}
+	os.Remove(gone)
+	ix.Refresh()
+	if len(ix.All()) != 0 {
+		t.Errorf("deleted note kept: %+v", ix.All())
+	}
+}
+
+func TestNewNoteEdges(t *testing.T) {
+	root := t.TempDir()
+	ix := New(root, "P", regexp.MustCompile(`ABC-\d+`))
+	p, err := ix.NewNote("ABC-1", "Plan", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(p, []byte("mine"), 0o644)
+	if again, err := ix.NewNote("ABC-1", " Plan ", []string{"x"}); err != nil || again != p {
+		t.Errorf("got %q %v", again, err)
+	}
+	if b, _ := os.ReadFile(p); string(b) != "mine" {
+		t.Errorf("existing note overwritten: %q", b)
+	}
+	os.WriteFile(filepath.Join(root, "Q"), nil, 0o644)
+	ix.Projects = "Q"
+	if _, err := ix.NewNote("ABC-1", "Plan", nil); err == nil {
+		t.Error("note under a file")
+	}
+}

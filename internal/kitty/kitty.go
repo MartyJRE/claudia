@@ -63,7 +63,7 @@ func clear(w io.Writer) {
 // size when it reports one (tmux doesn't; then assume cells twice as tall as wide).
 func fit(img image.Image, cols, rows int) (int, int) {
 	cw, ch := 1.0, 2.0
-	if ws, err := unix.IoctlGetWinsize(int(os.Stdout.Fd()), unix.TIOCGWINSZ); err == nil && ws.Xpixel > 0 && ws.Col > 0 {
+	if ws, err := winsize(int(os.Stdout.Fd()), unix.TIOCGWINSZ); err == nil && ws.Xpixel > 0 && ws.Col > 0 {
 		cw = float64(ws.Xpixel) / float64(ws.Col)
 		ch = float64(ws.Ypixel) / float64(ws.Row)
 	}
@@ -80,19 +80,31 @@ func fit(img image.Image, cols, rows int) (int, int) {
 	return max(1, int(r*ch*iw/ih/cw)), max(1, int(r))
 }
 
+// Terminal and OS access, swapped in tests.
+var (
+	makeRaw     = term.MakeRaw
+	restore     = term.Restore
+	getSize     = term.GetSize
+	winsize     = unix.IoctlGetWinsize
+	execCommand = exec.Command
+)
+
 // View pages through files until q/esc: n/space/→ next, p/← previous, o opens
 // the file in Preview.
 func View(files []string) error {
 	if len(files) == 0 {
 		return nil
 	}
-	fd := int(os.Stdin.Fd())
-	old, err := term.MakeRaw(uintptr(fd))
+	fd := os.Stdin.Fd()
+	old, err := makeRaw(fd)
 	if err != nil {
 		return err
 	}
-	defer term.Restore(uintptr(fd), old)
-	out := os.Stdout
+	defer restore(fd, old)
+	return browse(os.Stdin, os.Stdout, files)
+}
+
+func browse(in io.Reader, out io.Writer, files []string) error {
 	io.WriteString(out, "\x1b[?25l")
 	defer io.WriteString(out, "\x1b[?25h")
 	defer clear(out)
@@ -101,7 +113,7 @@ func View(files []string) error {
 	key := make([]byte, 8)
 	for {
 		clear(out)
-		cols, rows, _ := term.GetSize(uintptr(out.Fd()))
+		cols, rows, _ := getSize(os.Stdout.Fd())
 		f := files[i]
 		fmt.Fprintf(out, "\x1b[1;38;2;198;120;221m %s\x1b[0m\x1b[38;2;92;99;112m  %d/%d  ·  n next  p prev  o open  q back\x1b[0m\r\n\r\n",
 			filepath.Base(f), i+1, len(files))
@@ -114,7 +126,7 @@ func View(files []string) error {
 				fmt.Fprintf(out, "  %s", err)
 			}
 		}
-		n, err := os.Stdin.Read(key)
+		n, err := in.Read(key)
 		if err != nil {
 			return err
 		}
@@ -126,7 +138,7 @@ func View(files []string) error {
 		case "p", "k", "h", "\x1b[D", "\x1b[A":
 			i = (i + len(files) - 1) % len(files)
 		case "o":
-			_ = exec.Command("open", f).Start()
+			_ = execCommand("open", f).Start()
 		}
 	}
 }

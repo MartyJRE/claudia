@@ -5,8 +5,6 @@ import (
 	"net/url"
 	"strings"
 	"time"
-
-	"github.com/MartyJRE/claudia/internal/config"
 )
 
 type Issue struct {
@@ -214,7 +212,7 @@ func (c *Client) FetchJira() (JiraSnapshot, error) {
 	if err != nil {
 		return s, err
 	}
-	if p := config.Get().JiraProject; p != "" {
+	if p := siteConfig().JiraProject; p != "" {
 		s.Team, err = c.search("project = "+p+" AND sprint in openSprints() ORDER BY Rank", me)
 		if err != nil {
 			return s, err
