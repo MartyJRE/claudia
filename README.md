@@ -12,6 +12,7 @@
 <p align="center">
   <a href="https://github.com/MartyJRE/claudia/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/MartyJRE/claudia/ci.yml?branch=main&style=flat-square&label=CI" alt="CI"></a>
   <img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FMartyJRE%2Fclaudia%2Fbadges%2Fcoverage.json&style=flat-square" alt="coverage">
+  <img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FMartyJRE%2Fclaudia%2Fbadges%2Fswift-coverage.json&style=flat-square" alt="swift coverage">
   <img src="https://img.shields.io/badge/go-1.24+-61afef?style=flat-square&logo=go&logoColor=white" alt="Go 1.24+">
   <img src="https://img.shields.io/badge/macOS-tmux-c678dd?style=flat-square&logo=apple&logoColor=white" alt="macOS + tmux">
   <img src="https://img.shields.io/badge/GitLab%20·%20Jira%20·%20Confluence-98c379?style=flat-square" alt="GitLab, Jira, Confluence">
@@ -209,3 +210,9 @@ gofmt -l . && go mod tidy -diff && go vet ./... && go test -race ./...
 ```
 
 The tmux tests start a private tmux server, so they never touch your sessions.
+
+The notification helper in `notifier/` is a Swift package: its logic lives in
+`NotifierCore`, with the AppKit and UserNotifications wiring in the thin
+`claudia-notify` executable. `notifier/coverage.sh` runs its tests and prints
+NotifierCore's coverage; `notifier/build.sh /tmp/Claudia.app` builds the app
+somewhere other than `~/Applications`.
