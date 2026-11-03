@@ -388,7 +388,7 @@ func (m *Model) exportBrief(key string, then func(path string) tea.Msg) tea.Cmd 
 	atl := m.atl
 	m.setFlash("exporting "+key+"…", false)
 	return func() tea.Msg {
-		p, err := atl.ExportBrief(key, briefDir())
+		p, err := exportJiraBrief(atl, key, briefDir())
 		if err != nil {
 			return flashMsg{err.Error(), true}
 		}
@@ -407,7 +407,7 @@ type transitionsMsg struct {
 func (m *Model) loadTransitions(key string) tea.Cmd {
 	atl := m.atl
 	return func() tea.Msg {
-		ts, err := atl.Transitions(key)
+		ts, err := jiraTransitions(atl, key)
 		return transitionsMsg{key, ts, err}
 	}
 }
@@ -430,7 +430,7 @@ func (m *Model) showTransitions(msg transitionsMsg) {
 		t := ch.value.(atlassian.Transition)
 		atl := m.atl
 		return m, func() tea.Msg {
-			if err := atl.Transition(key, t.ID); err != nil {
+			if err := transitionIssue(atl, key, t.ID); err != nil {
 				return flashMsg{err.Error(), true}
 			}
 			return refreshMsg(srcJira)

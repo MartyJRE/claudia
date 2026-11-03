@@ -40,13 +40,13 @@ func (m *Model) openImages(msg imagesMsg) tea.Cmd {
 		m.setFlash(msg.key+" has no image attachments", false)
 		return nil
 	}
-	self, err := os.Executable()
+	self, err := executable()
 	if err != nil {
 		m.setFlash(err.Error(), true)
 		return nil
 	}
 	m.flash = ""
-	return tea.ExecProcess(exec.Command(self, append([]string{"img"}, msg.files...)...), func(err error) tea.Msg {
+	return execProcess(exec.Command(self, append([]string{"img"}, msg.files...)...), func(err error) tea.Msg {
 		if err != nil {
 			return flashMsg{err.Error(), true}
 		}

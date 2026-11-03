@@ -9,7 +9,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/MartyJRE/claudia/internal/claude"
-	"github.com/MartyJRE/claudia/internal/config"
 	"github.com/MartyJRE/claudia/internal/gitlab"
 	"github.com/MartyJRE/claudia/internal/launch"
 	"github.com/MartyJRE/claudia/internal/repos"
@@ -60,12 +59,12 @@ func (m *Model) claudeForTicket(key, summary string) (tea.Model, tea.Cmd) {
 	intents := []intent{
 		{"analysis", "Analysis", func(m *Model) (tea.Model, tea.Cmd) {
 			return m.ticketSession(key, summary, "analysis", "analyse", "analyse "+key+" in", func(path string, err error) string {
-				return fillBrief(config.Get().AnalysisPrompt, key, path, err)
+				return fillBrief(getConfig().AnalysisPrompt, key, path, err)
 			})
 		}},
 		{"implementation", "Implementation", func(m *Model) (tea.Model, tea.Cmd) {
 			return m.ticketSession(key, summary, "implementation", "implement", "implement "+key+" in", func(path string, err error) string {
-				return fillBrief(config.Get().ImplementationPrompt, key, path, err)
+				return fillBrief(getConfig().ImplementationPrompt, key, path, err)
 			})
 		}},
 		{"general", "General", func(m *Model) (tea.Model, tea.Cmd) { return m.briefSession(key, summary) }},
@@ -202,7 +201,7 @@ func (m *Model) ticketSession(key, summary, intent, verb, title string, prompt f
 		return m, func() tea.Msg {
 			path, err := "", error(nil)
 			if atl != nil {
-				path, err = atl.ExportBrief(key, briefDir())
+				path, err = exportJiraBrief(atl, key, briefDir())
 			} else {
 				err = m.atlErr
 			}
@@ -224,7 +223,7 @@ func (m *Model) reviewWithClaude(mr gitlab.MR) (tea.Model, tea.Cmd) {
 	}
 	m.seen.mark(rel...)
 	name := m.sessionTitle("review", "review", mrTicket(mr), mr.Title)
-	prompt := strings.ReplaceAll(config.Get().ReviewPrompt, "{urls}", strings.Join(urls, " "))
+	prompt := strings.ReplaceAll(getConfig().ReviewPrompt, "{urls}", strings.Join(urls, " "))
 	return m.inClone(mr, "review", name, prompt, urls)
 }
 
@@ -304,7 +303,7 @@ func (m *Model) sessionTitle(intent, verb, key, fallback string) string {
 	if r := []rune(about); len(r) > 50 {
 		about = strings.TrimSpace(string(r[:49])) + "…"
 	}
-	if tpl := config.Get().SessionNames[intent]; tpl != "" {
+	if tpl := getConfig().SessionNames[intent]; tpl != "" {
 		name := strings.NewReplacer("{key}", key, "{summary}", about, "{verb}", verb).Replace(tpl)
 		if name = strings.Trim(name, " -:_"); name != "" {
 			return name

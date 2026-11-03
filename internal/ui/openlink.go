@@ -12,7 +12,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/MartyJRE/claudia/internal/claude"
-	"github.com/MartyJRE/claudia/internal/config"
 	"github.com/MartyJRE/claudia/internal/gitlab"
 	"github.com/MartyJRE/claudia/internal/launch"
 	"github.com/MartyJRE/claudia/internal/state"
@@ -32,7 +31,7 @@ type promptBox struct {
 func (m *Model) askLink() tea.Cmd {
 	in := newInput("link › ", "GitLab MR, Jira ticket or any URL")
 	in.Width = max(40, m.width-12)
-	if clip, err := exec.Command("pbpaste").Output(); err == nil {
+	if clip, err := cmdOutput(exec.Command("pbpaste")); err == nil {
 		if s := strings.TrimSpace(string(clip)); strings.HasPrefix(s, "http") && !strings.ContainsAny(s, " \n") {
 			in.SetValue(s)
 			in.CursorEnd()
@@ -95,12 +94,12 @@ func (m *Model) openLink(link string) (tea.Model, tea.Cmd) {
 		}
 		m.setFlash(fmt.Sprintf("loading %s!%d…", project, iid), false)
 		return m, func() tea.Msg {
-			mr, err := gitlab.FetchMR(project, iid)
+			mr, err := fetchMR(project, iid)
 			return mrLoadedMsg{mr, err}
 		}
 	}
 	// Confluence lives under /wiki/; page titles there often contain KEY-123-looking words.
-	if base := config.Get().AtlassianURL; base != "" && strings.HasPrefix(link, base) && !strings.Contains(link, "/wiki/") {
+	if base := getConfig().AtlassianURL; base != "" && strings.HasPrefix(link, base) && !strings.Contains(link, "/wiki/") {
 		if k := jiraKeyRe.FindString(link); k != "" {
 			summary := ""
 			if is, ok := m.ix.issues[k]; ok {

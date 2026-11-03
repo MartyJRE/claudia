@@ -9,7 +9,6 @@ import (
 	"github.com/MartyJRE/claudia/internal/gitlab"
 	"github.com/MartyJRE/claudia/internal/repos"
 	"github.com/MartyJRE/claudia/internal/state"
-	"github.com/MartyJRE/claudia/internal/tmux"
 )
 
 type source int
@@ -46,15 +45,15 @@ type sessionsMsg []row
 func (m *Model) loadSessions() tea.Cmd {
 	store := m.store
 	return func() tea.Msg {
-		loc := tmux.NewLocator()
+		loc := newLocator()
 		var rows []row
-		for _, s := range store.Sessions() {
+		for _, s := range listSessions(store) {
 			r := row{Session: s}
 			if s.Live != nil {
-				if p, ok := loc.Pane(s.Live.PID); ok {
+				if p, ok := locatePane(loc, s.Live.PID); ok {
 					r.pane = &p
 				} else {
-					r.host = loc.Host(s.Live.PID)
+					r.host = locateHost(loc, s.Live.PID)
 				}
 			}
 			rows = append(rows, r)
@@ -69,19 +68,19 @@ func (m *Model) fetch(src source) tea.Cmd {
 		f := fetched{src: src}
 		switch src {
 		case srcGitlab:
-			f.data, f.err = gitlab.Fetch()
+			f.data, f.err = fetchGitlab()
 		case srcJira:
 			if atl == nil {
 				return fetched{src, nil, atlErr}
 			}
-			f.data, f.err = atl.FetchJira()
+			f.data, f.err = fetchJira(atl)
 		case srcConfluence:
 			if atl == nil {
 				return fetched{src, nil, atlErr}
 			}
-			f.data, f.err = atl.FetchConfluence()
+			f.data, f.err = fetchConfluence(atl)
 		case srcRepos:
-			f.data = repos.Find(repos.Root())
+			f.data = findRepos(repos.Root())
 		}
 		if f.err == nil && cacheFile[src] != "" {
 			_ = state.Save(cacheFile[src], f.data)

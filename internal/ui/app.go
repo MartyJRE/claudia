@@ -15,13 +15,11 @@ import (
 	"github.com/MartyJRE/claudia/internal/atlassian"
 	"github.com/MartyJRE/claudia/internal/brief"
 	"github.com/MartyJRE/claudia/internal/claude"
-	"github.com/MartyJRE/claudia/internal/config"
 	"github.com/MartyJRE/claudia/internal/gitlab"
 	"github.com/MartyJRE/claudia/internal/launch"
 	"github.com/MartyJRE/claudia/internal/links"
 	"github.com/MartyJRE/claudia/internal/repos"
 	"github.com/MartyJRE/claudia/internal/tmux"
-	"github.com/MartyJRE/claudia/internal/update"
 	"github.com/MartyJRE/claudia/internal/vault"
 	"github.com/MartyJRE/claudia/internal/watch"
 )
@@ -157,7 +155,7 @@ func New(opts Options) *Model {
 		dismissed:  loadDismissed(),
 	}
 	var problems []string
-	m.km, problems = newKeymap(config.Get().Keys)
+	m.km, problems = newKeymap(getConfig().Keys)
 	m.atl, m.atlErr = atlassian.New()
 	m.seen, m.seenExisted = loadSeen()
 	m.loadCaches()
@@ -189,11 +187,11 @@ func (m *Model) Init() tea.Cmd {
 }
 
 func tick() tea.Cmd {
-	return tea.Tick(1500*time.Millisecond, func(t time.Time) tea.Msg { return tickMsg(t) })
+	return tickAfter(1500*time.Millisecond, func(t time.Time) tea.Msg { return tickMsg(t) })
 }
 
 func frame() tea.Cmd {
-	return tea.Tick(120*time.Millisecond, func(t time.Time) tea.Msg { return frameMsg(t) })
+	return tickAfter(120*time.Millisecond, func(t time.Time) tea.Msg { return frameMsg(t) })
 }
 
 func (m *Model) refreshStale() tea.Cmd {
@@ -254,7 +252,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.reloadBrief()
 		if time.Since(m.updateAt) > 30*time.Second {
-			m.updateAt, m.updateAvail = time.Now(), update.Available()
+			m.updateAt, m.updateAvail = time.Now(), updateAvailable()
 		}
 		if m.reloadDismissed() {
 			m.refilter()
@@ -825,7 +823,7 @@ func (m *Model) refilter() {
 
 // start opens a claude window and jumps to it.
 func (m *Model) start(sp launch.Spec) (tea.Model, tea.Cmd) {
-	target, err := launch.Start(sp)
+	target, err := startSession(sp)
 	if err != nil {
 		m.setFlash(err.Error(), true)
 		return m, nil
@@ -839,7 +837,7 @@ func (m *Model) goTo(target string) (tea.Model, tea.Cmd) {
 		m.Result.Attach = target
 		return m, tea.Quit
 	}
-	if err := tmux.Switch(target); err != nil {
+	if err := switchClient(target); err != nil {
 		m.setFlash(err.Error(), true)
 		return m, nil
 	}
@@ -909,7 +907,7 @@ func (m *Model) countLive() int {
 
 func run(c *exec.Cmd) tea.Cmd {
 	return func() tea.Msg {
-		if out, err := c.CombinedOutput(); err != nil {
+		if out, err := cmdCombinedOutput(c); err != nil {
 			return flashMsg{strings.TrimSpace(string(out)) + " " + err.Error(), true}
 		}
 		return nil
@@ -922,7 +920,7 @@ func copyText(s, what string) tea.Cmd {
 	return func() tea.Msg {
 		c := exec.Command("pbcopy")
 		c.Stdin = strings.NewReader(s)
-		if err := c.Run(); err != nil {
+		if err := cmdRun(c); err != nil {
 			return flashMsg{err.Error(), true}
 		}
 		return flashMsg{"copied " + what, false}

@@ -30,12 +30,12 @@ type liveSnapshot struct {
 }
 
 func bootID() string {
-	out, _ := exec.Command("sysctl", "-n", "kern.boottime").Output()
+	out, _ := cmdOutput(exec.Command("sysctl", "-n", "kern.boottime"))
 	return strings.TrimSpace(string(out))
 }
 
 func tmuxServer() string {
-	out, _ := exec.Command("tmux", "display-message", "-p", "#{pid}").Output()
+	out, _ := cmdOutput(exec.Command("tmux", "display-message", "-p", "#{pid}"))
 	return strings.TrimSpace(string(out))
 }
 
@@ -107,7 +107,7 @@ func (m *Model) restoreAll() (tea.Model, tea.Cmd) {
 			continue
 		}
 		sp := launch.Spec{Dir: it.Dir, Profile: launch.Profile(it.Profile, m.store.Profiles), Name: it.Name, Args: []string{"--resume", it.ID}}
-		target, err := launch.Start(sp)
+		target, err := startSession(sp)
 		if err != nil {
 			m.setFlash(err.Error(), true)
 			continue

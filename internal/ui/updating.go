@@ -10,7 +10,6 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/MartyJRE/claudia/internal/update"
-	"github.com/MartyJRE/claudia/internal/watch"
 )
 
 // The update screen: what's new, then the build as it happens, then a restart.
@@ -46,7 +45,7 @@ func (m *Model) startUpdate() tea.Cmd {
 	}
 	m.upd = &updateView{}
 	return func() tea.Msg {
-		p, err := update.Fetch()
+		p, err := fetchUpdate()
 		return upPlanMsg{p, err}
 	}
 }
@@ -64,9 +63,9 @@ func (m *Model) updateMsg(msg tea.Msg) tea.Cmd {
 		u.stream = make(chan tea.Msg, 64)
 		ch := u.stream
 		go func() {
-			err := update.Install(func(l string) { ch <- upLogMsg(l) })
+			err := installUpdate(func(l string) { ch <- upLogMsg(l) })
 			if err == nil {
-				watch.Stop()
+				stopWatcher()
 			}
 			ch <- upDoneMsg{err}
 		}()
@@ -85,7 +84,7 @@ func (m *Model) updateMsg(msg tea.Msg) tea.Cmd {
 		}
 		u.stage = upDone
 		u.restarts = time.Now().Add(3 * time.Second)
-		return tea.Tick(3*time.Second, func(time.Time) tea.Msg { return upRestartMsg{} })
+		return tickAfter(3*time.Second, func(time.Time) tea.Msg { return upRestartMsg{} })
 	case upRestartMsg:
 		m.Result.Restart = true
 		return tea.Quit

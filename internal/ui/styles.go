@@ -4,8 +4,6 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-
-	"github.com/MartyJRE/claudia/internal/config"
 )
 
 // One Dark, as in ~/dot/.tmux/plugins/tmux-onedark-theme plus onedark.nvim's accents.
@@ -55,7 +53,7 @@ func tab(label string, on bool) string {
 }
 
 func rounded(body lipgloss.Style, bgc lipgloss.Color, s string) string {
-	if !config.Get().RoundedPills() {
+	if !getConfig().RoundedPills() {
 		return body.Padding(0, 1).Render(s)
 	}
 	end := lipgloss.NewStyle().Foreground(bgc)
