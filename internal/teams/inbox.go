@@ -33,6 +33,8 @@ var now = time.Now
 type me struct {
 	ID          string `json:"id"`
 	DisplayName string `json:"displayName"`
+	Mail        string `json:"mail"`
+	UPN         string `json:"userPrincipalName"`
 }
 
 func (c *Client) whoami() (me, error) {
@@ -41,7 +43,7 @@ func (c *Client) whoami() (me, error) {
 	if c.me.ID != "" {
 		return c.me, nil
 	}
-	err := c.getJSON("/me?$select=id,displayName", &c.me)
+	err := c.getJSON("/me?$select=id,displayName,mail,userPrincipalName", &c.me)
 	return c.me, err
 }
 
@@ -248,6 +250,9 @@ type Line struct {
 // Show returns the conversation a ref points into: the chat's recent
 // messages, or the channel thread.
 func (c *Client) Show(s string) ([]Line, error) {
+	if id, ok := strings.CutPrefix(s, "mail/"); ok {
+		return c.showMail(id)
+	}
 	r, err := c.parseRef(s)
 	if err != nil {
 		return nil, err

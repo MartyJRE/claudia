@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -14,7 +15,7 @@ const teamsHelp = `claudia teams: Microsoft Teams and your calendar, as you.
 
   login                           sign in (device code); needed once
   channels                        JSON: your teams' channels
-  waiting                         JSON: chats, @mentions and invites where it's your turn
+  waiting                         JSON: chats, @mentions, invites and mail where it's your turn
   show <ref>                      the conversation a ref points into, oldest first, with files
   posts [--mr <url>]              JSON: review-channel posts, or the ones about an MR
 
@@ -30,9 +31,9 @@ const teamsHelp = `claudia teams: Microsoft Teams and your calendar, as you.
   calendar [days]                 your meetings from now, default 1 day
   respond <event-ref> accept|tentative|decline [comment]
 
-A ref is chat/<chat>/<msg>, <team>/<channel>/<msg>, event/<id>, or a review-channel
-message id; waiting, posts, chat, post and calendar print them. An MR URL picks the
-newest review post about it.
+A ref is chat/<chat>/<msg>, <team>/<channel>/<msg>, event/<id>, mail/<id>, or a
+review-channel message id; waiting, posts, chat, post and calendar print them. An MR
+URL picks the newest review post about it.
 `
 
 var newTeams = func() (teamsClient, error) { return teams.New() }
@@ -107,6 +108,9 @@ func teamsCmd(args []string) error {
 		s, err := c.Fetch()
 		if err != nil {
 			return err
+		}
+		if s.MailErr != "" {
+			fmt.Fprintln(os.Stderr, "Outlook mail: "+s.MailErr)
 		}
 		if s.Waiting == nil {
 			s.Waiting = []teams.Waiting{}

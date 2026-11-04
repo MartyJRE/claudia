@@ -226,6 +226,47 @@ func TestTeamsInvitesShell(t *testing.T) {
 	}
 }
 
+func TestTeamsMailShell(t *testing.T) {
+	m := newModelShell(t)
+	m.repos = []repos.Repo{{Dir: "/code/ops"}}
+	started := fakeStart(t, "ops:1", nil)
+	at := time.Now().Add(-time.Hour)
+	m.teams.Waiting = []teams.Waiting{{Ref: "mail/m1", Kind: "mail", Where: "Deploy failed", From: "Lukas Laczi", At: at, Text: "Hi Martin", WebURL: "https://outlook/m1"}}
+	var mail []inboxItem
+	for _, it := range m.inbox() {
+		if it.kind == kMail {
+			mail = append(mail, it)
+		}
+	}
+	if len(mail) != 1 || mail[0].id != "tm:mail/m1" || !mail[0].since.Equal(at) || mail[0].url != "https://outlook/m1" || plainShell(kindStyle(kMail).Render("x")) != "x" {
+		t.Fatalf("mail item: %+v", mail)
+	}
+	m.refilter()
+	if s := plainShell(m.View()); !strings.Contains(s, "mail") || !strings.Contains(s, "Deploy failed") {
+		t.Errorf("inbox should list mail:\n%s", s)
+	}
+
+	m.claudeForInbox(mail[0])
+	pressShell(m, "enter")
+	if len(*started) != 1 {
+		t.Fatalf("a reply session starts: %+v", *started)
+	}
+	if p := promptOf((*started)[0]); !strings.HasPrefix(p, `Lukas Laczi emailed me: "Deploy failed"`) ||
+		!strings.Contains(p, "claudia teams show mail/m1") || !strings.Contains(p, "paste into Outlook (https://outlook/m1)") {
+		t.Errorf("prompt: %q", p)
+	}
+
+	m.applyFetched(fetched{src: srcTeams, data: teams.Snapshot{MailErr: "Teams GET: 403"}})
+	if !strings.Contains(m.flash, "Outlook mail: Teams GET: 403") || m.errs[srcTeams] != nil {
+		t.Errorf("a mail error flashes once, Teams itself is fine: %q %v", m.flash, m.errs[srcTeams])
+	}
+	m.flash = ""
+	m.applyFetched(fetched{src: srcTeams, data: teams.Snapshot{MailErr: "Teams GET: 403"}})
+	if m.flash != "" {
+		t.Errorf("the same error doesn't flash again: %q", m.flash)
+	}
+}
+
 func TestBriefMeetingsShell(t *testing.T) {
 	m := newModelShell(t)
 	at := func(h, min int) time.Time { return time.Date(2026, 11, 3, h, min, 0, 0, time.Local) }

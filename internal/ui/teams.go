@@ -182,6 +182,20 @@ func (m *Model) replyInTeams(w teams.Waiting) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// replyToMail drafts an answer to paste into Outlook; claudia can't send mail (no Mail.Send).
+func (m *Model) replyToMail(w teams.Waiting) (tea.Model, tea.Cmd) {
+	prompt := fmt.Sprintf("%s emailed me: %q\n\n> %s\n\n"+
+		"Read the thread with `claudia teams show %s`, check the code where it helps, and draft my reply: briefly, in the language they wrote in. "+
+		"claudia can't send email, so give me the text to paste into Outlook (%s).",
+		w.From, w.Where, strings.ReplaceAll(w.Text, "\n", "\n> "), w.Ref, w.WebURL)
+	m.pickRepo("reply to "+firstName(w.From)+" in", "", nil, func(m *Model, dir string, p claude.Profile) (tea.Model, tea.Cmd) {
+		sp, _ := launch.New(dir, p, "reply to "+firstName(w.From), prompt)
+		sp.Kind = "reply"
+		return m.start(sp)
+	})
+	return m, nil
+}
+
 // answerInvite offers the three answers to a meeting invite.
 func (m *Model) answerInvite(w teams.Waiting) {
 	tm := m.tm
