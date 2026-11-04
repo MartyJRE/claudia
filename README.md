@@ -255,10 +255,12 @@ registration of your own:
 1. Register an app (single tenant) and turn on **Allow public client flows**
    under Authentication.
 2. Give it the delegated Microsoft Graph permissions `User.Read`,
-   `User.ReadBasic.All`, `Chat.ReadWrite`, `Chat.Create`, `ChannelMessage.Read.All`,
-   `ChannelMessage.Send`, `Team.ReadBasic.All`, `Channel.ReadBasic.All`,
-   `Files.ReadWrite.All`, `Calendars.ReadWrite` and `offline_access`, and have an
-   admin grant consent (`ChannelMessage.Read.All` always needs one).
+   `Chat.ReadWrite`, `ChannelMessage.Read.All`, `ChannelMessage.Send`,
+   `Team.ReadBasic.All`, `Channel.ReadBasic.All`, `Calendars.ReadWrite` and
+   `offline_access`, and have an admin grant consent (`ChannelMessage.Read.All`
+   always needs one). `chat` and `who` also need `Chat.Create` and
+   `User.ReadBasic.All`, and files need `Files.ReadWrite.All`; claudia doesn't
+   ask for those at sign-in yet.
 3. Add it to the config and sign in once:
 
 ```json

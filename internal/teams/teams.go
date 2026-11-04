@@ -98,7 +98,7 @@ type token struct {
 
 const (
 	tokenFile = "teams-token.json"
-	scopes    = "https://graph.microsoft.com/User.Read https://graph.microsoft.com/Chat.ReadWrite https://graph.microsoft.com/ChannelMessage.Read.All https://graph.microsoft.com/ChannelMessage.Send https://graph.microsoft.com/Team.ReadBasic.All https://graph.microsoft.com/Channel.ReadBasic.All https://graph.microsoft.com/Chat.Create https://graph.microsoft.com/User.ReadBasic.All https://graph.microsoft.com/Files.ReadWrite.All https://graph.microsoft.com/Calendars.ReadWrite offline_access"
+	scopes    = "https://graph.microsoft.com/User.Read https://graph.microsoft.com/Chat.ReadWrite https://graph.microsoft.com/ChannelMessage.Read.All https://graph.microsoft.com/ChannelMessage.Send https://graph.microsoft.com/Team.ReadBasic.All https://graph.microsoft.com/Channel.ReadBasic.All https://graph.microsoft.com/Calendars.ReadWrite offline_access"
 )
 
 var (
