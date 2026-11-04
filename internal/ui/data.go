@@ -146,6 +146,9 @@ func (m *Model) applyFetched(f fetched) {
 	case []repos.Repo:
 		m.repos = d
 	case teams.Snapshot:
+		if d.MailErr != "" && d.MailErr != m.teams.MailErr {
+			m.setFlash("Outlook mail: "+d.MailErr, true)
+		}
 		m.teams = d
 	}
 }

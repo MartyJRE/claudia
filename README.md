@@ -122,6 +122,10 @@ your reply, and sends it only after you OK the text.
 Meeting invites you haven't answered show up too; `c` on one asks accept,
 tentative or decline. The brief knows the rest of today's meetings.
 
+With [mail turned on](#outlook-mail), unread Outlook mail that needs you shows
+up as well, until you read it. `enter` opens it in Outlook; `c` drafts a reply
+for you to paste there.
+
 Review requests posted in your code-review channel are matched to their MRs (a
 post can cover several MRs, and an MR can be posted more than once). The Review
 row shows a `teams` chip, `teams ✓` once you've replied in the thread, and `T`
@@ -281,8 +285,27 @@ claudia teams channels    # your teams and channels, to fill in team_id / channe
 `team_id` and `channel_id` are only for the review channel; chats and mentions
 work without them. `me` tells your replies apart from others'.
 
+#### Outlook mail
+
+Mail is off until `teams.mail` is set, because it makes sign-in ask for the
+delegated `Mail.Read`, and a scope the app hasn't been granted fails the whole
+sign-in. Add `Mail.Read` to the app, get it consented (yourself at sign-in, or
+by an admin if the tenant requires it), then set:
+
+```json
+"mail": {
+  "direct": true,
+  "rules": [{"from": "boss@example.com"}, {"subject": "approval needed"}]
+}
+```
+
+and run `claudia teams login` again. `direct` (on by default) lists mail with
+you in To that Outlook files as Focused; each rule lists mail whose sender
+(address or name) and subject contain what it sets, whoever it was sent to.
+Only unread mail from the last two weeks counts.
+
 ```sh
-claudia teams waiting                       # chats, @mentions and invites waiting on you, as JSON
+claudia teams waiting                       # chats, @mentions, invites and mail waiting on you, as JSON
 claudia teams show <ref>                    # the conversation, oldest first, with its files
 claudia teams posts [--mr <url>]            # review-channel posts, or the ones about an MR
 claudia teams reply <ref|mr-url> <text>     # into the chat or thread

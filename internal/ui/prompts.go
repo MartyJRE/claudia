@@ -289,6 +289,8 @@ func (m *Model) claudeForInbox(it inboxItem) (tea.Model, tea.Cmd) {
 		return m.replyInTeams(it.tw)
 	case kInvite:
 		m.answerInvite(it.tw)
+	case kMail:
+		return m.replyToMail(it.tw)
 	}
 	return m, nil
 }

@@ -59,6 +59,7 @@ type Snapshot struct {
 	Posts     []Post    `json:"posts"`
 	Waiting   []Waiting `json:"waiting"`
 	Events    []Event   `json:"events"` // the next two weeks
+	MailErr   string    `json:"mail_err,omitempty"`
 	FetchedAt time.Time `json:"fetched_at"`
 }
 
@@ -103,9 +104,18 @@ type token struct {
 }
 
 const (
-	tokenFile = "teams-token.json"
-	scopes    = "https://graph.microsoft.com/User.Read https://graph.microsoft.com/Chat.ReadWrite https://graph.microsoft.com/ChannelMessage.Read.All https://graph.microsoft.com/ChannelMessage.Send https://graph.microsoft.com/Team.ReadBasic.All https://graph.microsoft.com/Channel.ReadBasic.All https://graph.microsoft.com/Calendars.ReadWrite offline_access"
+	tokenFile  = "teams-token.json"
+	baseScopes = "https://graph.microsoft.com/User.Read https://graph.microsoft.com/Chat.ReadWrite https://graph.microsoft.com/ChannelMessage.Read.All https://graph.microsoft.com/ChannelMessage.Send https://graph.microsoft.com/Team.ReadBasic.All https://graph.microsoft.com/Channel.ReadBasic.All https://graph.microsoft.com/Calendars.ReadWrite offline_access"
 )
+
+// scopes asks for Mail.Read only once mail is configured: a scope the tenant
+// hasn't granted fails the whole sign-in.
+func scopes() string {
+	if siteConfig().Teams.Mail != nil {
+		return baseScopes + " https://graph.microsoft.com/Mail.Read"
+	}
+	return baseScopes
+}
 
 var (
 	siteConfig = config.Get
@@ -139,7 +149,7 @@ func (c *Client) Login(show func(string)) error {
 		Interval   int    `json:"interval"`
 		ExpiresIn  int    `json:"expires_in"`
 	}
-	if err := c.form("/devicecode", url.Values{"client_id": {c.cfg.ClientID}, "scope": {scopes}}, &dc); err != nil {
+	if err := c.form("/devicecode", url.Values{"client_id": {c.cfg.ClientID}, "scope": {scopes()}}, &dc); err != nil {
 		return err
 	}
 	show(dc.Message)
@@ -224,7 +234,7 @@ func (c *Client) access() (string, error) {
 		"grant_type":    {"refresh_token"},
 		"client_id":     {c.cfg.ClientID},
 		"refresh_token": {c.tok.Refresh},
-		"scope":         {scopes},
+		"scope":         {scopes()},
 	})
 	var oe *oauthError
 	if errors.As(err, &oe) && oe.Code == "invalid_grant" {
@@ -301,8 +311,16 @@ func (c *Client) Fetch() (Snapshot, error) {
 		return Snapshot{}, err
 	}
 	w = append(w, invites(evs)...)
+	var mailErr string
+	if mc := siteConfig().Teams.Mail; mc != nil {
+		mail, err := c.fetchMail(*mc)
+		if err != nil {
+			mailErr = err.Error()
+		}
+		w = append(w, mail...)
+	}
 	slices.SortFunc(w, func(a, b Waiting) int { return a.At.Compare(b.At) })
-	return Snapshot{MeID: c.me.ID, Posts: posts, Waiting: w, Events: evs, FetchedAt: time.Now()}, nil
+	return Snapshot{MeID: c.me.ID, Posts: posts, Waiting: w, Events: evs, MailErr: mailErr, FetchedAt: time.Now()}, nil
 }
 
 // FetchReview reads the last 50 posts of the review channel, replies included.

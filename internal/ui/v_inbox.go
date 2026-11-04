@@ -26,6 +26,7 @@ const (
 	kClaude
 	kTeams
 	kInvite
+	kMail
 )
 
 var kindLabel = map[inboxKind]string{
@@ -36,6 +37,7 @@ var kindLabel = map[inboxKind]string{
 	kClaude:  "claude",
 	kTeams:   "teams",
 	kInvite:  "invite",
+	kMail:    "mail",
 }
 
 // inboxItem is anything someone (or a session) is waiting on you for.
@@ -121,6 +123,9 @@ func (m *Model) inbox() []inboxItem {
 			// An invite waits from when it arrived, which Graph doesn't say; list it now.
 			k, since = kInvite, m.teams.FetchedAt
 		}
+		if w.Kind == "mail" {
+			k = kMail
+		}
 		out = append(out, inboxItem{id: "tm:" + w.Ref, kind: k, where: w.Where, who: w.From, text: text, since: since, url: w.WebURL, tw: w})
 	}
 	for _, r := range m.sessions {
@@ -182,6 +187,8 @@ func kindStyle(k inboxKind) lipgloss.Style {
 		return lipgloss.NewStyle().Foreground(cyan)
 	case kInvite:
 		return lipgloss.NewStyle().Foreground(red)
+	case kMail:
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("#f5a3c7"))
 	}
 	return lipgloss.NewStyle().Foreground(green)
 }
