@@ -20,6 +20,10 @@ const eventsJSON = `{"value":[
    "organizer":{"emailAddress":{"name":"Martin Prazak"}},"responseStatus":{"response":"organizer"}},
   {"id":"e0","subject":"Cancelled","isCancelled":true,"start":{"dateTime":"2026-11-03T14:00:00.0000000"},"end":{"dateTime":"2026-11-03T15:00:00.0000000"},
    "responseStatus":{"response":"notResponded"}},
+  {"id":"s1","seriesMasterId":"S","subject":"Daily","start":{"dateTime":"2026-11-05T09:00:00.0000000"},"end":{"dateTime":"2026-11-05T09:15:00.0000000"},
+   "organizer":{"emailAddress":{"name":"Vaclav"}},"responseStatus":{"response":"notResponded"}},
+  {"id":"s2","seriesMasterId":"S","subject":"Daily","start":{"dateTime":"2026-11-06T09:00:00.0000000"},"end":{"dateTime":"2026-11-06T09:15:00.0000000"},
+   "organizer":{"emailAddress":{"name":"Vaclav"}},"responseStatus":{"response":"notResponded"}},
   {"id":"e3","subject":"Already started","start":{"dateTime":"2026-11-03T11:00:00.0000000"},"end":{"dateTime":"2026-11-03T13:00:00.0000000"},
    "responseStatus":{"response":"notResponded"}}
 ]}`
@@ -30,7 +34,7 @@ func TestCalendar(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(evs) != 3 || evs[0].ID != "e3" || evs[1].ID != "e1" || evs[2].ID != "e2" {
+	if len(evs) != 5 || evs[0].ID != "e3" || evs[1].ID != "e1" || evs[2].ID != "e2" || evs[3].Series != "S" {
 		t.Fatalf("by start, cancelled left out: %+v", evs)
 	}
 	e := evs[2]
@@ -39,8 +43,11 @@ func TestCalendar(t *testing.T) {
 		t.Errorf("event: %+v", e)
 	}
 	inv := invites(evs)
-	if len(inv) != 1 || inv[0].Ref != "event/e2" || inv[0].Kind != "invite" || inv[0].From != "Vaclav" || inv[0].Text != "Planning" {
+	if len(inv) != 2 || inv[0].Ref != "event/e2" || inv[0].Kind != "invite" || inv[0].From != "Vaclav" || inv[0].Text != "Planning" {
 		t.Errorf("only unanswered invites still ahead: %+v", inv)
+	}
+	if inv[1].Ref != "event/S" || !strings.HasSuffix(inv[1].Where, ", recurring") || !strings.HasPrefix(inv[1].Where, "from Thu 5 Nov") {
+		t.Errorf("a recurring meeting is one invite, for its series: %+v", inv[1])
 	}
 	if _, err := parseEvents([]byte("x")); err == nil {
 		t.Error("garbage")
@@ -50,7 +57,7 @@ func TestCalendar(t *testing.T) {
 	c := newTestClient(t, f)
 	c.tok = token{Access: "at", Expires: time.Now().Add(time.Hour)}
 	s, err := c.Fetch()
-	if err != nil || len(s.Events) != 3 {
+	if err != nil || len(s.Events) != 5 {
 		t.Fatalf("fetch reads the calendar: %v %+v", err, s.Events)
 	}
 	if last := s.Waiting[len(s.Waiting)-1]; last.Kind != "invite" {

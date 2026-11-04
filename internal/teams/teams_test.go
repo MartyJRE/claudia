@@ -216,7 +216,7 @@ func TestLoginFetchReplyReact(t *testing.T) {
 	}
 
 	s, err := c.Fetch()
-	if err != nil || len(s.Posts) != 2 || len(s.Waiting) != 4 || s.FetchedAt.IsZero() {
+	if err != nil || len(s.Posts) != 2 || len(s.Waiting) != 5 || s.FetchedAt.IsZero() {
 		t.Fatalf("fetch: %v %+v", err, s)
 	}
 	if err := c.Reply("1730650000000", "approved <3\nthanks"); err != nil {
@@ -445,7 +445,7 @@ func TestFetchWithoutReviewChannel(t *testing.T) {
 	c.tok = token{Access: "at", Expires: time.Now().Add(time.Hour)}
 	c.cfg.TeamID, c.cfg.ChannelID = "", ""
 	s, err := c.Fetch()
-	if err != nil || len(s.Posts) != 0 || len(s.Waiting) != 4 {
+	if err != nil || len(s.Posts) != 0 || len(s.Waiting) != 5 {
 		t.Fatalf("chats still come without the review channel: %v %+v", err, s.Waiting)
 	}
 	if _, err := c.FetchReview(); !errors.Is(err, ErrNoChannel) {
@@ -502,7 +502,7 @@ func TestErrors(t *testing.T) {
 	// A channel that can't be read is skipped when scanning for mentions.
 	c := failingClient(t, map[string]int{}, "")
 	c.cfg.TeamID = ""
-	if s, err := c.Fetch(); err != nil || len(s.Waiting) != 4 {
+	if s, err := c.Fetch(); err != nil || len(s.Waiting) != 5 {
 		t.Errorf("unreadable channel: %v %+v", err, s.Waiting)
 	}
 

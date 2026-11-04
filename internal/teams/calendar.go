@@ -19,6 +19,7 @@ type Event struct {
 	Online    string    `json:"online,omitempty"`
 	WebURL    string    `json:"web_url"`
 	Location  string    `json:"location,omitempty"`
+	Series    string    `json:"series,omitempty"` // the recurring meeting it's one occurrence of
 }
 
 func (e Event) Ref() string { return "event/" + e.ID }
@@ -40,6 +41,7 @@ type event struct {
 	End         graphTime `json:"end"`
 	IsCancelled bool      `json:"isCancelled"`
 	WebLink     string    `json:"webLink"`
+	SeriesID    string    `json:"seriesMasterId"`
 	Organizer   struct {
 		EmailAddress struct {
 			Name string `json:"name"`
@@ -70,7 +72,7 @@ func parseEvents(b []byte) ([]Event, error) {
 		}
 		ev := Event{
 			ID: e.ID, Subject: e.Subject, Start: e.Start.parse(), End: e.End.parse(), Organizer: e.Organizer.EmailAddress.Name,
-			Response: e.ResponseStatus.Response, WebURL: e.WebLink, Location: e.Location.DisplayName,
+			Response: e.ResponseStatus.Response, WebURL: e.WebLink, Location: e.Location.DisplayName, Series: e.SeriesID,
 		}
 		if e.OnlineMeeting != nil {
 			ev.Online = e.OnlineMeeting.JoinURL
@@ -88,7 +90,7 @@ func (c *Client) Calendar(from, to time.Time) ([]Event, error) {
 		"endDateTime":   {to.UTC().Format(time.RFC3339)},
 		"$orderby":      {"start/dateTime"},
 		"$top":          {"100"},
-		"$select":       {"id,subject,start,end,isCancelled,webLink,organizer,responseStatus,onlineMeeting,location"},
+		"$select":       {"id,subject,start,end,isCancelled,webLink,organizer,responseStatus,onlineMeeting,location,seriesMasterId"},
 	}
 	b, err := c.doHeader("GET", "/me/calendarView?"+q.Encode(), nil, map[string]string{"Prefer": `outlook.timezone="UTC"`})
 	if err != nil {
@@ -97,17 +99,24 @@ func (c *Client) Calendar(from, to time.Time) ([]Event, error) {
 	return parseEvents(b)
 }
 
-// invites turns events you haven't answered into waiting items.
+// invites turns events you haven't answered into waiting items, a recurring
+// meeting once: its next occurrence, answered for the whole series.
 func invites(evs []Event) []Waiting {
 	var out []Waiting
+	seen := map[string]bool{}
 	for _, e := range evs {
-		if e.Response != "notResponded" || e.Start.Before(now()) {
+		if e.Response != "notResponded" || e.Start.Before(now()) || (e.Series != "" && seen[e.Series]) {
 			continue
 		}
-		out = append(out, Waiting{
+		w := Waiting{
 			Ref: e.Ref(), Kind: "invite", Where: e.Start.Local().Format("Mon 2 Jan 15:04"), From: e.Organizer,
 			At: e.Start, Text: e.Subject, WebURL: e.WebURL,
-		})
+		}
+		if e.Series != "" {
+			seen[e.Series] = true
+			w.Ref, w.Where = "event/"+e.Series, "from "+w.Where+", recurring"
+		}
+		out = append(out, w)
 	}
 	return out
 }
