@@ -110,7 +110,7 @@ func (m *Model) inbox() []inboxItem {
 		out = append(out, it)
 	}
 	for _, w := range m.teams.Waiting {
-		if m.onReviewRow(w) {
+		if m.coveredByMRs(w) {
 			continue
 		}
 		text, k, since := w.Text, kTeams, w.At

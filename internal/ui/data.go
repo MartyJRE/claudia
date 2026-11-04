@@ -114,6 +114,7 @@ func (m *Model) loadCaches() {
 	if state.Load(cacheFile[srcTeams], &m.teams) {
 		m.fetchedAt[srcTeams] = m.teams.FetchedAt
 	}
+	state.Load(postMRsFile, &m.postMRs)
 }
 
 func (m *Model) stale(src source) bool {

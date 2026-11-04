@@ -3,11 +3,13 @@ package ui
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/MartyJRE/claudia/internal/config"
+	"github.com/MartyJRE/claudia/internal/gitlab"
 	"github.com/MartyJRE/claudia/internal/repos"
 	"github.com/MartyJRE/claudia/internal/state"
 	"github.com/MartyJRE/claudia/internal/teams"
@@ -240,5 +242,85 @@ func TestBriefMeetingsShell(t *testing.T) {
 	if !strings.Contains(s, `"Meetings":[{"Subject":"Now","Start":"11:30","End":"12:30","Response":"accepted"},{"Subject":"Later"`) ||
 		strings.Contains(s, "Morning") || strings.Contains(s, "Declined") || strings.Contains(s, "Tomorrow") {
 		t.Errorf("the rest of today, declined left out: %s", s)
+	}
+}
+
+func TestMentionsCoveredByMRsShell(t *testing.T) {
+	m := newModelShell(t)
+	m.gl.Me.Username = "martin"
+	rev := m.gl.Review[0]
+	tracked := "https://gitlab.example.com/g/x/-/merge_requests/1"
+	m.ix.mrs[tracked] = gitlab.MR{WebURL: tracked, State: "merged"}
+	unknown := "https://gitlab.example.com/g/payments/-/merge_requests/77"
+	m.teams.Waiting = []teams.Waiting{
+		{Ref: "T/C/review", Kind: "mention", MRURLs: []string{rev.WebURL}},
+		{Ref: "T/C/merged", Kind: "mention", MRURLs: []string{tracked}},
+		{Ref: "T/C/unknown", Kind: "mention", MRURLs: []string{tracked, unknown}},
+		{Ref: "T/C/plain", Kind: "mention"},
+	}
+	refs := func() []string {
+		var out []string
+		for _, it := range m.inbox() {
+			if it.kind == kTeams {
+				out = append(out, it.tw.Ref)
+			}
+		}
+		return out
+	}
+	if got := strings.Join(refs(), ","); got != "T/C/unknown,T/C/plain" {
+		t.Errorf("on a review row or all MRs done: hidden; not looked up yet: shown. got %s", got)
+	}
+
+	var asked []string
+	fake(t, &fetchMR, func(project string, iid int) (gitlab.MR, error) {
+		asked = append(asked, fmt.Sprintf("%s!%d", project, iid))
+		if iid == 78 {
+			return gitlab.MR{}, errors.New("404")
+		}
+		return gitlab.MR{State: "opened", ApprovedBy: []string{"martin"}}, nil
+	})
+	m.teams.Waiting = append(m.teams.Waiting, teams.Waiting{Ref: "T/C/gone", Kind: "mention", MRURLs: []string{"https://gitlab.example.com/g/payments/-/merge_requests/78", "https://elsewhere/x"}})
+	msg := m.lookupPostMRs()()
+	m.Update(msg)
+	if strings.Join(asked, ",") != "g/payments!77,g/payments!78" {
+		t.Errorf("only untracked MRs are looked up, each once: %v", asked)
+	}
+	if got := strings.Join(refs(), ","); got != "T/C/plain,T/C/gone" {
+		t.Errorf("an MR I approved clears its mention: %s", got)
+	}
+	var saved map[string]bool
+	if !state.Load(postMRsFile, &saved) || !saved[unknown] {
+		t.Errorf("looked-up MRs are remembered: %v", saved)
+	}
+	m.teams.Waiting = m.teams.Waiting[:3]
+	if m.lookupPostMRs() != nil {
+		t.Error("done MRs aren't asked about again")
+	}
+	m.postMRs = nil
+	m.loadCaches()
+	if done, known := m.mrDone(unknown); !done || !known {
+		t.Error("and survive a restart")
+	}
+
+	// A review I've approved still in my list doesn't hold the mention on its row.
+	m.gl.Review[0].ApprovedBy = []string{"martin"}
+	m.reindex()
+	m.teams.Waiting = []teams.Waiting{{Ref: "T/C/review", Kind: "mention", MRURLs: []string{rev.WebURL}}}
+	if len(refs()) != 0 {
+		t.Error("approved: done")
+	}
+
+	// My reaction ticks the review chip.
+	m.teams.MeID = "me-id"
+	m.teams.Posts = []teams.Post{{ID: "p", MRURLs: []string{rev.WebURL}, ReactedBy: []string{"me-id"}}}
+	if plainShell(m.teamsChip(rev)) != "teams ✓" {
+		t.Error("reacted: ✓")
+	}
+
+	// The lookup runs after a Teams fetch.
+	m.teams.Waiting = []teams.Waiting{{Ref: "T/C/new", Kind: "mention", MRURLs: []string{"https://gitlab.example.com/g/payments/-/merge_requests/79"}}}
+	snap := m.teams
+	if _, cmd := m.Update(fetched{src: srcTeams, data: snap}); cmd == nil {
+		t.Error("a Teams fetch looks up its new MRs")
 	}
 }

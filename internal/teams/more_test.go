@@ -347,3 +347,24 @@ func keys[V any](m map[string]V) []string {
 	}
 	return out
 }
+
+func TestReactionsAnswer(t *testing.T) {
+	fixedNow(t)
+	body := `{"value":[
+	  {"id":"r1","createdDateTime":"2026-11-03T08:00:00Z","from":{"user":{"id":"l","displayName":"L"}},"body":{"content":"review pls"},
+	   "mentions":[{"mentioned":{"user":{"id":"me"}}}],"reactions":[{"reactionType":"✅","user":{"user":{"id":"me","displayName":null}}}]},
+	  {"id":"r2","createdDateTime":"2026-11-03T08:00:00Z","from":{"user":{"id":"l","displayName":"L"}},"body":{"content":"root"},
+	   "reactions":[{"reactionType":"like","user":{"user":{"id":"me"}}},{"reactionType":"like","user":{"user":{"id":"me"}}},{"reactionType":"like","user":{"application":{"id":"bot"}}}],
+	   "replies":[{"id":"a","createdDateTime":"2026-11-03T08:10:00Z","from":{"user":{"id":"p","displayName":"P"}},"body":{"content":"you?"},"mentions":[{"mentioned":{"user":{"id":"me"}}}]}]},
+	  {"id":"r3","createdDateTime":"2026-11-03T08:00:00Z","from":{"user":{"id":"l","displayName":"L"}},"body":{"content":"someone else reacted"},
+	   "mentions":[{"mentioned":{"user":{"id":"me"}}}],"reactions":[{"reactionType":"✅","user":{"user":{"id":"p"}}}]}
+	]}`
+	ws, err := unansweredMentions([]byte(body), Channel{TeamID: "T", ChannelID: "C"}, "me", "gitlab.example.com")
+	if err != nil || len(ws) != 1 || ws[0].Ref != "T/C/r3" {
+		t.Errorf("my reaction on the mention or on the thread's post answers it, someone else's doesn't: %v %+v", err, ws)
+	}
+	posts, _ := Parse([]byte(body), "gitlab.example.com")
+	if !posts[0].Reacted("me") || posts[2].Reacted("me") || posts[0].Reacted("") || len(posts[1].ReactedBy) != 1 {
+		t.Errorf("reactors, once each, bots left out: %+v", posts)
+	}
+}

@@ -32,6 +32,8 @@ type Post struct {
 	MRURLs  []string  `json:"mr_urls"`
 	Mention []string  `json:"mentions"`
 	Replies []Reply   `json:"replies"`
+	// ReactedBy are the user ids that reacted to the post itself.
+	ReactedBy []string `json:"reacted_by,omitempty"`
 }
 
 type Reply struct {
@@ -39,6 +41,9 @@ type Reply struct {
 	At   time.Time `json:"at"`
 	Text string    `json:"text"`
 }
+
+// Reacted tells whether the user with this id reacted to the post.
+func (p Post) Reacted(id string) bool { return id != "" && slices.Contains(p.ReactedBy, id) }
 
 // RepliedBy tells whether name has answered in the thread.
 func (p Post) RepliedBy(name string) bool {
@@ -50,6 +55,7 @@ func (p Post) Mentions(name string) bool {
 }
 
 type Snapshot struct {
+	MeID      string    `json:"me_id,omitempty"`
 	Posts     []Post    `json:"posts"`
 	Waiting   []Waiting `json:"waiting"`
 	Events    []Event   `json:"events"` // the next two weeks
@@ -296,7 +302,7 @@ func (c *Client) Fetch() (Snapshot, error) {
 	}
 	w = append(w, invites(evs)...)
 	slices.SortFunc(w, func(a, b Waiting) int { return a.At.Compare(b.At) })
-	return Snapshot{Posts: posts, Waiting: w, Events: evs, FetchedAt: time.Now()}, nil
+	return Snapshot{MeID: c.me.ID, Posts: posts, Waiting: w, Events: evs, FetchedAt: time.Now()}, nil
 }
 
 // FetchReview reads the last 50 posts of the review channel, replies included.
@@ -397,6 +403,21 @@ func (i *identity) name() string {
 	return ""
 }
 
+type reaction struct {
+	By identity `json:"user"`
+}
+
+// reactors are the ids of the users who reacted (Graph leaves their names out).
+func reactors(rs []reaction) []string {
+	var out []string
+	for _, r := range rs {
+		if r.By.User != nil && r.By.User.ID != "" && !slices.Contains(out, r.By.User.ID) {
+			out = append(out, r.By.User.ID)
+		}
+	}
+	return out
+}
+
 type message struct {
 	ID      string    `json:"id"`
 	Created time.Time `json:"createdDateTime"`
@@ -415,7 +436,8 @@ type message struct {
 		ContentURL  string  `json:"contentUrl"`
 		Name        string  `json:"name"`
 	} `json:"attachments"`
-	Replies []message `json:"replies"`
+	Replies   []message  `json:"replies"`
+	Reactions []reaction `json:"reactions"`
 }
 
 // Parse reads Graph's message list ({"value": [...]} or a bare array).
@@ -435,7 +457,7 @@ func Parse(b []byte, gitlabHost string) ([]Post, error) {
 		if m.Deleted != nil {
 			continue
 		}
-		p := Post{ID: m.ID, From: m.From.name(), At: m.Created, WebURL: m.WebURL, Text: plain(m.Body.Content)}
+		p := Post{ID: m.ID, From: m.From.name(), At: m.Created, WebURL: m.WebURL, Text: plain(m.Body.Content), ReactedBy: reactors(m.Reactions)}
 		hay := m.Body.Content
 		for _, a := range m.Attachments {
 			if a.Content != nil {

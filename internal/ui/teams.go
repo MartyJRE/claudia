@@ -11,6 +11,7 @@ import (
 	"github.com/MartyJRE/claudia/internal/claude"
 	"github.com/MartyJRE/claudia/internal/gitlab"
 	"github.com/MartyJRE/claudia/internal/launch"
+	"github.com/MartyJRE/claudia/internal/state"
 	"github.com/MartyJRE/claudia/internal/teams"
 )
 
@@ -22,7 +23,7 @@ func (m *Model) teamsChip(mr gitlab.MR) string {
 	if len(posts) == 0 {
 		return ""
 	}
-	if posts[0].RepliedBy(m.teamsMe()) {
+	if posts[0].RepliedBy(m.teamsMe()) || posts[0].Reacted(m.teams.MeID) {
 		return sDim.Render("teams ✓")
 	}
 	return lipgloss.NewStyle().Foreground(purple).Render("teams")
@@ -84,15 +85,83 @@ func (m *Model) teamsReplyNote(urls []string) string {
 		"Only after I OK it, post it with `claudia teams reply <message id> '<text>'` or `claudia teams react <message id> ✅`."
 }
 
-// onReviewRow: a mention in a post about an MR waiting for my review already
-// shows on that MR's row.
-func (m *Model) onReviewRow(w teams.Waiting) bool {
+// coveredByMRs: a mention in a post about MRs isn't an inbox item of its own
+// when one of them waits for my review (its row shows the post), or when all
+// of them are done: approved or reviewed by me, merged or closed.
+func (m *Model) coveredByMRs(w teams.Waiting) bool {
+	if len(w.MRURLs) == 0 {
+		return false
+	}
+	all := true
 	for _, u := range w.MRURLs {
-		if slices.ContainsFunc(m.gl.Review, func(mr gitlab.MR) bool { return mr.WebURL == u }) {
+		if slices.ContainsFunc(m.gl.Review, func(mr gitlab.MR) bool { return mr.WebURL == u && !m.mrIsDone(mr) }) {
 			return true
 		}
+		if done, _ := m.mrDone(u); !done {
+			all = false
+		}
 	}
-	return false
+	return all
+}
+
+func (m *Model) mrIsDone(mr gitlab.MR) bool {
+	return (mr.State != "" && mr.State != "opened") || mr.ApprovedByMe(m.gl.Me.Username) || mr.ReviewedByMe()
+}
+
+// mrDone says whether an MR is done, from the MRs claudia tracks or ones it
+// looked up for Teams posts; known is false when it hasn't been looked up yet.
+func (m *Model) mrDone(u string) (done, known bool) {
+	if mr, ok := m.ix.mrs[u]; ok {
+		return m.mrIsDone(mr), true
+	}
+	done, known = m.postMRs[u]
+	return done, known
+}
+
+const postMRsFile = "teams-mrs.json"
+
+type postMRsMsg map[string]bool
+
+// lookupPostMRs asks GitLab about MRs in Teams mentions that claudia doesn't
+// track, skipping ones already found done (they stay done).
+func (m *Model) lookupPostMRs() tea.Cmd {
+	var urls []string
+	for _, w := range m.teams.Waiting {
+		for _, u := range w.MRURLs {
+			if done, known := m.mrDone(u); !(known && done) && !slices.Contains(urls, u) {
+				if _, tracked := m.ix.mrs[u]; !tracked {
+					urls = append(urls, u)
+				}
+			}
+		}
+	}
+	if len(urls) == 0 {
+		return nil
+	}
+	me := m.gl.Me.Username
+	return func() tea.Msg {
+		out := postMRsMsg{}
+		for _, u := range urls {
+			project, iid, ok := gitlab.ParseMRURL(u)
+			if !ok {
+				continue
+			}
+			if mr, err := fetchMR(project, iid); err == nil {
+				out[u] = mr.State != "opened" || mr.ApprovedByMe(me)
+			}
+		}
+		return out
+	}
+}
+
+func (m *Model) applyPostMRs(msg postMRsMsg) {
+	if m.postMRs == nil {
+		m.postMRs = map[string]bool{}
+	}
+	for u, done := range msg {
+		m.postMRs[u] = done
+	}
+	_ = state.Save(postMRsFile, m.postMRs)
 }
 
 // replyInTeams drafts an answer to a chat or @mention; nothing is sent without an OK.

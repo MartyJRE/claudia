@@ -92,6 +92,7 @@ type Model struct {
 	conf         atlassian.ConfluenceSnapshot
 	teams        teams.Snapshot
 	tm           *teams.Client
+	postMRs      map[string]bool // done-ness of MRs in Teams posts that claudia doesn't track
 	repos        []repos.Repo
 	ix           index
 	seen         seenStore
@@ -246,6 +247,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.setFlash(viewSource(msg.src)+": "+msg.err.Error(), true)
 		}
 		m.reindex()
+		if msg.src == srcTeams {
+			return m, m.lookupPostMRs()
+		}
+		return m, nil
+	case postMRsMsg:
+		m.applyPostMRs(msg)
+		m.refilter()
 		return m, nil
 	case tickMsg:
 		var cmds []tea.Cmd

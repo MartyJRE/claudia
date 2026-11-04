@@ -129,7 +129,9 @@ func unansweredMentions(b []byte, ch Channel, myID, gitlabHost string) ([]Waitin
 				hit = &thread[i]
 			}
 		}
-		if hit == nil || slices.ContainsFunc(thread, func(m message) bool { return mine(m) && m.Created.After(hit.Created) }) {
+		// Answered: a reply of mine after it, or my reaction on it or on the thread's post.
+		if hit == nil || slices.ContainsFunc(thread, func(m message) bool { return mine(m) && m.Created.After(hit.Created) }) ||
+			slices.Contains(reactors(hit.Reactions), myID) || slices.Contains(reactors(root.Reactions), myID) {
 			continue
 		}
 		posts, _ := Parse(mustJSON([]message{root}), gitlabHost)
