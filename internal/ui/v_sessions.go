@@ -343,6 +343,10 @@ func (m *Model) keySessions(k string) (tea.Model, tea.Cmd) {
 		if r, ok := m.currentSession(); ok {
 			return m, copyText(r.ID, "session id")
 		}
+	case "sessions.plan":
+		if r, ok := m.currentSession(); ok {
+			m.openPlan(r)
+		}
 	case "sessions.restore":
 		return m.restoreAll()
 	case "sessions.forget_restore":
