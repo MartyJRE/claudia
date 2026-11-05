@@ -33,13 +33,18 @@ func TestEditorFull(t *testing.T) {
 	cursorToNoteViews(t, m, "Inbox")
 	path := m.vis.notes[m.cur[vNotes].pos].note.Path
 
+	t.Setenv("VISUAL", "")
 	t.Setenv("EDITOR", "")
 	pressViews(m, "e")
-	t.Setenv("EDITOR", "hx")
+	t.Setenv("EDITOR", "code -w")
 	m.openReader(m.vis.notes[m.cur[vNotes].pos].note)
 	pressViews(m, "e")
-	if len(*edited) != 2 || (*edited)[0] != "nvim "+path || (*edited)[1] != "hx "+path {
-		t.Errorf("$EDITOR, else nvim: %v", *edited)
+	t.Setenv("VISUAL", "hx")
+	m.openReader(m.vis.notes[m.cur[vNotes].pos].note)
+	pressViews(m, "e")
+	sh := func(ed string) string { return `sh -c ` + ed + ` "$1" sh ` + path }
+	if len(*edited) != 3 || (*edited)[0] != sh("vi") || (*edited)[1] != sh("code -w") || (*edited)[2] != sh("hx") {
+		t.Errorf("$VISUAL, else $EDITOR, else vi:\n%s", strings.Join(*edited, "\n"))
 	}
 	if msg, ok := (*done)(errors.New("exit 1")).(editedMsg); !ok || msg.path != path || msg.err == nil {
 		t.Errorf("the editor's end comes back as editedMsg: %#v", msg)

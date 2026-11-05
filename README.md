@@ -78,7 +78,7 @@ do first?" and small errands.
 
 With an Obsidian vault configured, every ticket shows its notes: the ones in
 its project folder and every note that mentions the key (an epic includes its
-stories' notes). `N` lists them, `enter` reads one, `e` edits it in `$EDITOR`,
+stories' notes). `N` lists them, `enter` reads one, `e` edits it in your editor (`$VISUAL`, else `$EDITOR`, else vi),
 `w` writes a new one into the ticket's folder.
 
 `c` starts the Claude session the item calls for: a review for a review request,
