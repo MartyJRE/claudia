@@ -27,6 +27,9 @@ import (
 
 type Options struct {
 	Popup bool
+	// PlanOnly shows just one session's plan review and quits when it closes,
+	// for `claudia plan` in a tmux popup.
+	PlanOnly bool
 }
 
 // Result is what main does after the TUI exits: outside tmux it attaches to Attach.
@@ -168,6 +171,7 @@ type Model struct {
 
 	frame         int
 	width, height int
+	plan          *planReview
 	flash         string
 	flashErr      bool
 	flashAt       time.Time
@@ -272,6 +276,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		saveLive(m.sessions, m.restore != nil)
 		m.reindex()
 		return m, nil
+	case planSentMsg:
+		return m.planSent(msg)
 	case fetched:
 		m.applyFetched(msg)
 		if msg.err != nil && msg.src != srcRepos {
@@ -359,6 +365,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateKeys(msg)
 		case m.reader != nil:
 			return m.updateReader(msg)
+		case m.plan != nil:
+			return m.updatePlan(msg)
 		case m.prompt != nil:
 			return m.updatePrompt(msg)
 		case m.chooser != nil:
@@ -519,6 +527,9 @@ func (m *Model) View() string {
 	}
 	if m.reader != nil {
 		return m.viewReader()
+	}
+	if m.plan != nil {
+		return m.viewPlan()
 	}
 	header := m.viewHeader()
 	footer := m.viewFooter()

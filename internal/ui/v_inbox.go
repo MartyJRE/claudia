@@ -341,6 +341,10 @@ func (m *Model) keyInbox(k string) (tea.Model, tea.Cmd) {
 		}
 	case "inbox.claude", "inbox.claude_bg":
 		return m.claudeForInbox(it)
+	case "inbox.plan":
+		if it.kind == kClaude {
+			m.openPlan(it.sess)
+		}
 	}
 	return m, nil
 }

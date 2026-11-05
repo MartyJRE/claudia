@@ -37,6 +37,7 @@ var (
 	installLatest = update.Install
 	currentBuild  = update.Current
 	buildInfo     = debug.ReadBuildInfo
+	planFor       = ui.PlanFor
 )
 
 func main() { run(os.Args[1:]) }
@@ -50,6 +51,12 @@ func run(args []string) {
 	}
 	if len(args) > 0 && args[0] == "ctl" {
 		if err := ctl(args[1:]); err != nil {
+			fail(err)
+		}
+		return
+	}
+	if len(args) > 0 && args[0] == "plan" {
+		if err := planCmd(args[1:]); err != nil {
 			fail(err)
 		}
 		return
@@ -147,6 +154,27 @@ func run(args []string) {
 		}
 		fail(syscallExec(bin, []string{"tmux", "attach-session", "-t", t}, os.Environ()))
 	}
+}
+
+// planCmd reviews the plan of the Claude session in a tmux pane: the one
+// given, else the active one, which in a popup is the pane under it.
+func planCmd(args []string) error {
+	pane := ""
+	if len(args) > 0 {
+		pane = args[0]
+	} else {
+		out, err := execCommand("tmux", "display-message", "-p", "#{pane_id}").Output()
+		if err != nil {
+			return fmt.Errorf("claudia plan runs inside tmux: %w", err)
+		}
+		pane = strings.TrimSpace(string(out))
+	}
+	m, err := planFor(pane)
+	if err != nil {
+		return err
+	}
+	_, err = newProgram(m, tea.WithAltScreen()).Run()
+	return err
 }
 
 // home puts you in the dedicated "claudia" tmux session, starting it if needed.

@@ -40,13 +40,17 @@ type Transcript struct {
 	FirstPrompt  string
 	LastPrompt   string
 	// Tail is the last few prompts and replies, oldest first, for a summary.
-	Tail    []Turn
-	Model   string
-	Models  []string
-	PRs     []PRLink
-	Usage   Usage
-	Started time.Time
-	Updated time.Time
+	Tail []Turn
+	// PlanPath is the session's plan file in plan mode; Plan is the text of
+	// its latest ExitPlanMode, for when the file is gone.
+	PlanPath string
+	Plan     string
+	Model    string
+	Models   []string
+	PRs      []PRLink
+	Usage    Usage
+	Started  time.Time
+	Updated  time.Time
 
 	offset   int64
 	size     int64
@@ -108,6 +112,10 @@ type entry struct {
 	CustomTitle string    `json:"customTitle"`
 	LastPrompt  string    `json:"lastPrompt"`
 	AgentColor  string    `json:"agentColor"`
+	Attachment  struct {
+		Type         string `json:"type"`
+		PlanFilePath string `json:"planFilePath"`
+	} `json:"attachment"`
 	PRLink
 	Message struct {
 		Model   string          `json:"model"`
@@ -213,6 +221,10 @@ func (t *Transcript) apply(line []byte) {
 		t.LastPrompt = e.LastPrompt
 	case "agent-color":
 		t.Color = strings.TrimPrefix(e.AgentColor, "default")
+	case "attachment":
+		if e.Attachment.Type == "plan_mode" && e.Attachment.PlanFilePath != "" {
+			t.PlanPath = e.Attachment.PlanFilePath
+		}
 	case "pr-link":
 		for _, p := range t.PRs {
 			if p.URL == e.URL {
@@ -256,6 +268,7 @@ func (t *Transcript) apply(line []byte) {
 			return
 		}
 		t.addTurn("assistant", replyText(e.Message.Content))
+		t.notePlan(e.Message.Content)
 		if m := e.Message.Model; m != "" {
 			if m != t.Model {
 				t.Models = append(t.Models, m)
@@ -284,6 +297,31 @@ func promptText(raw json.RawMessage) string {
 		return ""
 	}
 	return s
+}
+
+// notePlan keeps the plan from an ExitPlanMode call.
+func (t *Transcript) notePlan(raw json.RawMessage) {
+	var blocks []struct {
+		Type  string `json:"type"`
+		Name  string `json:"name"`
+		Input struct {
+			Plan         string `json:"plan"`
+			PlanFilePath string `json:"planFilePath"`
+		} `json:"input"`
+	}
+	if json.Unmarshal(raw, &blocks) != nil {
+		return
+	}
+	for _, b := range blocks {
+		if b.Type == "tool_use" && b.Name == "ExitPlanMode" {
+			if b.Input.Plan != "" {
+				t.Plan = b.Input.Plan
+			}
+			if b.Input.PlanFilePath != "" {
+				t.PlanPath = b.Input.PlanFilePath
+			}
+		}
+	}
 }
 
 // replyText joins the text blocks of a message's content.

@@ -58,6 +58,7 @@ var actions = []action{
 	{"inbox.teams", []string{"T"}, "teams post"},
 	{"inbox.claude", []string{"c"}, "claude does what fits"},
 	{"inbox.claude_bg", []string{"C"}, "same, in the background"},
+	{"inbox.plan", []string{"P"}, "comment on the plan"},
 
 	{"sessions.jump", []string{"enter"}, "jump"},
 	{"sessions.fold", []string{" "}, "fold"},
@@ -74,6 +75,7 @@ var actions = []action{
 	{"sessions.set_ticket", []string{"t"}, "set ticket"},
 	{"sessions.mr", []string{"o"}, "MR"},
 	{"sessions.copy_id", []string{"y"}, "copy id"},
+	{"sessions.plan", []string{"P"}, "comment on the plan"},
 	{"sessions.restore", []string{"X"}, "restore"},
 	{"sessions.forget_restore", []string{"ctrl+x"}, "forget restore"},
 
