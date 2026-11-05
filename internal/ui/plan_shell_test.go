@@ -417,3 +417,55 @@ func TestPlanBurstClosesAndUpwardSelectionShell(t *testing.T) {
 		t.Errorf("the box under the selection's last line stays on screen:\n%s", s)
 	}
 }
+
+func TestPlanMarksCommentedLinesShell(t *testing.T) {
+	m := planModelShell(t)
+	m.width, m.height = 80, 30
+	// planMD: 5 "## Steps", 6..9 the four steps.
+	pressShell(m, "G", "k", "k", "k", "V", "j", "j", "j", "c")
+	typeShell(m, "all four")
+	pressShell(m, "enter", "k", "k", "k", "k", "V", "j", "j", "c") // 5..7, overlapping the first
+	typeShell(m, "steps and the first two")
+	pressShell(m, "enter", "g")
+
+	// margin maps each plan line to the mark in front of it.
+	margin := func() map[int]string {
+		out := map[int]string{}
+		rows, line := m.planRows(m.width)
+		for i, r := range rows {
+			rs := []rune(r)
+			if strings.HasPrefix(plainShell(r), "   ┃") || len(rs) < 3 {
+				continue // a comment's own text
+			}
+			if _, seen := out[line[i]]; !seen {
+				out[line[i]] = strings.TrimSpace(plainShell(string(rs[:3])))
+			}
+		}
+		return out
+	}
+	want := map[int]string{0: "▌", 1: "", 2: "", 3: "", 4: "", 5: "▏", 6: "▏", 7: "▏", 8: "▏", 9: "▏"}
+	got := margin()
+	for line, w := range want {
+		if got[line] != w {
+			t.Errorf("line %d (%q) marked %q, want %q", line, m.plan.lines[line], got[line], w)
+		}
+	}
+
+	// With the cursor in a comment's lines, those are bright, the rest dim.
+	pressShell(m, "G")
+	rows, line := m.planRows(m.width)
+	bright, dim := planRail.Render("▏"), planCover.Render("▏")
+	for i, r := range rows {
+		if strings.HasPrefix(plainShell(r), "   ┃") {
+			continue
+		}
+		switch l := line[i]; {
+		case l >= 6 && l <= 8 && !strings.Contains(r, bright):
+			t.Errorf("line %d is in the cursor's comment, so bright: %q", l, r)
+		case l == 5 && !strings.Contains(r, dim):
+			t.Errorf("line 5 is only in the other comment, so dim: %q", r)
+		case l == 9 && !strings.Contains(r, "▌"):
+			t.Errorf("the cursor line keeps its bar: %q", r)
+		}
+	}
+}

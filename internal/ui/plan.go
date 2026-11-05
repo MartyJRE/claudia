@@ -228,6 +228,7 @@ func (m *Model) planHeight() int { return max(3, m.height-3) }
 
 var (
 	planRail   = lipgloss.NewStyle().Foreground(purple)
+	planCover  = lipgloss.NewStyle().Foreground(lipgloss.Color("#7a5a8c")) // a commented line, dimmer than the cursor's
 	planYou    = lipgloss.NewStyle().Foreground(purple).Bold(true)
 	planSel    = lipgloss.NewStyle().Background(visualGrey)
 	planHead1  = lipgloss.NewStyle().Foreground(blue).Bold(true)
@@ -264,6 +265,7 @@ func planLine(s string, fenced bool) string {
 func (m *Model) planRows(w int) (rows []string, line []int) {
 	p := m.plan
 	from, to := p.selection()
+	cur := p.at() // the comment under the cursor; its lines are marked brighter
 	textW := max(10, w-4)
 	fenced := false
 	add := func(s string, i int) { rows, line = append(rows, s), append(line, i) }
@@ -283,8 +285,13 @@ func (m *Model) planRows(w int) (rows []string, line []int) {
 		inSel := i >= from && i <= to && (p.anchor >= 0 || p.editing == len(p.comments))
 		for _, part := range strings.Split(ansi.Wordwrap(l, textW, ""), "\n") {
 			bar := "  "
-			if i == p.cur || inSel {
+			switch {
+			case i == p.cur || inSel:
 				bar = planRail.Bold(true).Render("▌") + " "
+			case cur >= 0 && i >= p.comments[cur].From && i <= p.comments[cur].To:
+				bar = planRail.Render("▏") + " "
+			case slices.ContainsFunc(p.comments, func(c plan.Comment) bool { return i >= c.From && i <= c.To }):
+				bar = planCover.Render("▏") + " "
 			}
 			text := planLine(part, fenced && !strings.HasPrefix(strings.TrimSpace(l), "```"))
 			if inSel {
