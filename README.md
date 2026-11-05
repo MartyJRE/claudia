@@ -45,10 +45,12 @@ switches between those sessions.
 | 9 | Usage | Tokens and API-equivalent cost per day, plan limits |
 
 **Sessions**, grouped by repo, each with its `/color` dot. Under each one, a
-line says where it stands ("Needs you: OK to merge?", "Waiting: Michal to
-approve", "Done: PR #5 open"). The watcher writes it on Haiku when the session
-stops, from the last few turns, in a separate headless run that leaves the
-session itself alone:
+line says where it stands ("OK to merge?", "Waiting: Michal to approve",
+"PR #5 open"). The watcher writes it on Haiku when the session stops, from the
+last few turns, in a separate headless run that leaves the session itself
+alone. When it says Claude is asking you something, the session shows
+`◆ needs you` and joins the Inbox, as if it were waiting on a prompt; when it
+says the work is done, `✓ done`, so finished sessions stand out to close:
 
 <img src="assets/sessions.svg" width="860" alt="Sessions grouped by repo, with recently closed ones below">
 
@@ -106,6 +108,7 @@ sessions a keypress from coming back.
 | `m` / `S` / `U` | mark sessions, tile the marked ones side by side, send them back |
 | `t` / `J` | set the session's ticket / go to it |
 | `o` / `y` | open its MR / copy its id |
+| `P` | comment inline on its plan, see [Plans](#plans) |
 | `v` / `a` / `space` | group by repo, ticket or flat / show every closed one / fold a group |
 
 `S` tiles the marked sessions (plus the one under the cursor) into one window in
@@ -114,14 +117,46 @@ sends each back to a window of its own in the session it came from.
 
 Every key can be rebound, see `keys` under [Configuration](#configuration).
 
+## Plans
+
+When a session in plan mode shows you its plan, `P` on it (in Sessions, or on
+its Inbox item) opens the plan for inline comments, instead of editing the
+plan file in your editor. Only when you ask for it; plans you're happy with
+you approve in Claude as usual.
+
+`j`/`k` move, `V` selects several lines, `c` comments on the line or the
+selection (`alt+enter` for a new line in the comment), `e` edits and `d`
+deletes the comment under the cursor. `s` sends them all to the session's plan
+prompt as "Tell Claude what to change", each under the lines it's about:
+
+```
+Comments on the plan:
+
+> - Keep state in `migrations/state.json`
+put it in the DB instead, the file is gone after a redeploy
+```
+
+and Claude revises the plan. Comments are kept until they're sent, and follow
+their lines when the plan changes. When the session isn't in tmux or its prompt
+isn't open, the feedback is copied for you to paste.
+
+From inside the session's own tmux window, bind a key to open it as a popup
+over the pane (`claudia plan` finds the session in the pane under it):
+
+```tmux
+bind P display-popup -E -w 90% -h 85% -b rounded -s 'bg=#282c34' -S 'fg=#c678dd' "$HOME/go/bin/claudia plan"
+```
+
 ## Teams
 
 With [Teams set up](#teams-setup), the Inbox also lists Microsoft Teams chats
 where someone else had the last word, and @mentions of you in any channel you
 haven't answered in the thread. They stay until you reply or snooze them with
 `x`, even after you've read them in Teams, so nothing slips. `enter` opens the
-message in Teams; `c` starts a session that reads the conversation and drafts
-your reply, and sends it only after you OK the text.
+message in the Teams app; `c` starts a session that reads the conversation and
+drafts your reply, and sends it only after you OK the text. Replies keep
+Markdown code as code, and can carry images (`--image`, shown in the message)
+and files (`--file`).
 
 Meeting invites you haven't answered show up too; `c` on one asks accept,
 tentative or decline. The brief knows the rest of today's meetings.
@@ -161,6 +196,7 @@ claudia version         # the commit this binary was built from
 claudia setup           # build the native notification helper
 claudia ctl help        # the commands Claude sessions use, see above
 claudia teams help      # Teams: login, waiting, show, reply, react, see below
+claudia plan [pane]     # comment on the plan of the session in a tmux pane (default: the active one)
 ```
 
 ## Requirements
@@ -182,6 +218,7 @@ In `~/.tmux.conf`, to toggle between claudia and the session you came from:
 
 ```tmux
 bind C if -F '#{==:#{session_name},claudia}' 'switch-client -l' 'new-session -A -s claudia "$HOME/go/bin/claudia ui"'
+bind P display-popup -E -w 90% -h 85% -b rounded -s 'bg=#282c34' -S 'fg=#c678dd' "$HOME/go/bin/claudia plan"
 set -g allow-passthrough on   # ticket images through tmux
 ```
 
@@ -340,6 +377,10 @@ gofmt -l . && go mod tidy -diff && go vet ./... && go test -race ./...
 ```
 
 The tmux tests start a private tmux server, so they never touch your sessions.
+`TestPlanReviewInTmux` goes end to end: it builds the binary, runs a stand-in
+Claude plan prompt (`internal/tmux/testdata/fakeplan.py`, needs `python3`) in one
+pane and `claudia plan` in another, types comments through tmux and checks the
+exact bytes the prompt receives. `go test -short` skips it.
 
 The screenshots in `assets/` are rendered from the real UI with demo data:
 

@@ -186,3 +186,35 @@ func TestTailSkipsSidechainsAndSynthetic(t *testing.T) {
 		t.Errorf("tail %+v", tr.Tail)
 	}
 }
+
+func TestPlan(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "s.jsonl")
+	body := `{"parentUuid":"a","attachment":{"type":"plan_mode","planFilePath":"/plans/first.md","planExists":false},"type":"attachment"}` + "\n" +
+		`{"parentUuid":"b","attachment":{"type":"deferred_tools_record"},"type":"attachment"}` + "\n" +
+		`{"type":"assistant","message":{"content":[{"type":"text","text":"here"},{"type":"tool_use","name":"ExitPlanMode","input":{"plan":"# Plan\n1. do it"}}]}}` + "\n"
+	os.WriteFile(path, []byte(body), 0o600)
+	tr := &Transcript{Path: path}
+	if err := tr.Feed(); err != nil {
+		t.Fatal(err)
+	}
+	if tr.PlanPath != "/plans/first.md" || tr.Plan != "# Plan\n1. do it" {
+		t.Fatalf("plan path %q, plan %q", tr.PlanPath, tr.Plan)
+	}
+	add := func(lines ...string) {
+		f, _ := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
+		f.WriteString(strings.Join(lines, "\n") + "\n")
+		f.Close()
+		tr.Feed()
+	}
+	add(`{"type":"assistant","message":{"content":[{"type":"tool_use","name":"ExitPlanMode","input":{"plan":"# Plan v2","planFilePath":"/plans/second.md"}},{"type":"tool_use","name":"Bash","input":{"plan":"not a plan"}}]}}`)
+	if tr.PlanPath != "/plans/second.md" || tr.Plan != "# Plan v2" {
+		t.Errorf("the latest ExitPlanMode wins: %q %q", tr.PlanPath, tr.Plan)
+	}
+	add(`{"type":"assistant","message":{"content":"plain text reply"}}`,
+		`{"type":"assistant","message":{"content":[{"type":"tool_use","name":"ExitPlanMode","input":{}}]}}`,
+		`{"parentUuid":"c","attachment":{"type":"plan_mode"},"type":"attachment"}`,
+		`{"type":"assistant","isSidechain":true,"message":{"content":[{"type":"tool_use","name":"ExitPlanMode","input":{"plan":"a subagent's"}}]}}`)
+	if tr.PlanPath != "/plans/second.md" || tr.Plan != "# Plan v2" {
+		t.Errorf("entries without a plan, and subagents', keep the last one: %q %q", tr.PlanPath, tr.Plan)
+	}
+}

@@ -177,6 +177,10 @@ func keyShell(k string) tea.KeyMsg {
 		"enter": tea.KeyEnter, "esc": tea.KeyEsc, "tab": tea.KeyTab, "shift+tab": tea.KeyShiftTab,
 		"up": tea.KeyUp, "down": tea.KeyDown, " ": tea.KeySpace, "ctrl+x": tea.KeyCtrlX,
 		"ctrl+c": tea.KeyCtrlC, "backspace": tea.KeyBackspace, "home": tea.KeyHome, "end": tea.KeyEnd,
+		"ctrl+d": tea.KeyCtrlD, "ctrl+u": tea.KeyCtrlU, "pgdown": tea.KeyPgDown, "pgup": tea.KeyPgUp, "ctrl+j": tea.KeyCtrlJ,
+	}
+	if k == "alt+enter" {
+		return tea.KeyMsg{Type: tea.KeyEnter, Alt: true}
 	}
 	if t, ok := named[k]; ok {
 		return tea.KeyMsg{Type: t}

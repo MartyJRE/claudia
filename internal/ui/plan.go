@@ -223,7 +223,8 @@ func (m *Model) planSent(msg planSentMsg) (tea.Model, tea.Cmd) {
 	return m.closePlan()
 }
 
-func (m *Model) planHeight() int { return max(3, m.height-4) }
+// planHeight is the rows for the plan: the screen less header, rule and footer.
+func (m *Model) planHeight() int { return max(3, m.height-3) }
 
 var (
 	planRail   = lipgloss.NewStyle().Foreground(purple)
