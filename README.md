@@ -262,9 +262,12 @@ registration of your own:
    `Chat.ReadWrite`, `ChannelMessage.Read.All`, `ChannelMessage.Send`,
    `Team.ReadBasic.All`, `Channel.ReadBasic.All`, `Calendars.ReadWrite` and
    `offline_access`, and have an admin grant consent (`ChannelMessage.Read.All`
-   always needs one). `chat` and `who` also need `Chat.Create` and
-   `User.ReadBasic.All`, and files need `Files.ReadWrite.All`; claudia doesn't
-   ask for those at sign-in yet.
+   always needs one). Optional ones turn on more: `Mail.Read` for mail in the
+   Inbox, `Chat.Create` and `User.ReadBasic.All` for `chat` and `who`, and
+   `Files.ReadWrite.All` for `--file` and `download`. Sign-in asks for whatever
+   the app has been granted, so a permission still waiting on an admin never
+   breaks it; the feature that needs it says so, the rest works. Run
+   `claudia teams login` again once a new one is granted.
 3. Add it to the config and sign in once:
 
 ```json
@@ -287,10 +290,7 @@ work without them. `me` tells your replies apart from others'.
 
 #### Outlook mail
 
-Mail is off until `teams.mail` is set, because it makes sign-in ask for the
-delegated `Mail.Read`, and a scope the app hasn't been granted fails the whole
-sign-in. Add `Mail.Read` to the app, get it consented (yourself at sign-in, or
-by an admin if the tenant requires it), then set:
+Mail shows up once `teams.mail` is set and the app has `Mail.Read`:
 
 ```json
 "mail": {
@@ -299,9 +299,9 @@ by an admin if the tenant requires it), then set:
 }
 ```
 
-and run `claudia teams login` again. `direct` (on by default) lists mail with
-you in To that Outlook files as Focused; each rule lists mail whose sender
-(address or name) and subject contain what it sets, whoever it was sent to.
+`direct` (on by default) lists mail with you in To that Outlook files as
+Focused; each rule lists mail whose sender (address or name) and subject
+contain what it sets, whoever it was sent to.
 Only unread mail from the last two weeks counts.
 
 ```sh

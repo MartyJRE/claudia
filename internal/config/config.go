@@ -80,8 +80,7 @@ type Teams struct {
 	ChannelID string `json:"channel_id"`
 	// Me is your Teams display name, to tell your replies from others'.
 	Me string `json:"me"`
-	// Mail lists unread Outlook mail in the Inbox; setting it makes sign-in
-	// ask for Mail.Read, which the app must have been granted.
+	// Mail lists unread Outlook mail in the Inbox, once the app has Mail.Read.
 	Mail *Mail `json:"mail,omitempty"`
 }
 
