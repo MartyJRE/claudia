@@ -113,7 +113,8 @@ const (
 )
 
 // granted says whether the signed-in token carries a Graph permission, e.g.
-// "Mail.Read". A token saved before claudia kept scopes is refreshed once.
+// "Mail.Read", named with or without the Graph URL and in any case. A token
+// saved before claudia kept scopes is refreshed once.
 func (c *Client) granted(perm string) bool {
 	c.mu.Lock()
 	unknown := c.tok.Scopes == "" && c.tok.Refresh != ""
@@ -128,7 +129,9 @@ func (c *Client) granted(perm string) bool {
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return slices.Contains(strings.Fields(c.tok.Scopes), graphURL+perm)
+	return slices.ContainsFunc(strings.Fields(c.tok.Scopes), func(s string) bool {
+		return strings.EqualFold(strings.TrimPrefix(s, graphURL), perm)
+	})
 }
 
 // need fails a feature whose permission the app hasn't been granted yet.

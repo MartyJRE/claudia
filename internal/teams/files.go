@@ -101,12 +101,13 @@ func (c *Client) folderFor(r ref) (string, error) {
 
 var (
 	fenceRe  = regexp.MustCompile("(?s)```[^\n`]*\n(.*?)\n?```")
-	inlineRe = regexp.MustCompile("`([^`\n]+)`")
+	inlineRe = regexp.MustCompile("```[^\n]+?```|``[^\n]+?``|`[^`\n]+`")
 )
 
 // toHTML escapes plain text for a message body, turning Markdown code
 // (```fenced``` and `inline`) into Teams' code formatting.
 func toHTML(text string) string {
+	text = strings.ReplaceAll(text, "\r\n", "\n")
 	var b strings.Builder
 	for {
 		loc := fenceRe.FindStringSubmatchIndex(text)
@@ -123,7 +124,8 @@ func toHTML(text string) string {
 
 func prose(s string) string {
 	s = inlineRe.ReplaceAllStringFunc(html.EscapeString(s), func(m string) string {
-		return "<code>" + m[1:len(m)-1] + "</code>"
+		n := len(m) - len(strings.TrimLeft(m, "`"))
+		return "<code>" + m[n:len(m)-n] + "</code>"
 	})
 	return strings.ReplaceAll(s, "\n", "<br>")
 }

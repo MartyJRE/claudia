@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -255,5 +256,62 @@ func TestSummarizeStoppedSessions(t *testing.T) {
 	}
 	if len(calls) != 0 {
 		t.Errorf("b was not skipped: %d calls", len(calls))
+	}
+	w.summarize(sess("a", at.Add(time.Minute)))
+	if len(calls) != 0 || len(w.summarizing) != 0 {
+		t.Error("a failure waits for the next turn")
+	}
+	w.summarize(claude.Session{ID: "c", Transcript: &claude.Transcript{Updated: at}})
+	if len(w.summarizing) != 0 {
+		t.Error("a session without a tail took the slot")
+	}
+	w.summarize(sess("a", at.Add(2*time.Minute)))
+	<-calls
+	release <- summary.Summary{Text: "Done: merged", For: at.Add(2 * time.Minute)}
+	w.summarizing <- struct{}{}
+	<-w.summarizing
+	want := summary.Summary{Text: "Done: merged", For: at.Add(2 * time.Minute)}
+	if got := summary.Load()["a"]; got != want || w.summaries["a"] != want {
+		t.Errorf("a later success clears the error: stored %+v, held %+v", got, w.summaries["a"])
+	}
+}
+
+func TestSessionsSummarizeOnlyStopped(t *testing.T) {
+	privateServer(t)
+	catchNotes(t)
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	calls := make(chan string, 4)
+	old := summarize
+	summarize = func(s claude.Session) summary.Summary {
+		calls <- s.ID
+		return summary.Summary{Text: "Done: " + s.ID, For: s.Updated}
+	}
+	t.Cleanup(func() { summarize = old })
+	prof := t.TempDir()
+	reg := registry{t, prof}
+	os.MkdirAll(filepath.Join(prof, "projects", "p"), 0o755)
+	for id, st := range map[string]claude.Status{"aaaaaaaa-busy": claude.StatusBusy, "bbbbbbbb-shell": claude.StatusShell, "cccccccc-idle": claude.StatusIdle, "dddddddd-wait": claude.StatusWaiting} {
+		os.WriteFile(filepath.Join(prof, "projects", "p", id+".jsonl"), []byte(
+			`{"type":"user","timestamp":"2026-11-05T09:00:00Z","message":{"content":"go"}}`+"\n"), 0o600)
+		reg.set(id, os.Getpid(), "/code/p", st)
+	}
+	w := newWatcher(claude.Profile{Name: "work", Dir: prof})
+	w.summaries = map[string]summary.Summary{}
+	w.summarizing = make(chan struct{}, 4)
+	w.sessions()
+	for range cap(w.summarizing) {
+		w.summarizing <- struct{}{}
+	}
+	close(calls)
+	var got []string
+	for id := range calls {
+		got = append(got, id)
+	}
+	slices.Sort(got)
+	if !slices.Equal(got, []string{"cccccccc-idle", "dddddddd-wait"}) {
+		t.Errorf("summarized %v", got)
+	}
+	if s := summary.Load()["dddddddd-wait"]; s.Text != "Done: dddddddd-wait" || !s.For.Equal(time.Date(2026, 11, 5, 9, 0, 0, 0, time.UTC)) {
+		t.Errorf("stored %+v", s)
 	}
 }

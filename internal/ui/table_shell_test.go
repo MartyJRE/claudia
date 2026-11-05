@@ -140,6 +140,50 @@ func TestHighlightSpanShell(t *testing.T) {
 	}
 }
 
+func TestTableSubLinesShell(t *testing.T) {
+	m := &Model{width: 30}
+	cols := []col{{"N", 4, 0}, {"NAME", 0, 0}}
+	cell := func(i int, sel bool) []string { return []string{fmt.Sprint(i), fmt.Sprintf("item-%02d", i)} }
+	sub := func(i int) string {
+		if i%2 == 0 {
+			return fmt.Sprintf("sub-%02d", i)
+		}
+		return ""
+	}
+	render := func(cur *cursor, h int) []string {
+		var out []string
+		for _, l := range strings.Split(plainShell(m.table(cols, 6, cur, h, cell, "", sub)), "\n") {
+			out = append(out, strings.TrimRight(l, " "))
+		}
+		return out
+	}
+	cur := &cursor{}
+	if got, want := render(cur, 6), []string{"   N    NAME", " ▌ 0    item-00", " ▌      sub-00", "   1    item-01", "   2    item-02", "        sub-02"}; !slices.Equal(got, want) {
+		t.Errorf("sub lines sit under their row at its main column, barred when selected:\n%q\n%q", got, want)
+	}
+	cur.pos = 5
+	if got, want := render(cur, 6), []string{"   N    NAME", "   3    item-03", "   4    item-04", "        sub-04", " ▌ 5    item-05", ""}; !slices.Equal(got, want) || cur.offset != 3 {
+		t.Errorf("two-line rows count double when scrolling to the cursor: offset %d\n%q", cur.offset, got)
+	}
+	if got := render(cur, 8); cur.offset != 1 || got[1] != "   1    item-01" || got[7] != " ▌ 5    item-05" {
+		t.Errorf("more room scrolls back as far as fits: offset %d\n%q", cur.offset, got)
+	}
+	cur.pos, cur.offset = 2, 0
+	if got := render(cur, 2); cur.offset != 2 || !slices.Equal(got, []string{"   N    NAME", " ▌ 2    item-02"}) {
+		t.Errorf("a two-line cursor row in a one-line space shows without its sub line: offset %d %q", cur.offset, got)
+	}
+
+	cur = &cursor{}
+	long := func(int) string { return strings.Repeat("x", 40) }
+	lines := strings.Split(plainShell(m.table(cols, 1, cur, 3, cell, "", long)), "\n")
+	if lines[2] != " ▌      "+strings.Repeat("x", 20)+"…" {
+		t.Errorf("a long sub line is cut to the width: %q", lines[2])
+	}
+	if got := plainShell(m.table(cols, 2, cur, 3, cell, "", nil)); strings.Count(got, "item-") != 2 {
+		t.Errorf("a nil sub keeps rows to one line:\n%s", got)
+	}
+}
+
 func TestCursorClampShell(t *testing.T) {
 	for _, c := range []struct{ pos, n, want int }{{5, 3, 2}, {-1, 3, 0}, {1, 3, 1}, {4, 0, 0}} {
 		cur := cursor{pos: c.pos}

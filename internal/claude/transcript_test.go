@@ -1,10 +1,14 @@
 package claude
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 const fixture = `{"type":"mode","mode":"normal","sessionId":"s1"}
@@ -106,5 +110,79 @@ func TestTail(t *testing.T) {
 	}
 	if !strings.HasSuffix(tr.Tail[0].Text, "Want me to commit?") || len([]rune(tr.Tail[1].Text)) != 1501 {
 		t.Errorf("a reply over tool calls is one turn, long text keeps its end: %+v", tr.Tail[:2])
+	}
+}
+
+func TestAddTurn(t *testing.T) {
+	tr := &Transcript{}
+	tr.addTurn("user", "")
+	tr.addTurn("assistant", "")
+	if tr.Tail != nil {
+		t.Fatalf("empty text adds nothing: %+v", tr.Tail)
+	}
+	tr.addTurn("user", "a")
+	tr.addTurn("user", "b")
+	tr.addTurn("assistant", "c")
+	tr.addTurn("assistant", "d")
+	want := []Turn{{"user", "a"}, {"user", "b"}, {"assistant", "c\nd"}}
+	if !slices.Equal(tr.Tail, want) {
+		t.Errorf("prompts stay apart, a reply joins up: %+v", tr.Tail)
+	}
+	for i := range 10 {
+		tr.addTurn([]string{"user", "assistant"}[i%2], strconv.Itoa(i))
+	}
+	want = []Turn{{"user", "4"}, {"assistant", "5"}, {"user", "6"}, {"assistant", "7"}, {"user", "8"}, {"assistant", "9"}}
+	if !slices.Equal(tr.Tail, want) {
+		t.Errorf("the last %d turns kept: %+v", tailTurns, tr.Tail)
+	}
+}
+
+func TestClip(t *testing.T) {
+	exact := strings.Repeat("é", turnChars)
+	if clip(exact) != exact || clip("") != "" {
+		t.Error("text at the limit stays whole")
+	}
+	got := clip("drop me " + strings.Repeat("ž", turnChars-3) + "end")
+	if want := "…" + strings.Repeat("ž", turnChars-3) + "end"; got != want || !utf8.ValidString(got) {
+		t.Errorf("clipped on runes, keeping the end: %d runes", utf8.RuneCountInString(got))
+	}
+	tr := &Transcript{}
+	tr.addTurn("assistant", strings.Repeat("a", turnChars))
+	tr.addTurn("assistant", "question?")
+	if s := tr.Tail[0].Text; utf8.RuneCountInString(s) != turnChars+1 || !strings.HasPrefix(s, "…a") || !strings.HasSuffix(s, "a\nquestion?") {
+		t.Errorf("a joined reply is clipped again: %q", s[:10])
+	}
+}
+
+func TestReplyText(t *testing.T) {
+	for in, want := range map[string]string{
+		`"a plain prompt"`: "",
+		`not json`:         "",
+		`[]`:               "",
+		`[{"type":"tool_use","name":"Bash"},{"type":"tool_result","content":"ok"}]`:                                      "",
+		`[{"type":"text","text":"  one \n"},{"type":"text","text":"   "},{"type":"image"},{"type":"text","text":"two"}]`: "one\ntwo",
+		`[{"type":"thinking","text":"hmm"},{"type":"text","text":"done"}]`:                                               "done",
+	} {
+		if got := replyText(json.RawMessage(in)); got != want {
+			t.Errorf("replyText(%s) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestTailSkipsSidechainsAndSynthetic(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "s.jsonl")
+	os.WriteFile(path, []byte(`{"type":"user","message":{"content":"ask"}}
+{"type":"assistant","isSidechain":true,"message":{"content":[{"type":"text","text":"subagent"}]}}
+{"type":"assistant","message":{"model":"<synthetic>","content":[{"type":"text","text":"No response requested."}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","content":"ok"}]}}
+{"type":"user","message":{"content":"  <local-command-stdout>x</local-command-stdout>"}}
+{"type":"assistant","message":{"content":[{"type":"text","text":"answer"}]}}
+`), 0o600)
+	tr := &Transcript{Path: path}
+	if err := tr.Feed(); err != nil {
+		t.Fatal(err)
+	}
+	if want := []Turn{{"user", "ask"}, {"assistant", "answer"}}; !slices.Equal(tr.Tail, want) {
+		t.Errorf("tail %+v", tr.Tail)
 	}
 }

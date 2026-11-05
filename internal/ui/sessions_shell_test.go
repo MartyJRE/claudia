@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/lipgloss"
+
 	"github.com/MartyJRE/claudia/internal/claude"
 	"github.com/MartyJRE/claudia/internal/gitlab"
 	"github.com/MartyJRE/claudia/internal/links"
@@ -473,5 +475,99 @@ func TestSessionsNeedsYouFromSummaryShell(t *testing.T) {
 	r.summaryFor, r.Live.Status = at, claude.StatusBusy
 	if r.needsYou() {
 		t.Error("working again: not waiting on you")
+	}
+}
+
+func TestNeedsYouShell(t *testing.T) {
+	at := time.Now().Add(-time.Minute)
+	tr := &claude.Transcript{Updated: at}
+	live := func(s claude.Status) *claude.Live { return &claude.Live{Status: s} }
+	for _, c := range []struct {
+		name string
+		r    row
+		want bool
+	}{
+		{"closed", row{Session: claude.Session{Transcript: tr}, summary: "Needs you: x", summaryFor: at}, false},
+		{"waiting on a prompt", row{Session: claude.Session{Live: live(claude.StatusWaiting)}}, true},
+		{"busy, though the summary asks", row{Session: claude.Session{Transcript: tr, Live: live(claude.StatusBusy)}, summary: "Needs you: x", summaryFor: at}, false},
+		{"in a shell command", row{Session: claude.Session{Transcript: tr, Live: live(claude.StatusShell)}, summary: "Needs you: x", summaryFor: at}, false},
+		{"idle, the summary of this turn asks", row{Session: claude.Session{Transcript: tr, Live: live(claude.StatusIdle)}, summary: "Needs you: x", summaryFor: at}, true},
+		{"idle, an earlier turn's summary", row{Session: claude.Session{Transcript: tr, Live: live(claude.StatusIdle)}, summary: "Needs you: x", summaryFor: at.Add(-time.Second)}, false},
+		{"idle, waiting on someone else", row{Session: claude.Session{Transcript: tr, Live: live(claude.StatusIdle)}, summary: "Waiting: Michal", summaryFor: at}, false},
+		{"idle, the prefix in another case", row{Session: claude.Session{Transcript: tr, Live: live(claude.StatusIdle)}, summary: "needs you: x", summaryFor: at}, false},
+		{"idle without a transcript", row{Session: claude.Session{Live: live(claude.StatusIdle)}, summary: "Needs you: x"}, false},
+	} {
+		if got := c.r.needsYou(); got != c.want {
+			t.Errorf("%s: needsYou %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+func TestSummaryTextShell(t *testing.T) {
+	prev := lipgloss.ColorProfile()
+	t.Cleanup(func() { lipgloss.SetColorProfile(prev) })
+	lipgloss.SetColorProfile(0) // termenv.TrueColor
+	at := time.Now()
+	asking := row{Session: claude.Session{Transcript: &claude.Transcript{Updated: at}, Live: &claude.Live{Status: claude.StatusIdle}}, summary: "Needs you:  OK to merge?", summaryFor: at}
+	stale := asking
+	stale.summaryFor = at.Add(-time.Hour)
+	yellowS, blueS := lipgloss.NewStyle().Foreground(yellow), lipgloss.NewStyle().Foreground(blue)
+	for _, c := range []struct {
+		name  string
+		r     row
+		under bool
+		want  string
+	}{
+		{"nothing written", row{}, true, ""},
+		{"under a needs-you status", asking, true, yellowS.Render("OK to merge?")},
+		{"in the detail", asking, false, yellowS.Render("Needs you:  OK to merge?")},
+		{"for an earlier turn", stale, true, yellowS.Render("Needs you:  OK to merge?")},
+		{"waiting on someone", row{summary: "Waiting: Michal"}, true, blueS.Render("Waiting: Michal")},
+		{"anything else", row{summary: "Done: PR open"}, true, sDim.Render("Done: PR open")},
+	} {
+		if got := summaryText(c.r, c.under); got != c.want {
+			t.Errorf("%s: %q, want %q", c.name, got, c.want)
+		}
+	}
+}
+
+func TestHeaderAndInboxCountNeedsYouShell(t *testing.T) {
+	m := sessionsModelShell(t)
+	claudeItems := func() []string {
+		var out []string
+		for _, it := range m.inbox() {
+			if it.kind == kClaude {
+				out = append(out, it.text)
+			}
+		}
+		return out
+	}
+	if h := plainShell(m.viewHeader()); !strings.Contains(h, "1 needs you") {
+		t.Fatalf("the waiting session counts: %s", h)
+	}
+	before := len(claudeItems())
+	i := slices.IndexFunc(m.sessions, func(r row) bool {
+		return r.live() && r.Transcript != nil && r.Live.Status != claude.StatusWaiting
+	})
+	if i < 0 {
+		t.Fatal("no live session with a transcript in the fixture")
+	}
+	r := &m.sessions[i]
+	r.Live.Status = claude.StatusIdle
+	r.summary, r.summaryFor = "Needs you: pick a name", r.Updated
+	if h := plainShell(m.viewHeader()); !strings.Contains(h, "2 needs you") {
+		t.Errorf("an asking summary counts too: %s", h)
+	}
+	if got := claudeItems(); len(got) != before+1 || !slices.Contains(got, r.Name()+" · pick a name") {
+		t.Errorf("the inbox adds it with what it asks: %q", got)
+	}
+	r.summary = "Needs you:"
+	if got := claudeItems(); !slices.Contains(got, r.Name()) {
+		t.Errorf("with nothing after the prefix only the name: %q", got)
+	}
+	w := slices.IndexFunc(m.sessions, func(r row) bool { return r.live() && r.Live.Status == claude.StatusWaiting })
+	m.sessions[w].summary, m.sessions[w].summaryFor = "Needs you: stale", time.Time{}
+	if got := claudeItems(); !slices.Contains(got, m.sessions[w].Name()) {
+		t.Errorf("a session waiting on a prompt doesn't add its summary: %q", got)
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -48,6 +49,33 @@ func TestEditorFull(t *testing.T) {
 	}
 	if msg, ok := (*done)(errors.New("exit 1")).(editedMsg); !ok || msg.path != path || msg.err == nil {
 		t.Errorf("the editor's end comes back as editedMsg: %#v", msg)
+	}
+}
+
+func TestEditorCmdFull(t *testing.T) {
+	path := `/vault/it's "a" $(note).md`
+	for _, c := range []struct{ visual, editor, want string }{
+		{"", "", "vi"},
+		{"", "code -w", "code -w"},
+		{"hx", "code -w", "hx"},
+		{"nvim", "", "nvim"},
+	} {
+		t.Setenv("VISUAL", c.visual)
+		t.Setenv("EDITOR", c.editor)
+		cmd := editorCmd(path)
+		if want := []string{"sh", "-c", c.want + ` "$1"`, "sh", path}; !slices.Equal(cmd.Args, want) {
+			t.Errorf("VISUAL=%q EDITOR=%q: %q, want %q", c.visual, c.editor, cmd.Args, want)
+		}
+	}
+	dir := t.TempDir()
+	out := filepath.Join(dir, "got")
+	t.Setenv("VISUAL", "printf %s >"+out)
+	note := filepath.Join(dir, `odd 'name' $(x).md`)
+	if err := editorCmd(note).Run(); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(out); string(b) != note {
+		t.Errorf("the path reaches the editor as one argument, unexpanded: %q", b)
 	}
 }
 

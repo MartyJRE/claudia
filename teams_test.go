@@ -98,9 +98,14 @@ func TestTeamsCmd(t *testing.T) {
 		t.Errorf("nothing waiting prints []: %q", r.out)
 	}
 	f.snap.Waiting = []teams.Waiting{{Ref: "chat/x/1", From: "Lukas"}}
-	if r := claudia(t, "teams", "waiting"); !strings.Contains(r.out, `"chat/x/1"`) {
-		t.Errorf("waiting: %q", r.out)
+	if r := claudia(t, "teams", "waiting"); !strings.Contains(r.out, `"chat/x/1"`) || r.err != "" {
+		t.Errorf("waiting: %+v", r)
 	}
+	f.snap.MailErr = "Teams GET: 403 Forbidden"
+	if r := claudia(t, "teams", "waiting"); r.code != -1 || !strings.Contains(r.out, `"chat/x/1"`) || r.err != "Outlook mail: Teams GET: 403 Forbidden\n" {
+		t.Errorf("a mail error is said on stderr, the rest still listed: %+v", r)
+	}
+	f.snap.MailErr = ""
 	if r := claudia(t, "teams", "show", "chat/x/1"); !strings.Contains(r.out, "Lukas: got a sec?") || !strings.Contains(r.out, "📎 a.pdf  https://sp/a.pdf") {
 		t.Errorf("show: %q", r.out)
 	}

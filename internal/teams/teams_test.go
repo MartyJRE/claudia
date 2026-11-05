@@ -141,6 +141,8 @@ func (f *fake) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			f.t.Errorf("calendar times should come in UTC")
 		}
 		io.WriteString(w, eventsJSON)
+	case r.URL.Path == "/graph/me/mailFolders/inbox/messages":
+		io.WriteString(w, mailJSON)
 	case r.URL.Path == "/graph/me/joinedTeams":
 		io.WriteString(w, `{"value":[{"id":"T","displayName":"Technology"}]}`)
 	case r.URL.Path == "/graph/teams/T/channels":

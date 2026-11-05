@@ -2,8 +2,12 @@ package summary
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -59,5 +63,73 @@ func TestStaleAndStore(t *testing.T) {
 	}
 	if !Stale(session(at.Add(time.Minute), turn), have) {
 		t.Error("the session moved on")
+	}
+	if Stale(session(at.In(time.FixedZone("CET", 3600)), turn), have) {
+		t.Error("the same instant in another zone is not news")
+	}
+	Put("s1", Summary{Text: "Needs you: merge?", For: at, Err: "x"})
+	if got := Load(); len(got) != 2 || got["s1"] != (Summary{Text: "Needs you: merge?", For: at, Err: "x"}) {
+		t.Errorf("Put replaces one entry: %+v", got)
+	}
+}
+
+func TestLoadAndPutFailures(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", dir)
+	os.MkdirAll(filepath.Join(dir, "claudia"), 0o755)
+	os.WriteFile(filepath.Join(dir, "claudia", file), []byte("{not json"), 0o600)
+	if got := Load(); got == nil || len(got) != 0 {
+		t.Errorf("a broken file loads as empty: %+v", got)
+	}
+	if err := Put("s1", Summary{Text: "a"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := Load(); len(got) != 1 || got["s1"].Text != "a" {
+		t.Errorf("Put over a broken file: %+v", got)
+	}
+	blocked := filepath.Join(t.TempDir(), "file")
+	os.WriteFile(blocked, nil, 0o600)
+	t.Setenv("XDG_STATE_HOME", blocked)
+	if err := Put("s1", Summary{}); err == nil {
+		t.Error("an unwritable state dir fails")
+	}
+}
+
+func TestPutConcurrently(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	var wg sync.WaitGroup
+	for i := range 20 {
+		wg.Add(1)
+		go func() { defer wg.Done(); Put(strconv.Itoa(i), Summary{Text: strconv.Itoa(i)}) }()
+	}
+	wg.Wait()
+	if got := Load(); len(got) != 20 || got["7"].Text != "7" {
+		t.Errorf("no Put lost another's entry: %d", len(got))
+	}
+}
+
+func TestGenerateText(t *testing.T) {
+	t.Cleanup(func() { headless = nil })
+	for _, tc := range []struct{ out, want string }{
+		{"Done: shipped", "Done: shipped"},
+		{"\n\n  \"Waiting: Michal\"  \nsecond line", "Waiting: Michal"},
+		{`"quoted "inner" text"`, `quoted "inner" text`},
+		{"", ""},
+		{"   \n  ", ""},
+	} {
+		headless = func(string, string, string, ...string) (string, error) { return tc.out, nil }
+		if got := Generate(session(time.Time{})).Text; got != tc.want {
+			t.Errorf("%q gave %q, want %q", tc.out, got, tc.want)
+		}
+	}
+	var in string
+	headless = func(_, input, _ string, _ ...string) (string, error) { in = input; return "x", nil }
+	Generate(claude.Session{ID: "abc", Transcript: &claude.Transcript{FirstPrompt: "fix it\nplease"}})
+	if in != "Title: fix it\n\n" {
+		t.Errorf("an untitled session is named by its first prompt line: %q", in)
+	}
+	headless = func(string, string, string, ...string) (string, error) { return "Done: half", errors.New("exit 1") }
+	if s := Generate(session(time.Time{})); s.Text != "Done: half" || s.Err != "exit 1" {
+		t.Errorf("text and error both kept: %+v", s)
 	}
 }
