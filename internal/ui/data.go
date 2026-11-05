@@ -10,6 +10,7 @@ import (
 	"github.com/MartyJRE/claudia/internal/gitlab"
 	"github.com/MartyJRE/claudia/internal/repos"
 	"github.com/MartyJRE/claudia/internal/state"
+	"github.com/MartyJRE/claudia/internal/summary"
 	"github.com/MartyJRE/claudia/internal/teams"
 )
 
@@ -51,9 +52,10 @@ func (m *Model) loadSessions() tea.Cmd {
 	store := m.store
 	return func() tea.Msg {
 		loc := newLocator()
+		sums := summary.Load()
 		var rows []row
 		for _, s := range listSessions(store) {
-			r := row{Session: s}
+			r := row{Session: s, summary: sums[s.ID].Text}
 			if s.Live != nil {
 				if p, ok := locatePane(loc, s.Live.PID); ok {
 					r.pane = &p

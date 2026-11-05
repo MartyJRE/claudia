@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 	"github.com/MartyJRE/claudia/internal/config"
 	"github.com/MartyJRE/claudia/internal/gitlab"
 	"github.com/MartyJRE/claudia/internal/state"
+	"github.com/MartyJRE/claudia/internal/summary"
 	"github.com/MartyJRE/claudia/internal/tmux"
 	"github.com/MartyJRE/claudia/internal/update"
 )
@@ -89,6 +91,40 @@ type watcher struct {
 	approved map[string]bool
 	mentions map[string]bool
 	baseline [3]bool
+
+	summaries   map[string]summary.Summary
+	summarizing chan struct{}
+	summaryMu   sync.Mutex
+}
+
+var summarize = summary.Generate
+
+// summarize writes a fresh summary for a stopped session that moved on, one
+// at a time; a failure keeps the last good text and waits for the next turn.
+func (w *watcher) summarize(s claude.Session) {
+	w.summaryMu.Lock()
+	stale := summary.Stale(s, w.summaries)
+	w.summaryMu.Unlock()
+	if !stale {
+		return
+	}
+	select {
+	case w.summarizing <- struct{}{}:
+	default:
+		return
+	}
+	go func() {
+		defer func() { <-w.summarizing }()
+		sum := summarize(s)
+		w.summaryMu.Lock()
+		if sum.Err != "" {
+			sum.Text = w.summaries[s.ID].Text
+			fmt.Fprintln(os.Stderr, time.Now().Format(time.TimeOnly), "summary:", sum.Err)
+		}
+		w.summaries[s.ID] = sum
+		w.summaryMu.Unlock()
+		_ = summary.Put(s.ID, sum)
+	}()
 }
 
 // Run polls until killed. makeBrief writes the inbox brief; it runs on the
@@ -110,6 +146,9 @@ func Run(makeBrief func()) error {
 		pipeline: map[string]string{},
 		approved: map[string]bool{},
 		mentions: map[string]bool{},
+
+		summaries:   summary.Load(),
+		summarizing: make(chan struct{}, 1),
 	}
 	w.atl, _ = atlassian.New()
 
@@ -173,6 +212,9 @@ func (w *watcher) sessions() {
 		seen[s.ID] = true
 		prev, had := w.status[s.ID]
 		w.status[s.ID] = s.Live.Status
+		if !s.Live.Status.Working() && w.summarizing != nil {
+			w.summarize(s)
+		}
 		p, inTmux := loc.Pane(s.Live.PID)
 		if inTmux && s.Live.Status == claude.StatusWaiting {
 			waiting[p.WindowID] = true

@@ -62,6 +62,16 @@ func Generate(data any, previous, configDir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if previous == "" {
+		previous = "(none yet)"
+	}
+	return Headless(instructions, "Previous brief:\n"+previous+"\n\nCurrent state ("+time.Now().Format("Mon 2 Jan 15:04")+"):\n"+string(payload), configDir)
+}
+
+// Headless runs one tool-less `claude -p` that leaves no session behind, with
+// input on stdin, and returns what it printed. extra goes after the system
+// prompt, e.g. "--model", "haiku".
+func Headless(system, input, configDir string, extra ...string) (string, error) {
 	bin, err := exec.LookPath("claude")
 	if err != nil {
 		home, _ := os.UserHomeDir()
@@ -69,12 +79,10 @@ func Generate(data any, previous, configDir string) (string, error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, bin, "-p", "--no-session-persistence", "--tools", "", "--system-prompt", instructions)
+	args := append([]string{"-p", "--no-session-persistence", "--tools", "", "--system-prompt", system}, extra...)
+	cmd := exec.CommandContext(ctx, bin, args...)
 	cmd.Env = append(os.Environ(), "CLAUDE_CONFIG_DIR="+configDir)
-	if previous == "" {
-		previous = "(none yet)"
-	}
-	cmd.Stdin = strings.NewReader("Previous brief:\n" + previous + "\n\nCurrent state (" + time.Now().Format("Mon 2 Jan 15:04") + "):\n" + string(payload))
+	cmd.Stdin = strings.NewReader(input)
 	out, err := cmd.Output()
 	if err != nil {
 		if ee, ok := err.(*exec.ExitError); ok && len(ee.Stderr) > 0 {

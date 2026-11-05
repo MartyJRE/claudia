@@ -3,6 +3,7 @@ package claude
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -70,5 +71,40 @@ func TestTicketFrom(t *testing.T) {
 		if got := TicketFrom(in); got != want {
 			t.Errorf("TicketFrom(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+func TestTail(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "s.jsonl")
+	var body string
+	line := func(typ, content string) {
+		body += `{"type":"` + typ + `","message":{"content":` + content + `}}` + "\n"
+	}
+	line("user", `"first ask"`)
+	for i := range 5 {
+		line("assistant", `[{"type":"text","text":"part `+string(rune('a'+i))+`"},{"type":"tool_use","name":"Bash"}]`)
+		line("user", `[{"type":"tool_result","content":"ok"}]`)
+	}
+	line("assistant", `[{"type":"text","text":"Want me to commit?"}]`)
+	line("user", `"<command-name>/clear</command-name>"`)
+	line("user", `[{"type":"text","text":"yes, `+strings.Repeat("x", 2000)+`"},{"type":"image"}]`)
+	line("user", `"q2"`)
+	line("assistant", `[{"type":"text","text":"r2"}]`)
+	line("user", `"q3"`)
+	line("assistant", `[{"type":"text","text":"r3"}]`)
+	os.WriteFile(path, []byte(body), 0o600)
+	tr := &Transcript{Path: path}
+	if err := tr.Feed(); err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, x := range tr.Tail {
+		got = append(got, x.Role[:1]+":"+x.Text[:min(len(x.Text), 12)])
+	}
+	if strings.Join(got, " ") != "a:part a\npart  u:…xxxxxxxxx u:q2 a:r2 u:q3 a:r3" {
+		t.Errorf("tail: %q", got)
+	}
+	if !strings.HasSuffix(tr.Tail[0].Text, "Want me to commit?") || len([]rune(tr.Tail[1].Text)) != 1501 {
+		t.Errorf("a reply over tool calls is one turn, long text keeps its end: %+v", tr.Tail[:2])
 	}
 }

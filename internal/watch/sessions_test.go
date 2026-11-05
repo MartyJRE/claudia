@@ -7,8 +7,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/MartyJRE/claudia/internal/claude"
+	"github.com/MartyJRE/claudia/internal/summary"
 	"github.com/MartyJRE/claudia/internal/tmux"
 )
 
@@ -211,5 +213,47 @@ func TestSessionsBorrowForAttachedClient(t *testing.T) {
 	}
 	if ls := tmux.Borrowed(); len(ls) != 1 || ls[0].Session != "bill" || ls[0].Viewed {
 		t.Errorf("links %+v", ls)
+	}
+}
+
+func TestSummarizeStoppedSessions(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	calls := make(chan string, 4)
+	release := make(chan summary.Summary)
+	old := summarize
+	summarize = func(s claude.Session) summary.Summary { calls <- s.ID; return <-release }
+	t.Cleanup(func() { summarize = old })
+	at := time.Date(2026, 11, 5, 9, 0, 0, 0, time.UTC)
+	sess := func(id string, at time.Time) claude.Session {
+		return claude.Session{ID: id, Transcript: &claude.Transcript{Updated: at, Tail: []claude.Turn{{Role: "user", Text: "hi"}}}}
+	}
+	w := &watcher{summaries: map[string]summary.Summary{}, summarizing: make(chan struct{}, 1)}
+	w.summarize(sess("a", at))
+	w.summarize(sess("b", at)) // one at a time: b waits for a later poll
+	if id := <-calls; id != "a" {
+		t.Fatalf("summarized %s", id)
+	}
+	release <- summary.Summary{Text: "Needs you: merge?", For: at}
+	w.summarizing <- struct{}{} // wait until a's run let go
+	<-w.summarizing
+	if got := summary.Load()["a"]; got.Text != "Needs you: merge?" {
+		t.Errorf("stored %+v", got)
+	}
+	w.summarize(sess("a", at))
+	select {
+	case id := <-calls:
+		t.Fatalf("summarized %s again without a new turn", id)
+	default:
+	}
+	w.summarize(sess("a", at.Add(time.Minute)))
+	<-calls
+	release <- summary.Summary{For: at.Add(time.Minute), Err: "not logged in"}
+	w.summarizing <- struct{}{}
+	<-w.summarizing
+	if got := summary.Load()["a"]; got.Text != "Needs you: merge?" || got.Err != "not logged in" {
+		t.Errorf("a failure keeps the last text: %+v", got)
+	}
+	if len(calls) != 0 {
+		t.Errorf("b was not skipped: %d calls", len(calls))
 	}
 }

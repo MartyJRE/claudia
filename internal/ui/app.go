@@ -58,8 +58,9 @@ const detailHeight = 8
 
 type row struct {
 	claude.Session
-	pane *tmux.Pane
-	host string
+	pane    *tmux.Pane
+	host    string
+	summary string // where the session stands, written by the watcher
 }
 
 func (r row) live() bool { return r.Live != nil }
