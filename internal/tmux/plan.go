@@ -31,25 +31,30 @@ var pause = func() { time.Sleep(150 * time.Millisecond) }
 
 // SendPlanFeedback answers the plan prompt in pane with feedback: it picks
 // "Tell Claude what to change", pastes the text (bracketed, so its newlines
-// don't submit) and presses enter.
+// don't submit) and presses enter, letting the prompt redraw between steps.
 func SendPlanFeedback(pane, feedback string) error {
 	opt, err := PlanPrompt(pane)
 	if err != nil {
 		return err
 	}
-	if _, err := tm("send-keys", "-t", pane, opt); err != nil {
-		return err
+	steps := []func() error{
+		func() error { _, err := tm("send-keys", "-t", pane, opt); return err },
+		func() error {
+			load := exec.Command("tmux", "load-buffer", "-b", "claudia-plan", "-")
+			load.Stdin = strings.NewReader(feedback)
+			if out, err := load.CombinedOutput(); err != nil {
+				return &cmdError{string(out), err}
+			}
+			_, err := tm("paste-buffer", "-p", "-d", "-b", "claudia-plan", "-t", pane)
+			return err
+		},
+		func() error { _, err := tm("send-keys", "-t", pane, "Enter"); return err },
 	}
-	pause()
-	load := exec.Command("tmux", "load-buffer", "-b", "claudia-plan", "-")
-	load.Stdin = strings.NewReader(feedback)
-	if out, err := load.CombinedOutput(); err != nil {
-		return &cmdError{string(out), err}
+	for _, step := range steps {
+		pause()
+		if err := step(); err != nil {
+			return err
+		}
 	}
-	if _, err := tm("paste-buffer", "-p", "-d", "-b", "claudia-plan", "-t", pane); err != nil {
-		return err
-	}
-	pause()
-	_, err = tm("send-keys", "-t", pane, "Enter")
-	return err
+	return nil
 }

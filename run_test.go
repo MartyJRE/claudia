@@ -521,3 +521,33 @@ func TestCtlHome(t *testing.T) {
 		t.Errorf("ran %q", ran)
 	}
 }
+
+func TestPlanCommand(t *testing.T) {
+	isolate(t)
+	var asked []string
+	var err error
+	swap(t, &planFor, func(pane string) (*ui.Model, error) { asked = append(asked, pane); return ui.New(ui.Options{}), err })
+	tui(t, ui.Result{}, context.Background())
+	if r := claudia(t, "plan", "%7"); r.code != -1 || len(asked) != 1 || asked[0] != "%7" {
+		t.Errorf("the pane given: %+v %q", r, asked)
+	}
+
+	swap(t, &execCommand, func(name string, args ...string) *exec.Cmd {
+		if strings.Join(append([]string{name}, args...), " ") != "tmux display-message -p #{pane_id}" {
+			t.Errorf("ran %s %v", name, args)
+		}
+		return exec.Command("echo", "%3")
+	})
+	if r := claudia(t, "plan"); r.code != -1 || asked[1] != "%3" {
+		t.Errorf("without one, the active pane: %+v %q", r, asked)
+	}
+
+	err = errors.New("no Claude session in this pane")
+	if r := claudia(t, "plan", "%9"); r.code != 1 || !strings.Contains(r.err, "no Claude session in this pane") {
+		t.Errorf("no session: %+v", r)
+	}
+	swap(t, &execCommand, func(string, ...string) *exec.Cmd { return exec.Command("false") })
+	if r := claudia(t, "plan"); r.code != 1 || !strings.Contains(r.err, "claudia plan runs inside tmux") {
+		t.Errorf("outside tmux: %+v", r)
+	}
+}
