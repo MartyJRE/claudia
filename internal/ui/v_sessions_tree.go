@@ -33,6 +33,7 @@ type srow struct {
 	collapsed bool
 	n, live   int
 	waiting   int
+	done      int
 }
 
 // id identifies the row across rebuilds, so the cursor can stay on it.
@@ -80,27 +81,36 @@ type sgroup struct {
 	last               time.Time
 }
 
-func (g *sgroup) stats() (n, live, waiting int, last time.Time) {
+type gstats struct {
+	n, live, waiting, done int
+	last                   time.Time
+}
+
+func (g *sgroup) stats() gstats {
+	var out gstats
 	for _, r := range g.sessions {
-		n++
+		out.n++
 		if r.live() {
-			live++
-			if r.needsYou() {
-				waiting++
-			}
+			out.live++
 		}
-		if t := r.LastActive(); t.After(last) {
-			last = t
+		switch {
+		case r.needsYou():
+			out.waiting++
+		case r.done():
+			out.done++
+		}
+		if t := r.LastActive(); t.After(out.last) {
+			out.last = t
 		}
 	}
 	for _, s := range g.subs {
-		sn, sl, sw, st := s.stats()
-		n, live, waiting = n+sn, live+sl, waiting+sw
-		if st.After(last) {
-			last = st
+		st := s.stats()
+		out.n, out.live, out.waiting, out.done = out.n+st.n, out.live+st.live, out.waiting+st.waiting, out.done+st.done
+		if st.last.After(out.last) {
+			out.last = st.last
 		}
 	}
-	return
+	return out
 }
 
 // started is the newest start among the group's live sessions.
@@ -123,8 +133,8 @@ func (g *sgroup) started() time.Time {
 // started, so activity doesn't reshuffle them; the rest by last activity.
 func sortGroups(gs []*sgroup) {
 	slices.SortStableFunc(gs, func(a, b *sgroup) int {
-		_, al, _, at := a.stats()
-		_, bl, _, bt := b.stats()
+		as, bs := a.stats(), b.stats()
+		al, at, bl, bt := as.live, as.last, bs.live, bs.last
 		switch {
 		case (al > 0) != (bl > 0):
 			return boolCmp(bl > 0, al > 0)
@@ -236,8 +246,8 @@ func (m *Model) buildSessions(sessions []row, filtering bool) []srow {
 	var walk func(gs []*sgroup, depth int)
 	walk = func(gs []*sgroup, depth int) {
 		for _, g := range gs {
-			n, live, waiting, _ := g.stats()
-			h := srow{key: g.key, title: g.title, ticket: g.ticket, depth: depth, n: n, live: live, waiting: waiting}
+			st := g.stats()
+			h := srow{key: g.key, title: g.title, ticket: g.ticket, depth: depth, n: st.n, live: st.live, waiting: st.waiting, done: st.done}
 			h.collapsed = !filtering && slices.Contains(m.sessPrefs.Collapsed, g.key)
 			out = append(out, h)
 			if h.collapsed {
@@ -269,6 +279,9 @@ func (m *Model) sessionHeaderCells(r srow) []string {
 	}
 	if r.waiting > 0 {
 		counts += sDim.Render(" · ") + lipgloss.NewStyle().Foreground(yellow).Bold(true).Render(fmt.Sprintf("%d needs you", r.waiting))
+	}
+	if r.done > 0 {
+		counts += sDim.Render(" · ") + sOK.Render(fmt.Sprintf("%d done", r.done))
 	}
 	// Spans the row, starting where the SESSION column starts.
 	return []string{strings.Repeat(" ", sessionCols[0].w+1) + sDim.Render(indent) + sAccent.Render(glyph) + title + counts}
