@@ -398,3 +398,44 @@ func TestMRRefShell(t *testing.T) {
 		t.Errorf("mrState")
 	}
 }
+
+func TestSessionsSummaryLineShell(t *testing.T) {
+	m := sessionsModelShell(t)
+	for i := range m.sessions {
+		m.sessions[i].summary = []string{"Needs you: OK to merge?", "Waiting: Michal to approve", "Done: PR #5 open", ""}[i%4]
+	}
+	m.reindex()
+	s := plainShell(m.listSessions(30))
+	for _, want := range []string{"Needs you: OK to merge?", "Waiting: Michal to approve", "Done: PR #5 open"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("summary %q missing:\n%s", want, s)
+		}
+	}
+	lines := strings.Split(s, "\n")
+	for i, l := range lines {
+		if strings.Contains(l, "Needs you:") && !strings.Contains(lines[i-1], m.sessions[0].Name()) {
+			t.Errorf("the summary sits under its session:\n%s\n%s", lines[i-1], l)
+		}
+	}
+	if plainShell(summaryText("Needs you: x")) != "Needs you: x" || summaryText("") != "" {
+		t.Error("summaryText")
+	}
+
+	// Two-line rows still keep the cursor on screen.
+	for range len(m.vis.sessions) {
+		pressShell(m, "down")
+	}
+	short := plainShell(m.listSessions(5))
+	if r, ok := m.currentSession(); ok && !strings.Contains(short, r.Name()) {
+		t.Errorf("cursor row %q scrolled off:\n%s", r.Name(), short)
+	}
+	if n := strings.Count(short, "\n") + 1; n > 5 {
+		t.Errorf("%d lines in a 5-line list", n)
+	}
+
+	m.switchView(vSessions)
+	m.cur[vSessions].pos = slices.IndexFunc(m.vis.sessions, func(x srow) bool { return x.isSess && x.sess.ID == m.sessions[0].ID })
+	if d := plainShell(m.detailSession()); !strings.Contains(d, "Needs you: OK to merge?") {
+		t.Errorf("detail shows the summary:\n%s", d)
+	}
+}

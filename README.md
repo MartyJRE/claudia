@@ -35,7 +35,7 @@ switches between those sessions.
 | Key | View | What it shows |
 |---|---|---|
 | 1 | Inbox | Everyone waiting on you, oldest first |
-| 2 | Sessions | Live and recent Claude sessions with status, branch, ticket, model |
+| 2 | Sessions | Live and recent Claude sessions with status, branch, ticket, model, and a line on where each stands |
 | 3 | Review | MRs where you are a reviewer and haven't approved yet |
 | 4 | My MRs | Your open MRs (reviewers, pipelines, review threads) and recently merged ones |
 | 5 | Jira | Your sprint, or the team's |
@@ -44,7 +44,11 @@ switches between those sessions.
 | 8 | Notes | Your Obsidian vault as a folder tree, or recently edited first |
 | 9 | Usage | Tokens and API-equivalent cost per day, plan limits |
 
-**Sessions**, grouped by repo, each with its `/color` dot:
+**Sessions**, grouped by repo, each with its `/color` dot. Under each one, a
+line says where it stands ("Needs you: OK to merge?", "Waiting: Michal to
+approve", "Done: PR #5 open"). The watcher writes it on Haiku when the session
+stops, from the last few turns, in a separate headless run that leaves the
+session itself alone:
 
 <img src="assets/sessions.svg" width="860" alt="Sessions grouped by repo, with recently closed ones below">
 

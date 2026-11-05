@@ -58,8 +58,10 @@ func joinCells(ws []int, cells []string, hl int) string {
 	return strings.Join(parts, " ")
 }
 
-// table renders a scrolling list with a header row and a highlighted cursor row.
-func (m *Model) table(cols []col, n int, cur *cursor, h int, cell func(i int, selected bool) []string, empty string) string {
+// table renders a scrolling list with a header row and a highlighted cursor
+// row. sub, when given, adds a dim second line under a row, starting at its
+// main column; an empty one keeps the row to one line.
+func (m *Model) table(cols []col, n int, cur *cursor, h int, cell func(i int, selected bool) []string, empty string, sub ...func(i int) string) string {
 	if h <= 0 {
 		return ""
 	}
@@ -71,21 +73,47 @@ func (m *Model) table(cols []col, n int, cur *cursor, h int, cell func(i int, se
 	for _, c := range cols {
 		titles = append(titles, sDim.Render(c.title))
 	}
+	under := func(int) string { return "" }
+	if len(sub) > 0 && sub[0] != nil {
+		under = sub[0]
+	}
+	subs := make([]string, n)
+	height := func(i int) int {
+		if subs[i] != "" {
+			return 2
+		}
+		return 1
+	}
+	for i := range n {
+		subs[i] = under(i)
+	}
+	span := func(from, to int) int { // lines rows from..to take
+		t := 0
+		for i := from; i <= to; i++ {
+			t += height(i)
+		}
+		return t
+	}
 	rows := h - 1
 	cur.clamp(n)
+	cur.offset = max(0, min(cur.offset, n-1))
 	if cur.pos < cur.offset {
 		cur.offset = cur.pos
 	}
-	if cur.pos >= cur.offset+rows {
-		cur.offset = cur.pos - rows + 1
+	for cur.offset < cur.pos && span(cur.offset, cur.pos) > rows {
+		cur.offset++
 	}
-	cur.offset = max(0, min(cur.offset, n-rows))
+	for cur.offset > 0 && span(cur.offset-1, n-1) <= rows {
+		cur.offset--
+	}
 
 	var b strings.Builder
 	b.WriteString("   " + joinCells(ws, titles, -1))
 	// The cursor lights up the row's main column (the one that stretches).
 	main := slices.IndexFunc(cols, func(c col) bool { return c.w == 0 })
-	for i := cur.offset; i < min(n, cur.offset+rows); i++ {
+	used := 0
+	for i := cur.offset; i < n && used+height(i) <= rows; i++ {
+		used += height(i)
 		sel, picked := i == cur.pos, m.inVisual(i)
 		cells := cell(i, sel)
 		hl := -1
@@ -108,6 +136,16 @@ func (m *Model) table(cols []col, n int, cur *cursor, h int, cell func(i int, se
 			b.WriteString(sAccent.Render(" ▏ ") + line)
 		default:
 			b.WriteString("   " + line)
+		}
+		if subs[i] != "" {
+			at := max(0, colStart(ws, main))
+			b.WriteString("\n")
+			if sel {
+				b.WriteString(sBar.Render(" ▌ "))
+			} else {
+				b.WriteString("   ")
+			}
+			b.WriteString(strings.Repeat(" ", at) + ansi.Truncate(subs[i], max(1, m.width-4-at), "…"))
 		}
 	}
 	return lipgloss.NewStyle().Height(h).MaxHeight(h).Render(b.String())

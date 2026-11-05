@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"slices"
 	"strings"
 	"time"
 )
@@ -38,17 +39,53 @@ type Transcript struct {
 	Color        string // set with /color; "" for the default
 	FirstPrompt  string
 	LastPrompt   string
-	Model        string
-	Models       []string
-	PRs          []PRLink
-	Usage        Usage
-	Started      time.Time
-	Updated      time.Time
+	// Tail is the last few prompts and replies, oldest first, for a summary.
+	Tail    []Turn
+	Model   string
+	Models  []string
+	PRs     []PRLink
+	Usage   Usage
+	Started time.Time
+	Updated time.Time
 
 	offset   int64
 	size     int64
 	mtime    time.Time
 	requests map[string]bool
+}
+
+// Turn is one prompt (Role "user") or reply ("assistant") in a Tail.
+type Turn struct {
+	Role string `json:"role"`
+	Text string `json:"text"`
+}
+
+const (
+	tailTurns = 6
+	turnChars = 1500
+)
+
+// addTurn appends to the tail; a reply split over several entries is one turn.
+func (t *Transcript) addTurn(role, text string) {
+	if text == "" {
+		return
+	}
+	if n := len(t.Tail); n > 0 && role == "assistant" && t.Tail[n-1].Role == "assistant" {
+		t.Tail[n-1].Text = clip(t.Tail[n-1].Text + "\n" + text)
+		return
+	}
+	t.Tail = append(t.Tail, Turn{role, clip(text)})
+	if len(t.Tail) > tailTurns {
+		t.Tail = slices.Clone(t.Tail[len(t.Tail)-tailTurns:])
+	}
+}
+
+// clip keeps the end of a long text: a reply's question or wrap-up is last.
+func clip(s string) string {
+	if r := []rune(s); len(r) > turnChars {
+		return "…" + string(r[len(r)-turnChars:])
+	}
+	return s
 }
 
 var skipPrefixes = [][]byte{
@@ -206,11 +243,19 @@ func (t *Transcript) apply(line []byte) {
 			if t.FirstPrompt == "" {
 				t.FirstPrompt = promptText(e.Message.Content)
 			}
+			// Prompts with an attachment come as blocks; tool results have no text block.
+			if p := replyText(e.Message.Content); !strings.HasPrefix(p, "<") {
+				t.addTurn("user", p)
+			}
+			if p := promptText(e.Message.Content); p != "" {
+				t.addTurn("user", p)
+			}
 			return
 		}
 		if e.Message.Model == "<synthetic>" {
 			return
 		}
+		t.addTurn("assistant", replyText(e.Message.Content))
 		if m := e.Message.Model; m != "" {
 			if m != t.Model {
 				t.Models = append(t.Models, m)
@@ -239,6 +284,24 @@ func promptText(raw json.RawMessage) string {
 		return ""
 	}
 	return s
+}
+
+// replyText joins the text blocks of a message's content.
+func replyText(raw json.RawMessage) string {
+	var blocks []struct {
+		Type string `json:"type"`
+		Text string `json:"text"`
+	}
+	if json.Unmarshal(raw, &blocks) != nil {
+		return ""
+	}
+	var parts []string
+	for _, b := range blocks {
+		if b.Type == "text" && strings.TrimSpace(b.Text) != "" {
+			parts = append(parts, strings.TrimSpace(b.Text))
+		}
+	}
+	return strings.Join(parts, "\n")
 }
 
 // Title prefers what the user named the session over Claude's generated title.

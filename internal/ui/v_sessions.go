@@ -76,7 +76,25 @@ func (m *Model) listSessionsTable(h int) string {
 			sDim.Render(age(r.LastActive())),
 			m.where(r),
 		}
-	}, empty)
+	}, empty, func(i int) string {
+		if !rows[i].isSess {
+			return ""
+		}
+		return summaryText(rows[i].sess.summary)
+	})
+}
+
+// summaryText colours a summary by what it asks of you.
+func summaryText(s string) string {
+	switch {
+	case s == "":
+		return ""
+	case strings.HasPrefix(s, "Needs you:"):
+		return lipgloss.NewStyle().Foreground(yellow).Render(s)
+	case strings.HasPrefix(s, "Waiting:"):
+		return lipgloss.NewStyle().Foreground(blue).Render(s)
+	}
+	return sDim.Render(s)
 }
 
 func (m *Model) status(r row) string {
@@ -201,6 +219,9 @@ func (m *Model) detailSession() string {
 	meta = append(meta, sDim.Render(r.Profile.Name), sDim.Render(r.ShortID()))
 	lines = append(lines, strings.Join(meta, sDim.Render("  ·  ")))
 
+	if r.summary != "" {
+		lines = append(lines, summaryText(r.summary))
+	}
 	if r.Transcript != nil {
 		if p := oneLine(r.LastPrompt); p != "" {
 			lines = append(lines, sDim.Render("› ")+sText.Render(p))
