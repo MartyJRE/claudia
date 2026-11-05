@@ -112,7 +112,8 @@ func (m *Model) table(cols []col, n int, cur *cursor, h int, cell func(i int, se
 	// The cursor lights up the row's main column (the one that stretches).
 	main := slices.IndexFunc(cols, func(c col) bool { return c.w == 0 })
 	used := 0
-	for i := cur.offset; i < n && used+height(i) <= rows; i++ {
+	// The first row always shows; with room for one line its sub line is cut.
+	for i := cur.offset; i < n && (used+height(i) <= rows || i == cur.offset); i++ {
 		used += height(i)
 		sel, picked := i == cur.pos, m.inVisual(i)
 		cells := cell(i, sel)

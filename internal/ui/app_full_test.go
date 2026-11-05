@@ -335,6 +335,27 @@ func TestOpenTeamsInTheAppFull(t *testing.T) {
 	}
 }
 
+func TestTeamsAppURLFull(t *testing.T) {
+	for _, c := range []struct {
+		in, want string
+		ok       bool
+	}{
+		{"https://teams.microsoft.com/l/message/19:x/1?tenantId=t&groupId=g", "msteams:/l/message/19:x/1?tenantId=t&groupId=g", true},
+		{"https://teams.cloud.microsoft/l/meetup-join/19%3ameeting/0", "msteams:/l/meetup-join/19%3ameeting/0", true},
+		{"https://teams.microsoft.com/v2/", "", false},
+		{"https://teams.microsoft.com/", "", false},
+		{"https://teams.microsoft.com/lx/chat", "", false},
+		{"http://teams.microsoft.com/l/chat/19:a/0", "", false},
+		{"https://teams.live.com/l/chat/19:a/0", "", false},
+		{"https://evil.example/https://teams.microsoft.com/l/chat/0", "", false},
+		{"", "", false},
+	} {
+		if got, ok := teamsAppURL(c.in); got != c.want || ok != c.ok {
+			t.Errorf("teamsAppURL(%q) = %q %v, want %q %v", c.in, got, ok, c.want, c.ok)
+		}
+	}
+}
+
 func TestRunAndClipboardFull(t *testing.T) {
 	ran := fakeCombined(t, "  boom\n", errors.New("exit status 1"))
 	msg := openURL("https://example.org")()

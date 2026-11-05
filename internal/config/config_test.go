@@ -163,3 +163,24 @@ func TestBrokenFileKeepsDefaults(t *testing.T) {
 		t.Errorf("got %+v", c)
 	}
 }
+
+func TestMail(t *testing.T) {
+	fresh(t, `{"teams": {"tenant": "t"}}`)
+	if Get().Teams.Mail != nil {
+		t.Error("mail stays off until configured")
+	}
+	for file, want := range map[string]bool{
+		`{"teams": {"mail": {}}}`:                true,
+		`{"teams": {"mail": {"direct": true}}}`:  true,
+		`{"teams": {"mail": {"direct": false}}}`: false,
+	} {
+		fresh(t, file)
+		if m := Get().Teams.Mail; m == nil || m.Direct() != want {
+			t.Errorf("%s: direct %v, want %v", file, m, want)
+		}
+	}
+	fresh(t, `{"teams": {"mail": {"rules": [{"from": "boss@"}, {"subject": "Approval"}]}}}`)
+	if r := Get().Teams.Mail.Rules; len(r) != 2 || r[0] != (MailRule{From: "boss@"}) || r[1] != (MailRule{Subject: "Approval"}) {
+		t.Errorf("rules %+v", r)
+	}
+}

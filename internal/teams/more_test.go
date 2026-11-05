@@ -2,6 +2,7 @@ package teams
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -374,8 +375,19 @@ func TestToHTML(t *testing.T) {
 		"approved <3\nthanks":                             "approved &lt;3<br>thanks",
 		"run `go test ./...` & see":                       "run <code>go test ./...</code> &amp; see",
 		"fix:\n```go\nif a < b {\n\treturn\n}\n```\ndone": "fix:<br><pre><code>if a &lt; b {\n\treturn\n}</code></pre>done",
-		"```\nx```":      "<pre><code>x</code></pre>",
-		"a lone ` stays": "a lone ` stays",
+		"```\nx```":                              "<pre><code>x</code></pre>",
+		"a lone ` stays":                         "a lone ` stays",
+		"`a` and `b`":                            "<code>a</code> and <code>b</code>",
+		"`<b>` & `\"q\"`":                        "<code>&lt;b&gt;</code> &amp; <code>&#34;q&#34;</code>",
+		"use ``a`b`` here":                       "use <code>a`b</code> here",
+		"one line ```x := 1``` too":              "one line <code>x := 1</code> too",
+		"no `split\nlines`":                      "no `split<br>lines`",
+		"```\nuse `x` and <y>\n```":              "<pre><code>use `x` and &lt;y&gt;</code></pre>",
+		"```\na\n```\n```sh\nb\n```":             "<pre><code>a</code></pre><pre><code>b</code></pre>",
+		"```\n```":                               "<pre><code></code></pre>",
+		"```\nnever closed `x`":                  "```<br>never closed <code>x</code>",
+		"fix:\r\n```go\r\nx := 1\r\n```\r\ndone": "fix:<br><pre><code>x := 1</code></pre>done",
+		"":                                       "",
 	} {
 		if got := toHTML(in); got != want {
 			t.Errorf("toHTML(%q) = %q, want %q", in, got, want)
@@ -404,7 +416,68 @@ func TestInlineImages(t *testing.T) {
 	if err := c.Reply("chat/19:a/m0", "x", Image(filepath.Join(dir, "notes.txt"))); err == nil || !strings.Contains(err.Error(), "PNG, JPEG or GIF") {
 		t.Errorf("not an image: %v", err)
 	}
-	if err := c.Reply("chat/19:a/m0", "x", Image(filepath.Join(dir, "gone.png"))); err == nil {
-		t.Error("a missing image fails")
+	if err := c.Reply("chat/19:a/m0", "x", Image(filepath.Join(dir, "gone.png"))); err == nil || !strings.Contains(err.Error(), "gone.png") {
+		t.Errorf("a missing image fails: %v", err)
+	}
+	if err := c.Reply("chat/19:a/m0", "x", Image(dir)); err == nil {
+		t.Error("an unreadable image fails")
+	}
+	if len(g.log) != 1 {
+		t.Errorf("a failing image sends nothing: %v", g.log)
+	}
+}
+
+func TestImageTypes(t *testing.T) {
+	dir := t.TempDir()
+	c, g := graphClient(t, map[string]http.HandlerFunc{"POST /chats/19:a/messages": reply(`{"id":"m1"}`)})
+	for name, want := range map[string]string{"a.png": "image/png", "b.JPG": "image/jpeg", "c.jpeg": "image/jpeg", "d.Gif": "image/gif", "e.webp": "", "noext": ""} {
+		p := filepath.Join(dir, name)
+		os.WriteFile(p, []byte("x"), 0o644)
+		err := c.Reply("chat/19:a/m0", "", Image(p))
+		if want == "" {
+			if err == nil || err.Error() != name+": --image takes PNG, JPEG or GIF" {
+				t.Errorf("%s: %v", name, err)
+			}
+			continue
+		}
+		hc := g.bodies["POST /chats/19:a/messages"]["hostedContents"].([]any)
+		if err != nil || hc[0].(map[string]any)["contentType"] != want {
+			t.Errorf("%s: %v %v", name, err, hc)
+		}
+	}
+}
+
+func TestImagesWithFiles(t *testing.T) {
+	dir := t.TempDir()
+	img := filepath.Join(dir, `a "b" & c.png`)
+	doc := filepath.Join(dir, "notes.txt")
+	os.WriteFile(img, []byte("PNG"), 0o644)
+	os.WriteFile(doc, []byte("hello"), 0o644)
+	c, g := graphClient(t, map[string]http.HandlerFunc{
+		"PUT /me/drive/root:/Microsoft Teams Chat Files/notes.txt:/content": reply(`{"eTag":"\"{ABC},1\"","name":"notes.txt","webUrl":"https://sp/notes.txt"}`),
+		"POST /chats/19:a/messages":                                         reply(`{"id":"m1"}`),
+	})
+	if err := c.Reply("chat/19:a/m0", "see `x`", doc, Image(img)); err != nil {
+		t.Fatal(err)
+	}
+	msg := g.bodies["POST /chats/19:a/messages"]
+	if b := msg["body"].(map[string]any)["content"]; b != `see <code>x</code><br><img src="../hostedContents/1/$value" alt="a &#34;b&#34; &amp; c.png"><attachment id="abc"></attachment>` {
+		t.Errorf("text, then images, then files: %v", b)
+	}
+	if len(msg["hostedContents"].([]any)) != 1 || len(msg["attachments"].([]any)) != 1 {
+		t.Errorf("one of each: %+v", msg)
+	}
+
+	c.tok.Scopes = graphURL + "Chat.ReadWrite"
+	g.log = nil
+	err := c.Reply("chat/19:a/m0", "x", Image(img), doc)
+	if !errors.Is(err, ErrNotGranted) || !strings.HasPrefix(err.Error(), "--file: ") || !strings.Contains(err.Error(), "Files.ReadWrite.All") || !strings.HasSuffix(err.Error(), "; --image works without it") {
+		t.Errorf("files without their permission: %v", err)
+	}
+	if len(g.log) != 0 {
+		t.Errorf("nothing is uploaded or sent: %v", g.log)
+	}
+	if err := c.Reply("chat/19:a/m0", "x", Image(img)); err != nil {
+		t.Errorf("images need no file permission: %v", err)
 	}
 }

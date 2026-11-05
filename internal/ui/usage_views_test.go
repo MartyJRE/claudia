@@ -142,6 +142,31 @@ func TestMoney(t *testing.T) {
 	}
 }
 
+func TestUsageWeekendDim(t *testing.T) {
+	prev := lipgloss.ColorProfile()
+	t.Cleanup(func() { lipgloss.SetColorProfile(prev) })
+	lipgloss.SetColorProfile(0) // termenv.TrueColor
+
+	m := newModelViews(t)
+	m.usage = []claude.DayModel{
+		{Day: "2026-10-31", Model: "claude-opus-5-5", Tokens: claude.Tokens{Requests: 1, Output: 10}},
+		{Day: "2026-11-01", Model: "claude-opus-5-5", Tokens: claude.Tokens{Requests: 1, Output: 10}},
+		{Day: "2026-11-02", Model: "claude-opus-5-5", Tokens: claude.Tokens{Requests: 1, Output: 10}},
+	}
+	m.usageLoaded = true
+	m.view = vUsage
+	m.refilter()
+	s := m.listUsage(20)
+	for day, style := range map[string]lipgloss.Style{"Sat 31 Oct": sDim, "Sun 01 Nov": sDim, "Mon 02 Nov": sText} {
+		if !strings.Contains(s, style.Render(day)) {
+			t.Errorf("%s styled wrong:\n%q", day, s)
+		}
+	}
+	if strings.Contains(s, sText.Render("Sat 31 Oct")) || strings.Contains(s, sDim.Render("Mon 02 Nov")) {
+		t.Error("weekend days dim, weekdays not")
+	}
+}
+
 func TestStackedBarByModel(t *testing.T) {
 	prev := lipgloss.ColorProfile()
 	t.Cleanup(func() { lipgloss.SetColorProfile(prev) })
