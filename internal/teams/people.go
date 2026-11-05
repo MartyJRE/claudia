@@ -16,6 +16,9 @@ type Person struct {
 // Person finds someone by email or by the start of their name; a name that
 // matches several people is an error that lists them.
 func (c *Client) Person(who string) (Person, error) {
+	if err := c.need("User.ReadBasic.All"); err != nil {
+		return Person{}, err
+	}
 	var v struct {
 		Value []struct {
 			ID                string `json:"id"`
@@ -56,6 +59,9 @@ func (c *Client) Person(who string) (Person, error) {
 func (c *Client) Chat(who []string, text string, files ...string) (string, error) {
 	if len(who) == 0 {
 		return "", errors.New("whom to write to?")
+	}
+	if err := c.need("Chat.Create", "User.ReadBasic.All"); err != nil {
+		return "", err
 	}
 	m, err := c.whoami()
 	if err != nil {

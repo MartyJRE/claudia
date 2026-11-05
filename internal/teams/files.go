@@ -167,6 +167,9 @@ func (c *Client) message(r ref, text string, files []string) (map[string]any, er
 		msg["hostedContents"] = hosted
 	}
 	if len(uploads) > 0 {
+		if err := c.need("Files.ReadWrite.All"); err != nil {
+			return nil, fmt.Errorf("--file: %w; --image works without it", err)
+		}
 		folder, err := c.folderFor(r)
 		if err != nil {
 			return nil, err
@@ -190,6 +193,9 @@ func (c *Client) message(r ref, text string, files []string) (map[string]any, er
 // Download saves a file shared in Teams (its SharePoint or OneDrive link) into
 // dir and returns the path.
 func (c *Client) Download(link, dir string) (string, error) {
+	if err := c.need("Files.ReadWrite.All"); err != nil {
+		return "", err
+	}
 	share := "u!" + strings.TrimRight(base64.URLEncoding.EncodeToString([]byte(link)), "=")
 	var it driveItem
 	if err := c.getJSON("/shares/"+share+"/driveItem?$select=name,webUrl,eTag", &it); err != nil {

@@ -109,7 +109,7 @@ func (f *fake) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	f.requests = append(f.requests, r.Method+" "+r.URL.Path)
 	switch {
 	case r.URL.Path == "/login/devicecode":
-		if r.FormValue("client_id") != "app" || !strings.Contains(r.FormValue("scope"), "ChannelMessage.Send") {
+		if r.FormValue("client_id") != "app" || r.FormValue("scope") != scopes {
 			f.t.Errorf("devicecode form: %v", r.Form)
 		}
 		io.WriteString(w, `{"device_code":"dc","message":"go to example.com/devicelogin and enter ABC","interval":1,"expires_in":60}`)
@@ -122,7 +122,7 @@ func (f *fake) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			f.refresh = r.FormValue("refresh_token")
-			io.WriteString(w, `{"access_token":"at2","expires_in":3600}`)
+			io.WriteString(w, `{"access_token":"at2","expires_in":3600,"scope":"`+allScopes+`"}`)
 		default:
 			if f.pending > 0 {
 				f.pending--
@@ -130,7 +130,7 @@ func (f *fake) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				io.WriteString(w, `{"error":"authorization_pending"}`)
 				return
 			}
-			io.WriteString(w, `{"access_token":"at","refresh_token":"rt","expires_in":3600}`)
+			io.WriteString(w, `{"access_token":"at","refresh_token":"rt","expires_in":3600,"scope":"`+allScopes+`"}`)
 		}
 	case r.URL.Path == "/graph/me":
 		io.WriteString(w, `{"id":"me-id","displayName":"Martin Prazak"}`)
@@ -376,7 +376,7 @@ func TestUnansweredMentions(t *testing.T) {
 func TestRefsShowAndChatReply(t *testing.T) {
 	f := &fake{t: t}
 	c := newTestClient(t, f)
-	c.tok = token{Access: "at", Expires: time.Now().Add(time.Hour)}
+	c.tok = token{Access: "at", Expires: time.Now().Add(time.Hour), Scopes: allScopes}
 
 	if err := c.Reply("chat/19:a@unq.gbl.spaces/m1", "sure"); err != nil {
 		t.Fatal(err)
@@ -442,7 +442,7 @@ func TestFetchWithoutReviewChannel(t *testing.T) {
 	fixedNow(t)
 	f := &fake{t: t}
 	c := newTestClient(t, f)
-	c.tok = token{Access: "at", Expires: time.Now().Add(time.Hour)}
+	c.tok = token{Access: "at", Expires: time.Now().Add(time.Hour), Scopes: allScopes}
 	c.cfg.TeamID, c.cfg.ChannelID = "", ""
 	s, err := c.Fetch()
 	if err != nil || len(s.Posts) != 0 || len(s.Waiting) != 5 {
@@ -486,7 +486,7 @@ func failingClient(t *testing.T, fail map[string]int, body string) *Client {
 		t.Fatal(err)
 	}
 	c.login, c.graph = srv.URL+"/login", srv.URL+"/graph"
-	c.tok = token{Access: "at", Expires: time.Now().Add(time.Hour)}
+	c.tok = token{Access: "at", Expires: time.Now().Add(time.Hour), Scopes: allScopes}
 	return c
 }
 

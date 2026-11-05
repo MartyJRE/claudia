@@ -101,20 +101,44 @@ type token struct {
 	Access  string    `json:"access_token"`
 	Refresh string    `json:"refresh_token"`
 	Expires time.Time `json:"expires"`
+	Scopes  string    `json:"scope,omitempty"`
 }
 
 const (
-	tokenFile  = "teams-token.json"
-	baseScopes = "https://graph.microsoft.com/User.Read https://graph.microsoft.com/Chat.ReadWrite https://graph.microsoft.com/ChannelMessage.Read.All https://graph.microsoft.com/ChannelMessage.Send https://graph.microsoft.com/Team.ReadBasic.All https://graph.microsoft.com/Channel.ReadBasic.All https://graph.microsoft.com/Calendars.ReadWrite offline_access"
+	tokenFile = "teams-token.json"
+	graphURL  = "https://graph.microsoft.com/"
+	// .default asks for whatever the app has been granted, so a permission
+	// still waiting on an admin never fails the sign-in; granted says what came.
+	scopes = graphURL + ".default offline_access"
 )
 
-// scopes asks for Mail.Read only once mail is configured: a scope the tenant
-// hasn't granted fails the whole sign-in.
-func scopes() string {
-	if siteConfig().Teams.Mail != nil {
-		return baseScopes + " https://graph.microsoft.com/Mail.Read"
+// granted says whether the signed-in token carries a Graph permission, e.g.
+// "Mail.Read". A token saved before claudia kept scopes is refreshed once.
+func (c *Client) granted(perm string) bool {
+	c.mu.Lock()
+	unknown := c.tok.Scopes == "" && c.tok.Refresh != ""
+	if unknown {
+		c.tok.Access = ""
 	}
-	return baseScopes
+	c.mu.Unlock()
+	if unknown {
+		if _, err := c.access(); err != nil {
+			return false
+		}
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return slices.Contains(strings.Fields(c.tok.Scopes), graphURL+perm)
+}
+
+// need fails a feature whose permission the app hasn't been granted yet.
+func (c *Client) need(perms ...string) error {
+	for _, p := range perms {
+		if !c.granted(p) {
+			return fmt.Errorf("%w: %s (an admin grants it on the claudia app, then run `claudia teams login`)", ErrNotGranted, p)
+		}
+	}
+	return nil
 }
 
 var (
@@ -123,6 +147,7 @@ var (
 	ErrUnconfigured = errors.New("Teams isn't set up: fill in teams.tenant and teams.client_id in config.json")
 	ErrNoChannel    = errors.New("no review channel: set teams.team_id and teams.channel_id (see `claudia teams channels`)")
 	ErrSignedOut    = errors.New("not signed in to Teams: run `claudia teams login`")
+	ErrNotGranted   = errors.New("claudia hasn't been granted this permission yet")
 )
 
 // New fails with ErrUnconfigured until config.json names the app.
@@ -149,7 +174,7 @@ func (c *Client) Login(show func(string)) error {
 		Interval   int    `json:"interval"`
 		ExpiresIn  int    `json:"expires_in"`
 	}
-	if err := c.form("/devicecode", url.Values{"client_id": {c.cfg.ClientID}, "scope": {scopes()}}, &dc); err != nil {
+	if err := c.form("/devicecode", url.Values{"client_id": {c.cfg.ClientID}, "scope": {scopes}}, &dc); err != nil {
 		return err
 	}
 	show(dc.Message)
@@ -210,11 +235,12 @@ func (c *Client) grant(v url.Values) error {
 		Access    string `json:"access_token"`
 		Refresh   string `json:"refresh_token"`
 		ExpiresIn int    `json:"expires_in"`
+		Scope     string `json:"scope"`
 	}
 	if err := c.form("/token", v, &t); err != nil {
 		return err
 	}
-	c.tok = token{Access: t.Access, Refresh: t.Refresh, Expires: time.Now().Add(time.Duration(t.ExpiresIn)*time.Second - time.Minute)}
+	c.tok = token{Access: t.Access, Refresh: t.Refresh, Expires: time.Now().Add(time.Duration(t.ExpiresIn)*time.Second - time.Minute), Scopes: t.Scope}
 	if c.tok.Refresh == "" {
 		c.tok.Refresh = v.Get("refresh_token")
 	}
@@ -234,7 +260,7 @@ func (c *Client) access() (string, error) {
 		"grant_type":    {"refresh_token"},
 		"client_id":     {c.cfg.ClientID},
 		"refresh_token": {c.tok.Refresh},
-		"scope":         {scopes()},
+		"scope":         {scopes},
 	})
 	var oe *oauthError
 	if errors.As(err, &oe) && oe.Code == "invalid_grant" {
@@ -312,7 +338,7 @@ func (c *Client) Fetch() (Snapshot, error) {
 	}
 	w = append(w, invites(evs)...)
 	var mailErr string
-	if mc := siteConfig().Teams.Mail; mc != nil {
+	if mc := siteConfig().Teams.Mail; mc != nil && c.granted("Mail.Read") {
 		mail, err := c.fetchMail(*mc)
 		if err != nil {
 			mailErr = err.Error()

@@ -55,7 +55,7 @@ func TestCalendar(t *testing.T) {
 
 	f := &fake{t: t}
 	c := newTestClient(t, f)
-	c.tok = token{Access: "at", Expires: time.Now().Add(time.Hour)}
+	c.tok = token{Access: "at", Expires: time.Now().Add(time.Hour), Scopes: allScopes}
 	s, err := c.Fetch()
 	if err != nil || len(s.Events) != 5 {
 		t.Fatalf("fetch reads the calendar: %v %+v", err, s.Events)
@@ -107,7 +107,7 @@ func graphClient(t *testing.T, routes map[string]http.HandlerFunc) (*Client, *gr
 		t.Fatal(err)
 	}
 	c.graph, c.login = srv.URL, srv.URL
-	c.tok = token{Access: "at", Expires: time.Now().Add(time.Hour)}
+	c.tok = token{Access: "at", Expires: time.Now().Add(time.Hour), Scopes: allScopes}
 	c.me = me{ID: "me-id", DisplayName: "Martin Prazak"}
 	return c, g
 }

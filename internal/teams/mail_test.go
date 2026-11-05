@@ -1,9 +1,13 @@
 package teams
 
 import (
+	"errors"
+	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/MartyJRE/claudia/internal/config"
 )
@@ -74,13 +78,47 @@ func withMail(t *testing.T, m *config.Mail) {
 	t.Cleanup(func() { siteConfig = config.Get })
 }
 
-func TestScopes(t *testing.T) {
-	if strings.Contains(scopes(), "Mail.Read") {
-		t.Error("no Mail.Read until mail is configured")
-	}
+const allScopes = graphURL + "Chat.ReadWrite " + graphURL + "Mail.Read " + graphURL + "Chat.Create " + graphURL + "User.ReadBasic.All " + graphURL + "Files.ReadWrite.All"
+
+func TestGranted(t *testing.T) {
+	fixedNow(t)
 	withMail(t, &config.Mail{})
-	if !strings.HasSuffix(scopes(), " https://graph.microsoft.com/Mail.Read") {
-		t.Errorf("mail on asks for Mail.Read: %s", scopes())
+	refreshed := 0
+	c, g := graphClient(t, map[string]http.HandlerFunc{
+		"POST /token": func(w http.ResponseWriter, r *http.Request) {
+			refreshed++
+			io.WriteString(w, `{"access_token":"at2","refresh_token":"rt2","expires_in":3600,"scope":"openid `+graphURL+`Chat.ReadWrite"}`)
+		},
+		"POST /chats/19:a/messages": reply(`{"id":"m1"}`),
+	})
+	c.tok = token{Access: "old", Refresh: "rt", Expires: time.Now().Add(time.Hour)} // saved before scopes were kept
+	if !c.granted("Chat.ReadWrite") || c.granted("Mail.Read") || refreshed != 1 {
+		t.Fatalf("an old token is refreshed once to learn its scopes: %d %+v", refreshed, c.tok)
+	}
+	c.granted("Chat.ReadWrite")
+	if refreshed != 1 {
+		t.Error("refreshed again")
+	}
+	for name, err := range map[string]error{
+		"who":      func() error { _, err := c.Person("lukas"); return err }(),
+		"chat":     func() error { _, err := c.Chat([]string{"lukas"}, "hi"); return err }(),
+		"download": func() error { _, err := c.Download("https://sp/a", t.TempDir()); return err }(),
+		"file":     c.Reply("chat/19:a/m0", "x", "notes.txt"),
+	} {
+		if !errors.Is(err, ErrNotGranted) {
+			t.Errorf("%s without its permission: %v", name, err)
+		}
+	}
+	if err := c.Reply("chat/19:a/m0", "plain"); err != nil {
+		t.Errorf("replies still work: %v", err)
+	}
+	if slices.ContainsFunc(g.log, func(l string) bool { return strings.Contains(l, "/users") || strings.Contains(l, "mailFolders") }) {
+		t.Errorf("nothing ungranted was asked: %v", g.log)
+	}
+	f := failingClient(t, map[string]int{"/graph/me/mailFolders/inbox/messages": 403}, "")
+	f.tok.Scopes = graphURL + "Chat.ReadWrite"
+	if s, err := f.Fetch(); err != nil || s.MailErr != "" {
+		t.Errorf("mail without Mail.Read is skipped quietly: %v %q", err, s.MailErr)
 	}
 }
 
