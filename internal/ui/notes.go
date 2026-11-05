@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"cmp"
 	_ "embed"
 	"fmt"
 	"net/url"
@@ -191,13 +192,16 @@ type editedMsg struct {
 	err  error
 }
 
-// edit hands the terminal to $EDITOR (nvim by default) and refreshes after.
+// edit hands the terminal to the user's editor and refreshes after.
 func (m *Model) edit(path string) tea.Cmd {
-	editor := os.Getenv("EDITOR")
-	if editor == "" {
-		editor = "nvim"
-	}
-	return execProcess(exec.Command(editor, path), func(err error) tea.Msg { return editedMsg{path, err} })
+	return execProcess(editorCmd(path), func(err error) tea.Msg { return editedMsg{path, err} })
+}
+
+// editorCmd opens path in $VISUAL, else $EDITOR, else vi. It goes through the
+// shell, so an editor set with arguments ("code -w") works.
+func editorCmd(path string) *exec.Cmd {
+	editor := cmp.Or(os.Getenv("VISUAL"), os.Getenv("EDITOR"), "vi")
+	return exec.Command("sh", "-c", editor+` "$1"`, "sh", path)
 }
 
 func obsidianURL(root, rel string) string {
