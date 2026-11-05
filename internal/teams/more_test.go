@@ -382,3 +382,29 @@ func TestToHTML(t *testing.T) {
 		}
 	}
 }
+
+func TestInlineImages(t *testing.T) {
+	dir := t.TempDir()
+	png := filepath.Join(dir, "flow.png")
+	os.WriteFile(png, []byte("PNG"), 0o644)
+	os.WriteFile(filepath.Join(dir, "notes.txt"), []byte("x"), 0o644)
+	c, g := graphClient(t, map[string]http.HandlerFunc{"POST /chats/19:a/messages": reply(`{"id":"m1"}`)})
+	if err := c.Reply("chat/19:a/m0", "see", Image(png), Image(png)); err != nil {
+		t.Fatal(err)
+	}
+	msg := g.bodies["POST /chats/19:a/messages"]
+	if b := msg["body"].(map[string]any)["content"]; b != `see<br><img src="../hostedContents/1/$value" alt="flow.png"><br><img src="../hostedContents/2/$value" alt="flow.png">` {
+		t.Errorf("body %v", b)
+	}
+	hc := msg["hostedContents"].([]any)
+	if len(hc) != 2 || hc[1].(map[string]any)["@microsoft.graph.temporaryId"] != "2" || hc[0].(map[string]any)["contentBytes"] != "UE5H" ||
+		hc[0].(map[string]any)["contentType"] != "image/png" || msg["attachments"] != nil {
+		t.Errorf("images ride inside the message, nothing is uploaded: %+v", msg)
+	}
+	if err := c.Reply("chat/19:a/m0", "x", Image(filepath.Join(dir, "notes.txt"))); err == nil || !strings.Contains(err.Error(), "PNG, JPEG or GIF") {
+		t.Errorf("not an image: %v", err)
+	}
+	if err := c.Reply("chat/19:a/m0", "x", Image(filepath.Join(dir, "gone.png"))); err == nil {
+		t.Error("a missing image fails")
+	}
+}

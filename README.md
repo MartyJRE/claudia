@@ -320,6 +320,8 @@ claudia teams respond <event-ref> accept|tentative|decline [comment]
 
 `reply`, `chat` and `post` take `--file <path>` (repeatable): files go to your
 OneDrive's Teams chat folder for a chat, or the channel's own files folder.
+`--image <path>` (repeatable; PNG, JPEG or GIF) shows the image in the message
+itself, like a pasted screenshot, and needs no file permission.
 
 ## Contributing
 

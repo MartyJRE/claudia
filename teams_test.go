@@ -113,7 +113,7 @@ func TestTeamsCmd(t *testing.T) {
 	swap(t, &clock, func() time.Time { return time.Date(2026, 11, 3, 8, 0, 0, 0, time.Local) })
 	outs := map[string]string{}
 	for _, args := range [][]string{
-		{"reply", "chat/c/1", "--file", "a.pdf", "here", "--file", "b.png"},
+		{"reply", "chat/c/1", "--file", "a.pdf", "here", "--file", "b.png", "--image", "d.png"},
 		{"chat", "lukas,pavel", "hi", "both", "--file", "x.txt"},
 		{"post", "Technology/General", "news"},
 		{"who", "Lukas", "Laczi"},
@@ -130,7 +130,7 @@ func TestTeamsCmd(t *testing.T) {
 		outs[args[0]] += r.out
 	}
 	want := []string{
-		"reply chat/c/1 here a.pdf b.png", "chat lukas+pavel hi both x.txt", "post Technology/General news",
+		"reply chat/c/1 here a.pdf b.png " + teams.Image("d.png"), "chat lukas+pavel hi both x.txt", "post Technology/General news",
 		"download https://sp/a.pdf .", "download https://sp/a.pdf /tmp/d", "calendar 24h0m0s", "calendar 168h0m0s", "respond event/e1 decline out sick",
 	}
 	if got := strings.Join(f.did, "|"); got != strings.Join(want, "|") {
@@ -141,7 +141,7 @@ func TestTeamsCmd(t *testing.T) {
 		t.Errorf("outputs %+v", outs)
 	}
 	for _, args := range [][]string{{"reply", "x"}, {"bogus"}, {"reply", "https://nope", "hi"}, {"show"}, {"show", "bad"},
-		{"chat", "x"}, {"who"}, {"download"}, {"calendar", "0"}, {"calendar", "x"}, {"respond", "event/e1"}, {"reply", "x", "y", "--file"}} {
+		{"chat", "x"}, {"who"}, {"download"}, {"calendar", "0"}, {"calendar", "x"}, {"respond", "event/e1"}, {"reply", "x", "y", "--file"}, {"reply", "x", "y", "--image"}} {
 		if r := claudia(t, append([]string{"teams"}, args...)...); r.code != 1 {
 			t.Errorf("%v should fail, got %+v", args, r)
 		}

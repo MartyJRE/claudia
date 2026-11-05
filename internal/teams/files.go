@@ -128,18 +128,51 @@ func prose(s string) string {
 	return strings.ReplaceAll(s, "\n", "<br>")
 }
 
-// message builds a chatMessage body: the text, then each file as a reference
-// attachment.
+// imagePrefix marks a path passed with Image: it goes inline in the message
+// rather than as an uploaded file.
+const imagePrefix = "\x00image:"
+
+// Image marks a file to send inline, shown in the message itself. It needs no
+// file permission: the image travels inside the message.
+func Image(path string) string { return imagePrefix + path }
+
+var imageTypes = map[string]string{".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif"}
+
+// message builds a chatMessage body: the text, each image inline as hosted
+// content, then each file as a reference attachment.
 func (c *Client) message(r ref, text string, files []string) (map[string]any, error) {
 	content := toHTML(text)
 	msg := map[string]any{}
-	if len(files) > 0 {
+	var uploads []string
+	var hosted []map[string]string
+	for _, f := range files {
+		p, ok := strings.CutPrefix(f, imagePrefix)
+		if !ok {
+			uploads = append(uploads, f)
+			continue
+		}
+		ct, ok := imageTypes[strings.ToLower(filepath.Ext(p))]
+		if !ok {
+			return nil, fmt.Errorf("%s: --image takes PNG, JPEG or GIF", filepath.Base(p))
+		}
+		b, err := os.ReadFile(p)
+		if err != nil {
+			return nil, err
+		}
+		id := fmt.Sprint(len(hosted) + 1)
+		hosted = append(hosted, map[string]string{"@microsoft.graph.temporaryId": id, "contentBytes": base64.StdEncoding.EncodeToString(b), "contentType": ct})
+		content += `<br><img src="../hostedContents/` + id + `/$value" alt="` + html.EscapeString(filepath.Base(p)) + `">`
+	}
+	if len(hosted) > 0 {
+		msg["hostedContents"] = hosted
+	}
+	if len(uploads) > 0 {
 		folder, err := c.folderFor(r)
 		if err != nil {
 			return nil, err
 		}
 		var atts []map[string]any
-		for _, f := range files {
+		for _, f := range uploads {
 			it, err := c.upload(folder, f)
 			if err != nil {
 				return nil, fmt.Errorf("%s: %w", filepath.Base(f), err)
