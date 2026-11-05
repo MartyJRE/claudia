@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -98,10 +99,39 @@ func (c *Client) folderFor(r ref) (string, error) {
 	return "/drives/" + url.PathEscape(f.Parent.DriveID) + "/items/" + url.PathEscape(f.ID) + ":/", nil
 }
 
+var (
+	fenceRe  = regexp.MustCompile("(?s)```[^\n`]*\n(.*?)\n?```")
+	inlineRe = regexp.MustCompile("`([^`\n]+)`")
+)
+
+// toHTML escapes plain text for a message body, turning Markdown code
+// (```fenced``` and `inline`) into Teams' code formatting.
+func toHTML(text string) string {
+	var b strings.Builder
+	for {
+		loc := fenceRe.FindStringSubmatchIndex(text)
+		if loc == nil {
+			break
+		}
+		b.WriteString(prose(text[:loc[0]]))
+		b.WriteString("<pre><code>" + html.EscapeString(text[loc[2]:loc[3]]) + "</code></pre>")
+		text = strings.TrimPrefix(text[loc[1]:], "\n")
+	}
+	b.WriteString(prose(text))
+	return b.String()
+}
+
+func prose(s string) string {
+	s = inlineRe.ReplaceAllStringFunc(html.EscapeString(s), func(m string) string {
+		return "<code>" + m[1:len(m)-1] + "</code>"
+	})
+	return strings.ReplaceAll(s, "\n", "<br>")
+}
+
 // message builds a chatMessage body: the text, then each file as a reference
 // attachment.
 func (c *Client) message(r ref, text string, files []string) (map[string]any, error) {
-	content := strings.ReplaceAll(html.EscapeString(text), "\n", "<br>")
+	content := toHTML(text)
 	msg := map[string]any{}
 	if len(files) > 0 {
 		folder, err := c.folderFor(r)
