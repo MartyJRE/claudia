@@ -571,3 +571,48 @@ func TestHeaderAndInboxCountNeedsYouShell(t *testing.T) {
 		t.Errorf("a session waiting on a prompt doesn't add its summary: %q", got)
 	}
 }
+
+func TestSessionsDoneFromSummaryShell(t *testing.T) {
+	m := sessionsModelShell(t)
+	i := slices.IndexFunc(m.sessions, func(r row) bool { return r.live() && r.Transcript != nil })
+	r := &m.sessions[i]
+	at := time.Now().Add(-time.Minute)
+	r.Live.Status, r.Transcript.Updated = claude.StatusIdle, at
+	r.summary, r.summaryFor = "Done: PR #5 merged", at
+	m.reindex()
+	if !r.done() || r.needsYou() || plainShell(m.status(*r)) != "✓ done" {
+		t.Fatalf("a finished session says so: %q", plainShell(m.status(*r)))
+	}
+	if got := plainShell(summaryText(*r, true)); got != "PR #5 merged" {
+		t.Errorf("the line under it drops the prefix: %q", got)
+	}
+	if got := plainShell(summaryText(*r, false)); got != "Done: PR #5 merged" {
+		t.Errorf("the detail keeps it: %q", got)
+	}
+	h := plainShell(m.viewHeader())
+	if !strings.Contains(h, "1 done") {
+		t.Errorf("the header counts it: %s", h)
+	}
+	if s := plainShell(m.listSessions(40)); !strings.Contains(s, "1 done") {
+		t.Errorf("its group counts it:\n%s", s)
+	}
+	if slices.ContainsFunc(m.inbox(), func(it inboxItem) bool { return it.kind == kClaude && it.sess.ID == r.ID }) {
+		t.Error("a done session isn't waiting on you")
+	}
+
+	for name, change := range map[string]func(){
+		"older summary": func() { r.summaryFor = at.Add(-time.Hour) },
+		"working again": func() { r.Live.Status = claude.StatusBusy },
+		"waiting":       func() { r.Live.Status = claude.StatusWaiting },
+		"closed":        func() { r.Live = nil },
+		"not done":      func() { r.summary = "Waiting: CI" },
+	} {
+		saved, live := *r, *r.Live
+		change()
+		if r.done() {
+			t.Errorf("%s: still done", name)
+		}
+		*r = saved
+		*r.Live = live
+	}
+}

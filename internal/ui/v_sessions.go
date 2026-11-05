@@ -85,7 +85,7 @@ func (m *Model) listSessionsTable(h int) string {
 }
 
 // summaryText colours a session's summary by what it asks of you; under a
-// row whose status already says it needs you, the line says only what for.
+// row whose status already says it (needs you, done), the line drops that.
 func summaryText(r row, underStatus bool) string {
 	s := r.summary
 	switch {
@@ -98,6 +98,8 @@ func summaryText(r row, underStatus bool) string {
 		return lipgloss.NewStyle().Foreground(yellow).Render(s)
 	case strings.HasPrefix(s, "Waiting:"):
 		return lipgloss.NewStyle().Foreground(blue).Render(s)
+	case underStatus && r.done():
+		s = strings.TrimSpace(strings.TrimPrefix(s, donePrefix))
 	}
 	return sDim.Render(s)
 }
@@ -114,6 +116,8 @@ func (m *Model) status(r row) string {
 		return lipgloss.NewStyle().Foreground(yellow).Bold(true).Render("◆ needs you")
 	case s.Working():
 		return sOK.Render(spinner[m.frame%len(spinner)] + " working")
+	case r.done():
+		return sOK.Render("✓ done")
 	default:
 		return lipgloss.NewStyle().Foreground(blue).Render("● your turn")
 	}

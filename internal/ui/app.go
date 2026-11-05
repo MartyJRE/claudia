@@ -67,7 +67,21 @@ type row struct {
 
 func (r row) live() bool { return r.Live != nil }
 
-const needsYouPrefix = "Needs you:"
+const (
+	needsYouPrefix = "Needs you:"
+	donePrefix     = "Done:"
+)
+
+// summarized: the summary was written from the session's latest turn.
+func (r row) summarized(prefix string) bool {
+	return strings.HasPrefix(r.summary, prefix) && r.Transcript != nil && r.summaryFor.Equal(r.Updated)
+}
+
+// done: stopped, and its summary of that very turn says nothing is left, so
+// it's likely safe to close.
+func (r row) done() bool {
+	return r.live() && !r.Live.Status.Working() && !r.needsYou() && r.summarized(donePrefix)
+}
 
 // needsYou: Claude is waiting on a prompt, or it stopped and its summary of
 // that very turn says it's asking you something.
@@ -78,7 +92,7 @@ func (r row) needsYou() bool {
 	if r.Live.Status == claude.StatusWaiting {
 		return true
 	}
-	return strings.HasPrefix(r.summary, needsYouPrefix) && r.Transcript != nil && r.summaryFor.Equal(r.Updated)
+	return r.summarized(needsYouPrefix)
 }
 
 type Model struct {
@@ -574,7 +588,7 @@ func (m *Model) maybeUsage() tea.Cmd {
 }
 
 func (m *Model) viewHeader() string {
-	var waiting, working, ready int
+	var waiting, working, ready, done int
 	for _, r := range m.sessions {
 		switch {
 		case !r.live():
@@ -582,6 +596,8 @@ func (m *Model) viewHeader() string {
 			waiting++
 		case r.Live.Status.Working():
 			working++
+		case r.done():
+			done++
 		default:
 			ready++
 		}
@@ -608,6 +624,9 @@ func (m *Model) viewHeader() string {
 	}
 	if ready > 0 {
 		pills = append(pills, pill(black, blue, fmt.Sprintf("%d your turn", ready)))
+	}
+	if done > 0 {
+		pills = append(pills, pill(black, commentGrey, fmt.Sprintf("%d done", done)))
 	}
 	right := strings.Join(pills, " ")
 	gap := max(1, m.width-lipgloss.Width(title)-lipgloss.Width(right)-1)
