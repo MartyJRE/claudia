@@ -368,3 +368,17 @@ func TestReactionsAnswer(t *testing.T) {
 		t.Errorf("reactors, once each, bots left out: %+v", posts)
 	}
 }
+
+func TestToHTML(t *testing.T) {
+	for in, want := range map[string]string{
+		"approved <3\nthanks":                             "approved &lt;3<br>thanks",
+		"run `go test ./...` & see":                       "run <code>go test ./...</code> &amp; see",
+		"fix:\n```go\nif a < b {\n\treturn\n}\n```\ndone": "fix:<br><pre><code>if a &lt; b {\n\treturn\n}</code></pre>done",
+		"```\nx```":      "<pre><code>x</code></pre>",
+		"a lone ` stays": "a lone ` stays",
+	} {
+		if got := toHTML(in); got != want {
+			t.Errorf("toHTML(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
