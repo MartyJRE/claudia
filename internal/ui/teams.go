@@ -172,7 +172,7 @@ func (m *Model) replyInTeams(w teams.Waiting) (tea.Model, tea.Cmd) {
 	}
 	prompt := fmt.Sprintf("%s %s:\n\n> %s\n\n"+
 		"Read the conversation with `claudia teams show %s` (`claudia teams download <url>` fetches a file it lists), check the code where it helps, and draft my reply: briefly, in the language they wrote in. "+
-		"Only after I OK the exact text, send it with `claudia teams reply %s '<text>'` (add `--file <path>` to attach a file), or react with `claudia teams react %s 👍`.",
+		"Only after I OK the exact text, send it with `claudia teams reply %s '<text>'` (add `--file <path>` to attach a file, `--image <path>` to show an image such as a diagram in the message), or react with `claudia teams react %s 👍`.",
 		w.From, what, strings.ReplaceAll(w.Text, "\n", "\n> "), w.Ref, w.Ref, w.Ref)
 	m.pickRepo("reply to "+firstName(w.From)+" in", "", nil, func(m *Model, dir string, p claude.Profile) (tea.Model, tea.Cmd) {
 		sp, _ := launch.New(dir, p, "reply to "+firstName(w.From), prompt)

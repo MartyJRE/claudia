@@ -23,7 +23,8 @@ const teamsHelp = `claudia teams: Microsoft Teams and your calendar, as you.
   react <ref|mr-url> <emoji>      react to the message, e.g. ✅ or 👍
   chat <who>[,<who>…] <text>      write to people (name or email); several make a group chat
   post <Team/Channel> <text>      start a new thread in a channel
-  reply, chat and post take --file <path> (repeatable) to attach files.
+  reply, chat and post take --file <path> to attach a file and --image <path> to show
+  a PNG, JPEG or GIF in the message (both repeatable).
 
   who <name|email>                JSON: find a person
   download <file-url> [dir]       save a file shared in Teams (default: current dir)
@@ -56,17 +57,21 @@ type teamsClient interface {
 
 var clock = time.Now
 
-// fileFlags takes every --file <path> out of args.
+// fileFlags takes every --file <path> and --image <path> out of args.
 func fileFlags(args []string) (rest, files []string, err error) {
 	for i := 0; i < len(args); i++ {
-		if args[i] != "--file" {
+		if args[i] != "--file" && args[i] != "--image" {
 			rest = append(rest, args[i])
 			continue
 		}
 		if i+1 == len(args) {
-			return nil, nil, errors.New("--file needs a path")
+			return nil, nil, errors.New(args[i] + " needs a path")
 		}
-		files = append(files, args[i+1])
+		f := args[i+1]
+		if args[i] == "--image" {
+			f = teams.Image(f)
+		}
+		files = append(files, f)
 		i++
 	}
 	return rest, files, nil
