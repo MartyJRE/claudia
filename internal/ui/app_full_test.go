@@ -319,6 +319,22 @@ func TestProfileForUnknownFull(t *testing.T) {
 	}
 }
 
+func TestOpenTeamsInTheAppFull(t *testing.T) {
+	ran := fakeCombined(t, "", nil)
+	openURL("https://teams.microsoft.com/l/message/19:x@thread.tacv2/1730?tenantId=t")()
+	openURL("https://teams.microsoft.com/v2/")()
+	if got := strings.Join(*ran, "|"); got != "open msteams:/l/message/19:x@thread.tacv2/1730?tenantId=t|open https://teams.microsoft.com/v2/" {
+		t.Errorf("a Teams link opens the app: %s", got)
+	}
+	ran = fakeCombined(t, "no app", errors.New("exit status 1"))
+	if msg := openURL("https://teams.cloud.microsoft/l/chat/19:a/0")(); msg == nil {
+		t.Error("both failing flashes")
+	}
+	if got := strings.Join(*ran, "|"); got != "open msteams:/l/chat/19:a/0|open https://teams.cloud.microsoft/l/chat/19:a/0" {
+		t.Errorf("without the app, the browser: %s", got)
+	}
+}
+
 func TestRunAndClipboardFull(t *testing.T) {
 	ran := fakeCombined(t, "  boom\n", errors.New("exit status 1"))
 	msg := openURL("https://example.org")()

@@ -977,7 +977,29 @@ func run(c *exec.Cmd) tea.Cmd {
 	}
 }
 
-func openURL(u string) tea.Cmd { return run(exec.Command("open", u)) }
+// openURL opens a link; a Teams one goes to the desktop app through its
+// msteams: scheme, and to the browser only when that fails.
+func openURL(u string) tea.Cmd {
+	app, ok := teamsAppURL(u)
+	if !ok {
+		return run(exec.Command("open", u))
+	}
+	return func() tea.Msg {
+		if _, err := cmdCombinedOutput(exec.Command("open", app)); err == nil {
+			return nil
+		}
+		return run(exec.Command("open", u))()
+	}
+}
+
+func teamsAppURL(u string) (string, bool) {
+	for _, host := range []string{"https://teams.microsoft.com/", "https://teams.cloud.microsoft/"} {
+		if rest, ok := strings.CutPrefix(u, host); ok && strings.HasPrefix(rest, "l/") {
+			return "msteams:/" + rest, true
+		}
+	}
+	return "", false
+}
 
 func copyText(s, what string) tea.Cmd {
 	return func() tea.Msg {
