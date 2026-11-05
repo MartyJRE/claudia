@@ -61,9 +61,25 @@ type row struct {
 	pane    *tmux.Pane
 	host    string
 	summary string // where the session stands, written by the watcher
+	// summaryFor is the transcript update the summary was written from.
+	summaryFor time.Time
 }
 
 func (r row) live() bool { return r.Live != nil }
+
+const needsYouPrefix = "Needs you:"
+
+// needsYou: Claude is waiting on a prompt, or it stopped and its summary of
+// that very turn says it's asking you something.
+func (r row) needsYou() bool {
+	if !r.live() || r.Live.Status.Working() {
+		return false
+	}
+	if r.Live.Status == claude.StatusWaiting {
+		return true
+	}
+	return strings.HasPrefix(r.summary, needsYouPrefix) && r.Transcript != nil && r.summaryFor.Equal(r.Updated)
+}
 
 type Model struct {
 	opts   Options
@@ -562,7 +578,7 @@ func (m *Model) viewHeader() string {
 	for _, r := range m.sessions {
 		switch {
 		case !r.live():
-		case r.Live.Status == claude.StatusWaiting:
+		case r.needsYou():
 			waiting++
 		case r.Live.Status.Working():
 			working++

@@ -406,18 +406,18 @@ func TestSessionsSummaryLineShell(t *testing.T) {
 	}
 	m.reindex()
 	s := plainShell(m.listSessions(30))
-	for _, want := range []string{"Needs you: OK to merge?", "Waiting: Michal to approve", "Done: PR #5 open"} {
+	for _, want := range []string{"OK to merge?", "Waiting: Michal to approve", "Done: PR #5 open"} {
 		if !strings.Contains(s, want) {
 			t.Errorf("summary %q missing:\n%s", want, s)
 		}
 	}
 	lines := strings.Split(s, "\n")
 	for i, l := range lines {
-		if strings.Contains(l, "Needs you:") && !strings.Contains(lines[i-1], m.sessions[0].Name()) {
+		if strings.Contains(l, "OK to merge?") && !strings.Contains(lines[i-1], m.sessions[0].Name()) {
 			t.Errorf("the summary sits under its session:\n%s\n%s", lines[i-1], l)
 		}
 	}
-	if plainShell(summaryText("Needs you: x")) != "Needs you: x" || summaryText("") != "" {
+	if plainShell(summaryText(row{summary: "Needs you: x"}, true)) != "Needs you: x" || summaryText(row{}, true) != "" {
 		t.Error("summaryText")
 	}
 
@@ -437,5 +437,41 @@ func TestSessionsSummaryLineShell(t *testing.T) {
 	m.cur[vSessions].pos = slices.IndexFunc(m.vis.sessions, func(x srow) bool { return x.isSess && x.sess.ID == m.sessions[0].ID })
 	if d := plainShell(m.detailSession()); !strings.Contains(d, "Needs you: OK to merge?") {
 		t.Errorf("detail shows the summary:\n%s", d)
+	}
+}
+
+func TestSessionsNeedsYouFromSummaryShell(t *testing.T) {
+	m := sessionsModelShell(t)
+	i := slices.IndexFunc(m.sessions, func(r row) bool { return r.live() && r.Transcript != nil })
+	if i < 0 {
+		t.Fatal("no live session in the fixture")
+	}
+	r := &m.sessions[i]
+	at := time.Now().Add(-time.Minute)
+	r.Live.Status, r.Transcript.Updated = claude.StatusIdle, at
+	r.summary, r.summaryFor = "Needs you: OK to merge !260?", at
+	m.reindex()
+	if !r.needsYou() || plainShell(m.status(*r)) != "◆ needs you" {
+		t.Fatalf("a summary asking you makes the session need you: %q", plainShell(m.status(*r)))
+	}
+	if got := plainShell(summaryText(*r, true)); got != "OK to merge !260?" {
+		t.Errorf("the line says only what for: %q", got)
+	}
+	if !strings.Contains(plainShell(m.viewHeader()), "needs you") {
+		t.Error("the header counts it")
+	}
+	if !slices.ContainsFunc(m.inbox(), func(it inboxItem) bool {
+		return it.kind == kClaude && it.sess.ID == r.ID && strings.HasSuffix(it.text, " · OK to merge !260?")
+	}) {
+		t.Error("the inbox lists it, with what it asks")
+	}
+
+	r.summaryFor = at.Add(-time.Hour) // written for an earlier turn
+	if r.needsYou() || plainShell(summaryText(*r, true)) != "Needs you: OK to merge !260?" {
+		t.Error("an old summary doesn't make it need you")
+	}
+	r.summaryFor, r.Live.Status = at, claude.StatusBusy
+	if r.needsYou() {
+		t.Error("working again: not waiting on you")
 	}
 }

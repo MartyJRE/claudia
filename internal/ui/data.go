@@ -55,7 +55,7 @@ func (m *Model) loadSessions() tea.Cmd {
 		sums := summary.Load()
 		var rows []row
 		for _, s := range listSessions(store) {
-			r := row{Session: s, summary: sums[s.ID].Text}
+			r := row{Session: s, summary: sums[s.ID].Text, summaryFor: sums[s.ID].For}
 			if s.Live != nil {
 				if p, ok := locatePane(loc, s.Live.PID); ok {
 					r.pane = &p
