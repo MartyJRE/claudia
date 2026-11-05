@@ -129,12 +129,16 @@ func (m *Model) inbox() []inboxItem {
 		out = append(out, inboxItem{id: "tm:" + w.Ref, kind: k, where: w.Where, who: w.From, text: text, since: since, url: w.WebURL, tw: w})
 	}
 	for _, r := range m.sessions {
-		if !r.live() || r.Live.Status != claude.StatusWaiting {
+		if !r.needsYou() {
 			continue
+		}
+		text := r.Name()
+		if ask := strings.TrimSpace(strings.TrimPrefix(r.summary, needsYouPrefix)); ask != r.summary && ask != "" && r.Live.Status != claude.StatusWaiting {
+			text += " · " + ask
 		}
 		out = append(out, inboxItem{
 			id: fmt.Sprintf("cc:%s:%d", r.ID, r.Live.UpdatedAt), kind: kClaude,
-			where: project(r.Dir()), who: "claude", text: r.Name(), since: r.Live.Since(),
+			where: project(r.Dir()), who: "claude", text: text, since: r.Live.Since(),
 			ticket: m.ix.sessionTicket[r.ID], sess: r,
 		})
 	}

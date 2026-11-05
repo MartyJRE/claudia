@@ -10,7 +10,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/MartyJRE/claudia/internal/atlassian"
-	"github.com/MartyJRE/claudia/internal/claude"
 	"github.com/MartyJRE/claudia/internal/launch"
 	"github.com/MartyJRE/claudia/internal/state"
 )
@@ -254,7 +253,7 @@ func (m *Model) issueSessions(key string) string {
 		for _, r := range m.sessions {
 			if r.ID == id && r.live() {
 				live++
-				waiting = waiting || r.Live.Status == claude.StatusWaiting
+				waiting = waiting || r.needsYou()
 			}
 		}
 	}

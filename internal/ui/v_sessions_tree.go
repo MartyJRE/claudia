@@ -9,7 +9,6 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/MartyJRE/claudia/internal/claude"
 	"github.com/MartyJRE/claudia/internal/state"
 )
 
@@ -86,7 +85,7 @@ func (g *sgroup) stats() (n, live, waiting int, last time.Time) {
 		n++
 		if r.live() {
 			live++
-			if r.Live.Status == claude.StatusWaiting {
+			if r.needsYou() {
 				waiting++
 			}
 		}

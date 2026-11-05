@@ -80,16 +80,21 @@ func (m *Model) listSessionsTable(h int) string {
 		if !rows[i].isSess {
 			return ""
 		}
-		return summaryText(rows[i].sess.summary)
+		return summaryText(rows[i].sess, true)
 	})
 }
 
-// summaryText colours a summary by what it asks of you.
-func summaryText(s string) string {
+// summaryText colours a session's summary by what it asks of you; under a
+// row whose status already says it needs you, the line says only what for.
+func summaryText(r row, underStatus bool) string {
+	s := r.summary
 	switch {
 	case s == "":
 		return ""
-	case strings.HasPrefix(s, "Needs you:"):
+	case strings.HasPrefix(s, needsYouPrefix):
+		if underStatus && r.needsYou() {
+			s = strings.TrimSpace(strings.TrimPrefix(s, needsYouPrefix))
+		}
 		return lipgloss.NewStyle().Foreground(yellow).Render(s)
 	case strings.HasPrefix(s, "Waiting:"):
 		return lipgloss.NewStyle().Foreground(blue).Render(s)
@@ -105,7 +110,7 @@ func (m *Model) status(r row) string {
 		return sDim.Render("○ closed")
 	}
 	switch s := r.Live.Status; {
-	case s == claude.StatusWaiting:
+	case r.needsYou():
 		return lipgloss.NewStyle().Foreground(yellow).Bold(true).Render("◆ needs you")
 	case s.Working():
 		return sOK.Render(spinner[m.frame%len(spinner)] + " working")
@@ -220,7 +225,7 @@ func (m *Model) detailSession() string {
 	lines = append(lines, strings.Join(meta, sDim.Render("  ·  ")))
 
 	if r.summary != "" {
-		lines = append(lines, summaryText(r.summary))
+		lines = append(lines, summaryText(r, false))
 	}
 	if r.Transcript != nil {
 		if p := oneLine(r.LastPrompt); p != "" {
