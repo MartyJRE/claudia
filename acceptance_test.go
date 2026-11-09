@@ -43,6 +43,8 @@ func TestPlanReviewInTmux(t *testing.T) {
 		c := exec.Command("tmux", "kill-server")
 		c.Env = append(os.Environ(), env...)
 		c.Run()
+		// The watcher detaches from tmux, so the server going doesn't end it.
+		exec.Command("pkill", "-f", filepath.Join(root, "claudia")+" watch").Run()
 	})
 	wait := func(what string, ok func() bool) {
 		t.Helper()
