@@ -177,8 +177,13 @@ func TestTickFull(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	spawned := 0
+	fake(t, &spawnWatcher, func() { spawned++ })
 	_, cmd := m.Update(tickMsg{})
 	msgs := drainFull(cmd)
+	if spawned != 1 {
+		t.Errorf("tick respawns a dead watcher: %d", spawned)
+	}
 	if !m.sessLoading || !m.vaultLoading || !m.updateAvail || m.flash != "" || m.updateAt.IsZero() {
 		t.Errorf("tick reloads sessions, vault, update state and clears old flashes: sess %v vault %v upd %v flash %q",
 			m.sessLoading, m.vaultLoading, m.updateAvail, m.flash)
@@ -198,6 +203,9 @@ func TestTickFull(t *testing.T) {
 	m.setFlash("fresh", false)
 	_, cmd = m.Update(tickMsg{})
 	msgs = drainFull(cmd)
+	if spawned != 1 {
+		t.Errorf("the watcher is checked every 30s only: %d", spawned)
+	}
 	if m.flash != "fresh" || m.chooser != nil {
 		t.Errorf("a fresh flash stays, no open request twice: %q", m.flash)
 	}

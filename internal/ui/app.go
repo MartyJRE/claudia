@@ -304,6 +304,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.reloadBrief()
 		if time.Since(m.updateAt) > 30*time.Second {
 			m.updateAt, m.updateAvail = time.Now(), updateAvailable()
+			// An update or a crash may have ended the watcher; the summaries need it.
+			spawnWatcher()
 		}
 		if m.reloadDismissed() {
 			m.refilter()

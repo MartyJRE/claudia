@@ -64,4 +64,5 @@ var (
 	fetchUpdate     = update.Fetch
 	installUpdate   = update.Install
 	stopWatcher     = watch.Stop
+	spawnWatcher    = watch.Spawn
 )

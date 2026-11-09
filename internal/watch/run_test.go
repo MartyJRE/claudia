@@ -144,6 +144,16 @@ func TestRunCantWritePid(t *testing.T) {
 	}
 }
 
+func TestRunCantLockOrWritePid(t *testing.T) {
+	for _, blocked := range []string{lockFile, pidFile + ".tmp"} {
+		t.Setenv("XDG_STATE_HOME", t.TempDir())
+		os.MkdirAll(state.Path(blocked), 0o755)
+		if err := Run(func() { t.Error("briefed") }); err == nil {
+			t.Errorf("ran with %s a directory", blocked)
+		}
+	}
+}
+
 func TestSpawn(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	bin := t.TempDir()

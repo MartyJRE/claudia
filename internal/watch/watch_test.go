@@ -12,6 +12,7 @@ import (
 	"sync"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/MartyJRE/claudia/internal/atlassian"
 	"github.com/MartyJRE/claudia/internal/claude"
@@ -254,7 +255,7 @@ func TestPost(t *testing.T) {
 func TestRunningAndStop(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	if Running() {
-		t.Fatal("running without a pid file")
+		t.Fatal("running without a lock file")
 	}
 	Stop()
 	child := exec.Command("sleep", "60")
@@ -265,29 +266,65 @@ func TestRunningAndStop(t *testing.T) {
 	if err := state.Save(pidFile, child.Process.Pid); err != nil {
 		t.Fatal(err)
 	}
+	if Running() {
+		t.Error("a live pid without the lock, like a zombie's, counts as running")
+	}
+	l, err := lock()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !Running() {
-		t.Error("live pid not running")
+		t.Error("held lock not running")
 	}
 	Spawn()
 	if err := Run(func() {}); err == nil || err.Error() != "already running" {
 		t.Errorf("second watcher: %v", err)
 	}
 	Stop()
-	err := child.Wait()
+	err = child.Wait()
 	ws, ok := child.ProcessState.Sys().(syscall.WaitStatus)
 	if err == nil || !ok || !ws.Signaled() || ws.Signal() != syscall.SIGTERM {
 		t.Errorf("stop didn't SIGTERM the watcher: %v", err)
 	}
+	l.Close()
 	if Running() {
-		t.Error("dead pid still running")
+		t.Error("released lock still running")
 	}
 	if err := state.Save(pidFile, "garbage"); err != nil {
 		t.Fatal(err)
 	}
-	if Running() {
-		t.Error("garbage pid running")
-	}
 	Stop()
+}
+
+func TestRunEndsOnSIGTERM(t *testing.T) {
+	privateServer(t)
+	catchNotes(t)
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	fakeGlab(t, "exit 1\n")
+	serveJira(t, func(w http.ResponseWriter, _ *http.Request) { http.Error(w, "down", 500) })
+	oldEvery := pollEvery
+	pollEvery = time.Millisecond
+	t.Cleanup(func() { pollEvery = oldEvery })
+	ended := make(chan error, 1)
+	go func() { ended <- Run(func() {}) }()
+	for i := 0; !exists(pidFile); i++ {
+		if i > 1000 {
+			t.Fatal("watcher never started")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	_ = syscall.Kill(os.Getpid(), syscall.SIGTERM)
+	select {
+	case err := <-ended:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("SIGTERM didn't end the watcher")
+	}
+	if exists(pidFile) || Running() {
+		t.Error("SIGTERM left the pid file or the lock behind")
+	}
 }
 
 func TestOneLine(t *testing.T) {

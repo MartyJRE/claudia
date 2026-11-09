@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -24,7 +25,10 @@ import (
 	"github.com/MartyJRE/claudia/internal/update"
 )
 
-const pidFile = "watch.pid"
+const (
+	pidFile  = "watch.pid"
+	lockFile = "watch.lock"
+)
 
 // Seams for tests.
 var (
@@ -36,14 +40,32 @@ var (
 	stopRun      chan struct{} // closing it ends Run; nil never does
 )
 
-// Running reports whether a watcher process is alive.
+// Running reports whether a watcher holds the lock. A pid alone can't say: a
+// watcher that died under the TUI that spawned it lingers as a zombie, and
+// kill(pid, 0) still succeeds on it. The kernel drops the lock on exit.
 func Running() bool {
-	b, err := os.ReadFile(state.Path(pidFile))
+	f, err := os.Open(state.Path(lockFile))
 	if err != nil {
 		return false
 	}
-	pid, _ := strconv.Atoi(strings.TrimSpace(string(b)))
-	return pid > 0 && syscall.Kill(pid, 0) == nil
+	defer f.Close()
+	return syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB) != nil
+}
+
+// lock takes the watcher lock for as long as the returned file stays open.
+func lock() (*os.File, error) {
+	if err := os.MkdirAll(state.Dir(), 0o755); err != nil {
+		return nil, err
+	}
+	f, err := os.OpenFile(state.Path(lockFile), os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return nil, err
+	}
+	if syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB) != nil {
+		f.Close()
+		return nil, fmt.Errorf("already running")
+	}
+	return f, nil
 }
 
 // Stop ends a running watcher, so the next claudia start runs a fresh one.
@@ -76,7 +98,7 @@ func Spawn() {
 	c.Stdout, c.Stderr = log, log
 	c.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	if c.Start() == nil {
-		_ = c.Process.Release()
+		go c.Wait()
 	}
 	log.Close()
 }
@@ -130,9 +152,14 @@ func (w *watcher) summarize(s claude.Session) {
 // Run polls until killed. makeBrief writes the inbox brief; it runs on the
 // configured interval and whenever the TUI asks for one.
 func Run(makeBrief func()) error {
-	if Running() {
-		return fmt.Errorf("already running")
+	l, err := lock()
+	if err != nil {
+		return err
 	}
+	defer l.Close()
+	term := make(chan os.Signal, 1)
+	signal.Notify(term, syscall.SIGTERM, syscall.SIGINT)
+	defer signal.Stop(term)
 	if err := state.Save(pidFile, os.Getpid()); err != nil {
 		return err
 	}
@@ -193,6 +220,8 @@ func Run(makeBrief func()) error {
 		}
 		select {
 		case <-stopRun:
+			return nil
+		case <-term:
 			return nil
 		case <-time.After(pollEvery):
 		}

@@ -47,6 +47,7 @@ func stubOS() {
 	fetchUpdate = func() (update.Plan, error) { panic("update.Fetch not faked") }
 	installUpdate = func(func(string)) error { panic("update.Install not faked") }
 	stopWatcher = func() { panic("watch.Stop not faked") }
+	spawnWatcher = func() { panic("watch.Spawn not faked") }
 }
 
 // fake swaps a seam for the length of the test.
