@@ -58,6 +58,11 @@ func TestWritePreviews(t *testing.T) {
 			return slices.IndexFunc(m.vis.jira, func(r jrow) bool { return r.issue.Key == "ABC-412" })
 		}},
 		{"usage.svg", vUsage, func(*Model) int { return 0 }},
+		// Last: what it adds would show in the other views.
+		{"board.svg", vBoard, func(m *Model) int {
+			demoBoard(m)
+			return m.cur[vBoard].pos
+		}},
 	}
 	for _, s := range shots {
 		m.switchView(s.v)
@@ -124,6 +129,28 @@ func demoModel(t *testing.T) *Model {
 	m.fetchedAt[srcConfluence] = now.Add(-2 * time.Minute)
 	m.reindex()
 	return m
+}
+
+// demoBoard adds what the Board shows beyond the other views: an analysis
+// session and what the tickets cost so far.
+func demoBoard(m *Model) {
+	analysis := demoSession("f7a8b9c0-d1e2-4f3a-b4c5-d6e7f8a9b0c1", "work", "billing", "devel", "Analyse ABC-403 PDF totals", "", "claude-opus-5-5", "", 4*time.Hour, 3*time.Hour)
+	analysis.kind = "analysis"
+	m.links.SetTicket(analysis.ID, "ABC-403")
+	m.sessions = append(m.sessions, analysis)
+	opus := func(out, read int) map[string]claude.Tokens {
+		return map[string]claude.Tokens{"claude-opus-5-5": {Output: out, Read: read}, "claude-haiku-5-5": {Output: out / 10}}
+	}
+	m.ledger = claude.OpenLedger()
+	m.ledger.Merge([]claude.SessionCost{
+		{ID: "7c1e4b2a-5d3f-4e8a-9b61-2f0c8d4a7e19", Ticket: "ABC-412", Models: opus(420_000, 31_000_000)},
+		{ID: "4e2d9a1b-7c3f-4b5e-a6d8-9f0e1c2b3a4d", Ticket: "ABC-401", Models: opus(260_000, 18_000_000)},
+		{ID: "old-401-analysis", Ticket: "ABC-401", Models: opus(90_000, 5_000_000)},
+		{ID: "0f1e2d3c-4b5a-4c6d-9e8f-7a6b5c4d3e2f", Ticket: "ABC-422", Models: opus(40_000, 2_500_000)},
+		{ID: analysis.ID, Ticket: "ABC-403", Models: opus(60_000, 4_000_000)},
+	})
+	m.costs = ticketCosts(m.ledger)
+	m.reindex()
 }
 
 func writeLimits(t *testing.T, p claude.Profile, now time.Time) {

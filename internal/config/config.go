@@ -75,6 +75,13 @@ type Config struct {
 	WorkersRaw string `json:"workers"`
 	// Teams links review requests posted in a Teams channel to their MRs.
 	Teams Teams `json:"teams"`
+	Board Board `json:"board"`
+}
+
+type Board struct {
+	// Statuses puts the tickets in a Jira status into a Board column by name,
+	// e.g. {"Ready for QA": "QA"}, over the column claudia would work out.
+	Statuses map[string]string `json:"statuses"`
 }
 
 type Teams struct {

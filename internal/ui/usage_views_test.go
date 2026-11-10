@@ -174,7 +174,7 @@ func TestStackedBarByModel(t *testing.T) {
 
 	m := usageModelViews(t)
 	today := m.usageRows()[0]
-	bar := stackedBar(today, 40)
+	bar := stackedBar(today.models, today.cost, 40)
 	if got := []rune(plainViews(bar)); len(got) != 40 {
 		t.Errorf("segments add up to the whole bar, got %d", len(got))
 	}
@@ -183,10 +183,10 @@ func TestStackedBarByModel(t *testing.T) {
 		t.Errorf("want %d coloured segments, got %d: %q", len(today.models), n, bar)
 	}
 	other := usageRow{cost: 1, models: []claude.DayModel{{Model: "gpt-x", Tokens: claude.Tokens{Input: 1}}}}
-	if stackedBar(other, 10) != "" {
+	if stackedBar(other.models, other.cost, 10) != "" {
 		t.Error("models without a price draw nothing")
 	}
-	if stackedBar(usageRow{}, 10) != "" {
+	if stackedBar(nil, 0, 10) != "" {
 		t.Error("no cost, no bar")
 	}
 }

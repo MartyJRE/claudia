@@ -19,7 +19,7 @@ import (
 func TestViewsRenderShell(t *testing.T) {
 	m := newModelShell(t)
 	header := []string{"✻ claudia", "1 needs you", "1 to review", "1 mentions", "1 failed pipeline", "1 working", "1 your turn",
-		"1 Inbox 4", "2 Sessions 3", "3 Review 1", "4 My MRs 1", "6 Mentions 1", "9 Usage"}
+		"1 Inbox 4", "2 Board 2", "3 Sessions 3", "4 Review 1", "5 My MRs 1", "7 Mentions 1", "9 Notes", "Usage"}
 	for _, c := range []struct {
 		v     view
 		wants []string
@@ -138,8 +138,8 @@ func TestViewSwitchingShell(t *testing.T) {
 		{"1", vInbox},
 		{"shift+tab", vUsage},
 		{"tab", vInbox},
-		{"9", vUsage},
-		{"4", vMine},
+		{"9", vNotes},
+		{"5", vMine},
 		{"0", vMine},
 	} {
 		switch c.key {
@@ -471,7 +471,7 @@ func TestHeaderPillsShell(t *testing.T) {
 	}
 	m.updateAvail = true
 	m.sessions = []row{{Session: claude.Session{ID: "ffffffff", Live: &claude.Live{Status: claude.StatusShell}}}}
-	containsAllShell(t, "header", plainShell(m.viewHeader()), "⬆ update · ctrl+u", "1 working", "2 Sessions 1")
+	containsAllShell(t, "header", plainShell(m.viewHeader()), "⬆ update · ctrl+u", "1 working", "3 Sessions 1")
 	m.width = 30
 	for _, l := range strings.Split(m.viewHeader(), "\n") {
 		if ansi.StringWidth(l) > 30 {

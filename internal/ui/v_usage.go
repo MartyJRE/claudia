@@ -71,6 +71,9 @@ var usageCols = []col{
 func (m *Model) listUsage(h int) string {
 	top := m.viewLimits()
 	h -= lipgloss.Height(top)
+	if m.usageByTicket() {
+		return top + m.listCosts(h)
+	}
 	rows := m.vis.usage
 	peak := 0.0
 	for _, r := range rows {
@@ -96,7 +99,7 @@ func (m *Model) listUsage(h int) string {
 		}
 		bar := ""
 		if peak > 0 {
-			bar = stackedBar(r, int(r.cost/peak*float64(barW)))
+			bar = stackedBar(r.models, r.cost, int(r.cost/peak*float64(barW)))
 		}
 		cost := money(r.cost)
 		if r.unknown {
@@ -117,21 +120,21 @@ func (m *Model) listUsage(h int) string {
 	return top + table
 }
 
-// stackedBar splits a day's bar by model, each segment as long as that model's
+// stackedBar splits a bar by model, each segment as long as that model's
 // share of the cost and in its colour. Cumulative rounding keeps the total exact.
-func stackedBar(r usageRow, w int) string {
-	if r.cost <= 0 {
+func stackedBar(models []claude.DayModel, cost float64, w int) string {
+	if cost <= 0 {
 		return ""
 	}
 	var b strings.Builder
 	done, sum := 0, 0.0
-	for _, dm := range r.models {
+	for _, dm := range models {
 		c, ok := dm.Cost(dm.Model)
 		if !ok {
 			continue
 		}
 		sum += c
-		end := int(sum / r.cost * float64(w))
+		end := int(sum / cost * float64(w))
 		if n := end - done; n > 0 {
 			f, _ := modelName(dm.Model)
 			b.WriteString(lipgloss.NewStyle().Foreground(modelColor(f)).Render(strings.Repeat("━", n)))
@@ -221,6 +224,9 @@ func limitBar(name string, w claude.Window) string {
 }
 
 func (m *Model) detailUsage() string {
+	if m.usageByTicket() {
+		return m.detailCost()
+	}
 	c := m.cur[vUsage].pos
 	if c < 0 || c >= len(m.vis.usage) {
 		return m.panel(nil)

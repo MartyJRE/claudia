@@ -309,7 +309,7 @@ func TestGlobalKeysFull(t *testing.T) {
 func TestUnknownViewFull(t *testing.T) {
 	m := newModelShell(t)
 	m.view = nViews
-	if m.viewList(10) != "" || m.viewDetail() != "" || m.subtitle() != "" || m.count() != 0 {
+	if m.viewList(10) != "" || m.viewDetail() != "" || m.subtitle() != "" || m.count() != 0 || m.help() != nil || viewScope(m.view) != "" {
 		t.Error("a view without a tab renders nothing")
 	}
 }

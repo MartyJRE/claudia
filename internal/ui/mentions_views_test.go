@@ -49,7 +49,7 @@ func TestMentionsList(t *testing.T) {
 		t.Error("unansweredFor")
 	}
 	s := screenViews(m)
-	for _, want := range []string{"6 Mentions 1", "Bob Builder", "about ABC-2", "Martin please review & sign…", "OPS", "Jira and Confluence mentions"} {
+	for _, want := range []string{"7 Mentions 1", "Bob Builder", "about ABC-2", "Martin please review & sign…", "OPS", "Jira and Confluence mentions"} {
 		if !strings.Contains(s, want) {
 			t.Errorf("screen lacks %q:\n%s", want, s)
 		}

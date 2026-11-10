@@ -76,6 +76,10 @@ var Fields = []Field{
 	{Key: "teams.mail.rules", Group: "Teams", Label: "mail rules", Kind: KindJSON,
 		Help: "list mail regardless of recipients when the sender or subject contains the text", Example: `[{"from": "boss@"}, {"subject": "Approval"}]`},
 
+	{Key: "board.statuses", Group: "Board", Label: "statuses", Kind: KindJSON,
+		Default: "worked out from MRs and sessions", Help: "puts a Jira status in a Board column: Up next, Plan, Building, Review, Merge, QA or Done",
+		Example: `{"Ready for QA": "QA", "Blocked": "Up next"}`},
+
 	{Key: "brief_every", Group: "UI", Label: "brief every", Kind: KindDuration,
 		Default: "2h", Help: "how often the inbox brief is rewritten, e.g. 30m; off leaves only the on-demand refresh"},
 	{Key: "rounded_pills", Group: "UI", Label: "rounded pills", Kind: KindBool,
