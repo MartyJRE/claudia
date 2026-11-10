@@ -6,6 +6,30 @@ on:
   pull_request:
 
 jobs:
+  # The Swift job waits for a scarce macOS runner, so it only runs when the
+  # notifier changed; everything else stops waiting on it.
+  changes:
+    runs-on: ubuntu-26.04
+    outputs:
+      swift: ${{ steps.diff.outputs.swift }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: what changed
+        id: diff
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            echo "swift=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if git diff --name-only "$BASE" HEAD | grep -q '^notifier/'; then
+            echo "swift=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "swift=false" >> "$GITHUB_OUTPUT"
+          fi
+
   check:
     runs-on: ubuntu-26.04
     steps:
@@ -59,6 +83,8 @@ jobs:
   # The notification helper's tests. Coverage counts NotifierCore, not the thin
   # executables that wire it to AppKit.
   swift:
+    needs: changes
+    if: needs.changes.outputs.swift == 'true'
     runs-on: macos-latest
     timeout-minutes: 10
     outputs:
@@ -78,7 +104,9 @@ jobs:
   # Every green push to main is a release. Tagging and goreleaser share one job
   # because a tag pushed with GITHUB_TOKEN starts no other workflow.
   release:
-    if: github.event_name == 'push'
+    if: >-
+      github.event_name == 'push' && !cancelled() && needs.check.result == 'success' &&
+      (needs.swift.result == 'success' || needs.swift.result == 'skipped')
     needs: [check, swift]
     runs-on: ubuntu-26.04
     permissions:
