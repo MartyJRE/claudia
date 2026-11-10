@@ -121,7 +121,7 @@ func TestCardTurnShell(t *testing.T) {
 			r.Activity = claude.Activity{Verb: "editing", Detail: "a.go"}
 		})}}, nil, turnAgent, "a.go"},
 		{"waiting on someone", boardCard{sessions: []row{boardSess("", claude.StatusIdle, waitingOn)}}, nil, turnColleague, "Michal to approve"},
-		{"a closed session waiting doesn't count", boardCard{sessions: []row{boardSess("", "", waitingOn)}}, nil, turnYou, "plan it"},
+		{"a closed session waiting doesn't count", boardCard{sessions: []row{boardSess("", "", waitingOn)}}, nil, turnYou, "readiness"},
 		{"reviewers", boardCard{stage: stReview, mrs: []gitlab.MR{boardMR(9, "opened", func(mr *gitlab.MR) { mr.ApprovalsLeft = 2 })}}, nil, turnColleague, "!9 waits on 2 approval(s)"},
 		{"threads to address", boardCard{stage: stReview, mrs: []gitlab.MR{boardMR(1, "merged", nil), threadMR}}, nil, turnYou, "address 2 threads"},
 		{"pipeline", boardCard{stage: stReview, mrs: []gitlab.MR{boardMR(9, "opened", func(mr *gitlab.MR) { failed(mr); mr.ApprovalsLeft = 1 })}}, nil, turnYou, "fix the pipeline of !9"},
@@ -168,7 +168,7 @@ func TestBoardRendersShell(t *testing.T) {
 	out := m.View()
 	s := plainShell(out)
 	containsAllShell(t, "board", s, "2 Board 2", "my tickets by stage", "Up next 1", "Plan 0", "Review 2", "QA 0",
-		"ABC-1  ◆ needs you", "Payments export", "$30.00+? · ✻1 · !11", "ABC-4", "→ plan it", "+ 1 in future sprints  f", "h/l columns")
+		"ABC-1  ◆ needs you", "Payments export", "$30.00+? · ✻1 · !11", "ABC-4", "→ readiness", "+ 1 in future sprints  f", "h/l columns")
 	lacksShell(t, "board", s, "Done ", "ABC-3", "‹", "›", "ABC-4  ● you", "ABC-5")
 	if h := lipgloss.Height(out); h != m.height {
 		t.Errorf("%d lines", h)
@@ -182,7 +182,7 @@ func TestBoardRendersShell(t *testing.T) {
 	if c, ok := m.currentCard(); !ok || c.issue.Key != "ABC-4" {
 		t.Fatalf("cursor on %+v", c)
 	}
-	containsAllShell(t, "detail", plainShell(m.detailBoard()), "ABC-4 Fresh idea", "Up next", "To Do", "Ann", "ABC-100 Payments epic", "● you · plan it", "no plan, session or MR yet")
+	containsAllShell(t, "detail", plainShell(m.detailBoard()), "ABC-4 Fresh idea", "Up next", "To Do", "Ann", "ABC-100 Payments epic", "● you · readiness", "no plan, session or MR yet")
 
 	pressShell(m, "l")
 	d := plainShell(m.detailBoard())

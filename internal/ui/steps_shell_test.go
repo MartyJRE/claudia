@@ -141,14 +141,15 @@ func TestStepStripShell(t *testing.T) {
 		yellowFG = "38;2;229;192;123"
 		redFG    = "38;2;224;108;117"
 		blueFG   = "38;2;97;175;239"
-		dimFG    = "38;2;92;99;112"
-		boldFG   = "1;38;2;170;178;191"
+		ruleFG   = "38;2;62;68;81"
+		nextFG   = "1;38;2;198;120;221"
+		passedFG = "38;2;89;115;72"
 	)
 	c := boardCard{stage: stUpNext, issue: atlassian.Issue{Key: "ABC-9"}, runs: []runs.Run{
 		runShell("readiness", runs.OK, nil), runShell("implement", runs.Failed, nil), runShell("qa", runs.NeedsYou, nil),
 	}}
 	segs := strings.Split(m.stepStrip(c), " ")
-	for i, want := range []string{greenFG, boldFG, redFG, dimFG, dimFG, dimFG, yellowFG} {
+	for i, want := range []string{greenFG, nextFG, redFG, ruleFG, ruleFG, ruleFG, yellowFG} {
 		if !strings.Contains(segs[i], want) {
 			t.Errorf("segment %d %q, want %s", i, segs[i], want)
 		}
@@ -173,7 +174,7 @@ func TestStepStripShell(t *testing.T) {
 	if s := plainShell(m.stepStrip(rc)); s != "━ ─  review" {
 		t.Errorf("a stale review is next again: %q", s)
 	}
-	for rs, want := range map[rstage]string{rsFindings: yellowFG, rsWaiting: greenFG, rsDone: greenFG, rsReviewing: dimFG} {
+	for rs, want := range map[rstage]string{rsFindings: yellowFG, rsWaiting: greenFG, rsDone: greenFG, rsReviewing: ruleFG} {
 		rc.rstage = rs
 		if seg := strings.Split(m.stepStrip(rc), " ")[1]; !strings.Contains(seg, want) {
 			t.Errorf("findings in %s: %q", rstageNames[rs], seg)
@@ -465,5 +466,30 @@ func TestLoadSessionsSettlesRunsShell(t *testing.T) {
 	}
 	if r := db.For("ABC-1"); r[0].Outcome != runs.OK || r[0].Reason != "MR !40 open" {
 		t.Errorf("settled %+v", r[0])
+	}
+}
+
+func TestStepStripPassedShell(t *testing.T) {
+	prev := lipgloss.ColorProfile()
+	t.Cleanup(func() { lipgloss.SetColorProfile(prev) })
+	lipgloss.SetColorProfile(0) // termenv.TrueColor
+	m := newModelShell(t)
+	const passedFG, greenFG, nextFG = "38;2;89;115;72", "38;2;152;195;121", "1;38;2;198;120;221"
+	// A QA card got past every step before QA notes without claudia running them;
+	// the one it did run stays bright green.
+	c := boardCard{stage: stQA, issue: atlassian.Issue{Key: "ABC-9"}, runs: []runs.Run{runShell("implement", runs.OK, nil)}}
+	segs := strings.Split(m.stepStrip(c), " ")
+	for i, want := range []string{passedFG, passedFG, greenFG, passedFG, passedFG, passedFG, nextFG} {
+		if !strings.Contains(segs[i], want) {
+			t.Errorf("segment %d %q, want %s", i, segs[i], want)
+		}
+	}
+	if s := plainShell(m.stepStrip(c)); s != "━ ━ ━ ━ ━ ━ ━  QA notes" {
+		t.Errorf("strip %q", s)
+	}
+	review := mrShell("payments", 11, "x", "alice", "feat/x", time.Hour)
+	rc := boardCard{mr: &review, rstage: rsWaiting}
+	if seg := strings.Split(m.stepStrip(rc), " ")[0]; !strings.Contains(seg, passedFG) {
+		t.Errorf("a review past Requested: %q", seg)
 	}
 }
