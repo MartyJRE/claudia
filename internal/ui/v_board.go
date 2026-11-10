@@ -157,6 +157,9 @@ func (m *Model) boardColumn(i int, st stage, w, h, shown int) string {
 	if below := len(cards) - cur.offset - room; below > 0 && len(lines) < h {
 		lines = append(lines, sDim.Render(fmt.Sprintf("  ↓ %d more", below)))
 	}
+	if st == stUpNext && m.boardLater > 0 && len(lines) < h {
+		lines = append(lines, sDim.Render(fmt.Sprintf("  + %d in future sprints  ", m.boardLater))+sKey.Render(m.key("board.later")))
+	}
 	for len(lines) < h {
 		lines = append(lines, "")
 	}
@@ -169,7 +172,7 @@ func (m *Model) boardColumn(i int, st stage, w, h, shown int) string {
 func (m *Model) cardLines(c boardCard, w int, sel bool) []string {
 	inner := w - 2
 	lines := []string{
-		fit(sTicket.Render(c.issue.Key)+"  "+m.turnBadge(c), inner),
+		fit(sTicket.Render(c.issue.Key)+m.cardBadge(c), inner),
 		fit(sText.Render(c.issue.Summary), inner),
 		fit(cardChips(c), inner),
 	}
@@ -184,6 +187,15 @@ func (m *Model) cardLines(c boardCard, w int, sel bool) []string {
 		lines[i] = bar + l
 	}
 	return lines
+}
+
+// cardBadge leaves out the plain "you" turn: on most cards it's the default,
+// and the → next hint already says what to do.
+func (m *Model) cardBadge(c boardCard) string {
+	if c.turn == turnYou {
+		return ""
+	}
+	return "  " + m.turnBadge(c)
 }
 
 func (m *Model) turnBadge(c boardCard) string {
@@ -330,6 +342,11 @@ func (m *Model) keyBoard(k string) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "board.done":
 		m.boardPrefs.Done = !m.boardPrefs.Done
+		m.saveBoardPrefs()
+		m.refilter()
+		return m, nil
+	case "board.later":
+		m.boardPrefs.Later = !m.boardPrefs.Later
 		m.saveBoardPrefs()
 		m.refilter()
 		return m, nil

@@ -142,6 +142,7 @@ type Model struct {
 	boardCol     int             // the Board column the cursor is in
 	boardOff     int             // the first column shown when they don't all fit
 	boardCur     [nStages]cursor // each column's cursor while another has it
+	boardLater   int             // Up next tickets folded away as later sprints
 	boardNeeds   int
 	sessLoaded   bool
 	sessLoading  bool
@@ -853,7 +854,7 @@ func (m *Model) subtitle() string {
 		if m.boardPrefs.Done {
 			s += " incl. done"
 		}
-		hint := sKey.Render(m.key("board.team")) + sDim.Render(" mine/team  ") + sKey.Render(m.key("board.done")) + sDim.Render(" done")
+		hint := sKey.Render(m.key("board.team")) + sDim.Render(" mine/team  ") + sKey.Render(m.key("board.done")) + sDim.Render(" done  ") + sKey.Render(m.key("board.later")) + sDim.Render(" future sprints")
 		return sDim.Render(s+" by stage, worked out from Jira, MRs and sessions") + "  " + hint
 	case vUsage:
 		layout := "  " + sKey.Render(m.key("usage.layout")) + sDim.Render(" layout")

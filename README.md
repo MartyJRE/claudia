@@ -51,15 +51,18 @@ and sessions, first match from the right: a merged MR (and no open one) is QA,
 an approved MR with a green pipeline and no open threads is Merge, an open MR is
 Review, a draft MR or an implementation, fix or test session (or Claude working
 on the ticket's branch) is Building, an analysis session or a plan is Plan.
-Done tickets join as a last column with `d`, and `board.statuses` can pin a Jira
-status to a column. Each card says whose turn it is: `◆ needs you` (a session
-asks, or the Inbox has something for the ticket; these go first), Claude at
-work with its activity, `⧗ waiting` on reviewers or someone a session named,
-else `● you` with the next step. Its last line has the ticket's cost so far,
-sessions, MRs and that step. `h`/`l` move between columns (tab and the digits
-still switch views), `enter` lists the ticket's sessions or starts one, `c`/`C`
-start Claude on it, `o` opens it in Jira, `M` its MR, `t` the MR's threads, `m`
-moves it in Jira, `a` shows the team's sprint:
+The Jira status counts too, since merged MRs drop out of GitLab's list after a
+few days: a ticket goes to the further of the two, so one in testing sits in QA.
+Done tickets join as a last column with `d`, tickets planned for a future sprint
+are folded under Up next until `f`, and `board.statuses` can pin a Jira status
+to a column. Each card says whose turn it is: `◆ needs you` (a session asks, or
+the Inbox has something for the ticket; these go first), Claude at work with its
+activity, or `⧗ waiting` on reviewers, someone a session named, or a status on
+hold; otherwise it's yours and the card shows the next step. Its last line has
+the ticket's cost so far, sessions, MRs and that step. `h`/`l` move between
+columns (tab and the digits still switch views), `enter` lists the ticket's
+sessions or starts one, `c`/`C` start Claude on it, `o` opens it in Jira, `M`
+its MR, `t` the MR's threads, `m` moves it in Jira, `a` shows the team's sprint:
 
 <img src="assets/board.svg" width="860" alt="Board: tickets in columns by stage, each saying whose turn it is">
 

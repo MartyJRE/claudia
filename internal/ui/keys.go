@@ -78,6 +78,7 @@ var actions = []action{
 	{"board.copy", []string{"y"}, "copy key"},
 	{"board.team", []string{"a"}, "mine/team"},
 	{"board.done", []string{"d"}, "show done"},
+	{"board.later", []string{"f"}, "future sprints"},
 
 	{"usage.layout", []string{"v"}, "layout"},
 
