@@ -50,7 +50,9 @@ line says where it stands ("OK to merge?", "Waiting: Michal to approve",
 last few turns, in a separate headless run that leaves the session itself
 alone. When it says Claude is asking you something, the session shows
 `◆ needs you` and joins the Inbox, as if it were waiting on a prompt; when it
-says the work is done, `✓ done`, so finished sessions stand out to close:
+says the work is done, `✓ done`, so finished sessions stand out to close.
+A group holding a single session is just that session's row, with the group
+named on it, so there's no header to scroll past:
 
 <img src="assets/sessions.svg" width="860" alt="Sessions grouped by repo, with recently closed ones below">
 
@@ -109,7 +111,7 @@ sessions a keypress from coming back.
 | `t` / `J` | set the session's ticket / go to it |
 | `o` / `y` | open its MR / copy its id |
 | `P` | comment inline on its plan, see [Plans](#plans) |
-| `v` / `a` / `space` | group by repo, ticket or flat / show every closed one / fold a group |
+| `v` / `a` / `space` | layout: by repo, by ticket or flat / show every closed one / fold a group |
 
 `S` tiles the marked sessions (plus the one under the cursor) into one window in
 a `splits` tmux session and takes you there; closing one re-tiles the rest. `U`

@@ -71,25 +71,41 @@ func TestSessionTree(t *testing.T) {
 	render := func(rs []srow) string {
 		var b []string
 		for _, r := range rs {
-			if r.isSess {
+			switch {
+			case r.single:
+				b = append(b, strings.Repeat(" ", r.depth)+r.sess.ID+"("+r.group+")")
+			case r.isSess:
 				b = append(b, strings.Repeat(" ", r.depth)+r.sess.ID)
-			} else {
+			case r.via != "":
+				b = append(b, strings.Repeat(" ", r.depth)+"#"+r.via+"›"+r.title)
+			default:
 				b = append(b, strings.Repeat(" ", r.depth)+"#"+r.title)
 			}
 		}
 		return strings.Join(b, "|")
 	}
-	// Live groups by when their newest session started; waiting doesn't move them.
-	if got, want := render(m.buildSessions(rows, false)), "#pay| a| c|#bill| b"; got != want {
+	// Live groups by when their newest session started; waiting doesn't move
+	// them. A group of one is just its session, named on the row.
+	if got, want := render(m.buildSessions(rows, false)), "#pay| a| c|b(bill)"; got != want {
 		t.Errorf("by repo: got %s want %s", got, want)
 	}
 	rows[1].Live.UpdatedAt = 1e12
-	if got, want := render(m.buildSessions(rows, false)), "#pay| a| c|#bill| b"; got != want {
+	if got, want := render(m.buildSessions(rows, false)), "#pay| a| c|b(bill)"; got != want {
 		t.Errorf("activity reordered: got %s want %s", got, want)
 	}
 	m.sessPrefs.Group = sessByTicket
-	if got, want := render(m.buildSessions(rows, false)), "#epic| #story|  a|  c|#No ticket| b"; got != want {
-		t.Errorf("by ticket: got %s want %s", got, want)
+	if got, want := render(m.buildSessions(rows, false)), "#epic›story| a| c|b()"; got != want {
+		t.Errorf("by ticket, an epic of one ticket names itself on the ticket's header: got %s want %s", got, want)
+	}
+	m.ix.sessionTicket["c"] = "ABC-3"
+	m.ix.issues["ABC-3"] = atlassian.Issue{Key: "ABC-3", Summary: "other", Parent: "ABC-1"}
+	if got, want := render(m.buildSessions(rows, false)), "#epic| c(other)| a(story)|b()"; got != want {
+		t.Errorf("by ticket, two tickets of one session each: got %s want %s", got, want)
+	}
+	delete(m.ix.sessionTicket, "c")
+	m.sessPrefs.Collapsed = []string{"ticket:ABC-1", "ticket:ABC-2"}
+	if got, want := render(m.buildSessions(rows[:2], false)), "b()|a(epic › story)"; got != want {
+		t.Errorf("an epic holding one session is that session, folded or not: got %s want %s", got, want)
 	}
 }
 

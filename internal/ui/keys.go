@@ -66,7 +66,7 @@ var actions = []action{
 	{"sessions.fold", []string{" "}, "fold"},
 	{"sessions.fold_all", []string{"-"}, "fold all"},
 	{"sessions.unfold_all", []string{"+", "="}, "unfold all"},
-	{"sessions.group", []string{"v"}, "group"},
+	{"sessions.group", []string{"v"}, "layout"},
 	{"sessions.all", []string{"a"}, "show closed"},
 	{"sessions.resume", []string{"R"}, "resume"},
 	{"sessions.close", []string{"K"}, "kill"},
