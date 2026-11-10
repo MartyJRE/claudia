@@ -19,7 +19,7 @@ func TestAsRun(t *testing.T) {
 		t.Fatalf("args %q", run.Args)
 	}
 	note := run.Args[5]
-	for _, want := range []string{"ctl here", "This is claudia run run-1, step plan for ABC-2.", "`CLAUDIA_RESULT: ok|needs-you|failed — <short reason>`"} {
+	for _, want := range []string{"ctl here", "This is claudia run run-1, step plan for ABC-2.", "`CLAUDIA_RESULT: ok|needs-you|failed — <short reason>`", "`size: simple`"} {
 		if !strings.Contains(note, want) {
 			t.Errorf("note misses %q: %s", want, note)
 		}
@@ -28,7 +28,7 @@ func TestAsRun(t *testing.T) {
 		t.Error("the original spec changed")
 	}
 	bare := Spec{Args: []string{"--resume", "s1"}, Env: []string{"A=1"}}.AsRun("run-2", "review", "!5")
-	if !slices.Equal(bare.Args[:3], []string{"--resume", "s1", "--append-system-prompt"}) || !strings.Contains(bare.Args[3], "run-2") {
+	if !slices.Equal(bare.Args[:3], []string{"--resume", "s1", "--append-system-prompt"}) || !strings.Contains(bare.Args[3], "run-2") || !strings.Contains(bare.Args[3], "ok — no findings") || strings.Contains(bare.Args[3], "size:") {
 		t.Errorf("args without a hint %q", bare.Args)
 	}
 	if !slices.Equal(bare.Env, []string{"A=1", "CLAUDIA_RUN=run-2"}) {

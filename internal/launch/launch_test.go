@@ -61,6 +61,11 @@ func TestWindowName(t *testing.T) {
 	if got := windowName("review", "pay !12"); got != "\U000F0208 pay !12" {
 		t.Errorf("review icon: %q", got)
 	}
+	for _, kind := range []string{"readiness", "mr", "qa"} {
+		if got := windowName(kind, "x"); got == tmux.Icon+" x" {
+			t.Errorf("%s has no icon of its own", kind)
+		}
+	}
 	if got := windowName("unknown", "x"); got != tmux.Icon+" x" {
 		t.Errorf("unknown kind falls back to the robot: %q", got)
 	}
