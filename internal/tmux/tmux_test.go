@@ -71,6 +71,21 @@ func TestLocator(t *testing.T) {
 	if _, ok := l.comm[pane.PID]; !ok {
 		t.Error("ps output not parsed")
 	}
+	if !l.Alone(pane) {
+		t.Error("the only pane isn't alone")
+	}
+	if _, err := tm("split-window", "-t", pane.ID, "sleep 60"); err != nil {
+		t.Fatal(err)
+	}
+	if NewLocator().Alone(pane) {
+		t.Error("a split pane is alone")
+	}
+	if err := KillWindow(pane.WindowID); err != nil || len(Panes()) != 0 {
+		t.Errorf("kill window: %v, %d panes left", err, len(Panes()))
+	}
+	if err := KillWindow(pane.WindowID); err == nil {
+		t.Error("killed a window that's gone")
+	}
 }
 
 func TestLocatorHost(t *testing.T) {

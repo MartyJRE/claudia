@@ -305,6 +305,11 @@ func TestRunKeyStartsStepsShell(t *testing.T) {
 	if len(*started) != 2 || (*started)[1].Args[1] != got[0].Session || !slices.Contains((*started)[1].Env, "CLAUDIA_RUN="+got[0].ID) {
 		t.Fatalf("resumed as the run: %+v", (*started)[1:])
 	}
+	// enter on it resumes a dormant session too, rather than listing it.
+	pressShell(m, "enter")
+	if len(*started) != 3 || (*started)[2].Args[1] != got[0].Session || m.chooser != nil {
+		t.Fatalf("enter resumes: %+v", (*started)[2:])
+	}
 	m.sessions[len(m.sessions)-1].Live = &claude.Live{Status: claude.StatusIdle}
 	m.sessions[len(m.sessions)-1].pane = &tmux.Pane{ID: "%9", Session: "payments", Window: "1", Index: "0"}
 	m.reindex()

@@ -82,6 +82,23 @@ func (l *Locator) Pane(pid int) (Pane, bool) {
 	return Pane{}, false
 }
 
+// Alone: the pane is the only one in its window.
+func (l *Locator) Alone(p Pane) bool {
+	n := 0
+	for _, o := range l.panes {
+		if o.WindowID == p.WindowID {
+			n++
+		}
+	}
+	return n == 1
+}
+
+// KillWindow closes the window, ending whatever runs in it.
+func KillWindow(target string) error {
+	_, err := tm("kill-window", "-t", target)
+	return err
+}
+
 // Host names the GUI app a pid ultimately runs under (Ghostty, iTerm2, an IDE…).
 func (l *Locator) Host(pid int) string {
 	host := ""
