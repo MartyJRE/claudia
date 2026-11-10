@@ -152,6 +152,7 @@ func boardModelShell(t *testing.T) *Model {
 	m.boardCol = 0
 	m.reindex()
 	m.switchView(vBoard)
+	m.boardFocus = true
 	return m
 }
 
@@ -247,7 +248,7 @@ func TestBoardEmptyShell(t *testing.T) {
 func TestBoardKeysShell(t *testing.T) {
 	m := boardModelShell(t)
 	// tab still switches views; h/l move between columns.
-	pressShell(m, "1", "2")
+	pressShell(m, "1", "2", "down")
 	if m.view != vBoard {
 		t.Fatalf("2 → %s", viewNames[m.view])
 	}
@@ -280,6 +281,10 @@ func TestBoardKeysShell(t *testing.T) {
 		t.Errorf("tab → %s", viewNames[m.view])
 	}
 	pressShell(m, "shift+tab")
+	if m.boardFocus {
+		t.Error("coming back to the Board starts outside it")
+	}
+	pressShell(m, "down")
 
 	// No sessions: enter offers to start one; with sessions it lists them.
 	pressShell(m, "enter")
@@ -454,5 +459,80 @@ func TestBoardFutureSprintsShell(t *testing.T) {
 	pressShell(m, "f")
 	if s := plainShell(m.View()); !strings.Contains(s, "Up next 1") || strings.Contains(s, "ABC-5") {
 		t.Errorf("future sprints still shown:\n%s", s)
+	}
+}
+
+func TestBoardStepInOutShell(t *testing.T) {
+	m := boardModelShell(t)
+	m.switchView(vSessions)
+	m.switchView(vBoard)
+	if m.boardFocus {
+		t.Fatal("arriving on the Board starts outside it")
+	}
+	s := screenShell(m)
+	containsAllShell(t, "outside", s, "↓ step in", "↓ steps in", "↓ steps into the board")
+	lacksShell(t, "outside", s, "▌", "h/l columns")
+	if pressShell(m, "enter"); !strings.Contains(m.flash, "steps into the board") {
+		t.Errorf("a card key outside: %q", m.flash)
+	}
+	m.flash = ""
+	pressShell(m, "up")
+	if m.boardFocus || m.view != vBoard {
+		t.Error("up outside does nothing")
+	}
+
+	// Outside, the side keys switch tabs both ways.
+	pressShell(m, "right")
+	if m.view != vSessions {
+		t.Errorf("right outside: %s", viewNames[m.view])
+	}
+	m.switchView(vBoard)
+	pressShell(m, "h")
+	if m.view != vInbox {
+		t.Errorf("h outside: %s", viewNames[m.view])
+	}
+
+	// Down steps in on the first card without moving past it.
+	m.switchView(vBoard)
+	pressShell(m, "down")
+	if c, ok := m.currentCard(); !m.boardFocus || !ok || c.issue.Key != "ABC-4" {
+		t.Fatalf("stepped in on %+v", c)
+	}
+	containsAllShell(t, "inside", screenShell(m), "▌ ABC-4", "h/l columns", "↑ on a top card steps out")
+	pressShell(m, "l")
+	if m.view != vBoard || m.boardCol == 0 {
+		t.Errorf("l inside moves columns, now %s col %d", viewNames[m.view], m.boardCol)
+	}
+
+	// Up on a column's top card, or esc, steps back out; tabs work again.
+	pressShell(m, "up")
+	if m.boardFocus {
+		t.Error("up on the top card steps out")
+	}
+	pressShell(m, "G")
+	if !m.boardFocus {
+		t.Error("G steps in too")
+	}
+	pressShell(m, "esc")
+	if m.boardFocus || m.view != vBoard {
+		t.Error("esc steps out without quitting")
+	}
+
+	// Inside, a filter that hides every card leaves an empty panel, not the hint.
+	pressShell(m, "down")
+	m.filter.SetValue("no such ticket")
+	m.refilter()
+	if d := plainShell(m.detailBoard()); strings.Contains(d, "steps into") {
+		t.Errorf("hint while inside: %s", d)
+	}
+	m.filter.SetValue("")
+
+	// An empty board can't be stepped into.
+	m.boardFocus = false
+	m.jira.Sprint = nil
+	m.refilter()
+	pressShell(m, "down")
+	if m.boardFocus {
+		t.Error("stepped into an empty board")
 	}
 }

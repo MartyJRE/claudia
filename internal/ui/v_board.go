@@ -22,7 +22,7 @@ const (
 // ticket stays in the column.
 func (m *Model) refilterBoard(match func(...string) bool) {
 	sel := ""
-	if c, ok := m.currentCard(); ok {
+	if c, ok := m.cardUnderCursor(); ok {
 		sel = c.issue.Key
 	}
 	cards := m.boardCards()
@@ -44,7 +44,15 @@ func (m *Model) refilterBoard(match func(...string) bool) {
 	}
 }
 
+// currentCard is the card under the cursor once you've stepped into the Board.
 func (m *Model) currentCard() (boardCard, bool) {
+	if !m.boardFocus {
+		return boardCard{}, false
+	}
+	return m.cardUnderCursor()
+}
+
+func (m *Model) cardUnderCursor() (boardCard, bool) {
 	if m.boardCol >= len(m.vis.board) {
 		return boardCard{}, false
 	}
@@ -152,7 +160,7 @@ func (m *Model) boardColumn(i int, st stage, w, h, shown int) string {
 		if j > cur.offset {
 			lines = append(lines, "")
 		}
-		lines = append(lines, m.cardLines(cards[j], w, active && j == cur.pos)...)
+		lines = append(lines, m.cardLines(cards[j], w, m.boardFocus && active && j == cur.pos)...)
 	}
 	if below := len(cards) - cur.offset - room; below > 0 && len(lines) < h {
 		lines = append(lines, sDim.Render(fmt.Sprintf("  ↓ %d more", below)))
@@ -262,7 +270,10 @@ func mrChip(mr gitlab.MR) string {
 func (m *Model) detailBoard() string {
 	c, ok := m.currentCard()
 	if !ok {
-		return m.panel(nil)
+		if m.boardFocus {
+			return m.panel(nil)
+		}
+		return m.panel([]string{sDim.Render("↓ steps into the board, ↑ on a column's top card steps back out; outside it ←/→ switch tabs")})
 	}
 	is := c.issue
 	lines := []string{sTicket.Render(is.Key) + " " + sBold.Render(is.Summary)}
@@ -325,6 +336,36 @@ func (m *Model) costLine(key string, c boardCard) string {
 	return strings.Join(parts, sDim.Render("  ·  "))
 }
 
+// boardNav steps in and out of the Board. Outside it the side keys switch tabs
+// as everywhere else; inside, they move between columns.
+func (m *Model) boardNav(k string) (tea.Model, tea.Cmd, bool) {
+	act := m.action(k)
+	if !m.boardFocus {
+		switch act {
+		case "board.left":
+			m.switchView((m.view + nViews - 1) % nViews)
+		case "board.right":
+			m.switchView((m.view + 1) % nViews)
+		case "global.down", "global.top", "global.bottom":
+			if m.count() == 0 {
+				return m, nil, true
+			}
+			m.boardFocus = true
+			return m, nil, act == "global.down"
+		case "global.up":
+		default:
+			return m, nil, false
+		}
+		return m, nil, true
+	}
+	switch {
+	case act == "global.up" && m.cur[vBoard].pos == 0, act == "global.back" && m.filter.Value() == "":
+		m.boardFocus = false
+		return m, nil, true
+	}
+	return m, nil, false
+}
+
 func (m *Model) keyBoard(k string) (tea.Model, tea.Cmd) {
 	act := m.action(k)
 	switch act {
@@ -353,6 +394,9 @@ func (m *Model) keyBoard(k string) (tea.Model, tea.Cmd) {
 	}
 	c, ok := m.currentCard()
 	if !ok {
+		if !m.boardFocus && m.count() > 0 {
+			m.setFlash("↓ steps into the board to pick a card", false)
+		}
 		return m, nil
 	}
 	key := c.issue.Key

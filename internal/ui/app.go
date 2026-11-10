@@ -139,6 +139,7 @@ type Model struct {
 	costs        map[string]claude.TicketCost
 	jiraPrefs    jiraPrefs
 	boardPrefs   boardPrefs
+	boardFocus   bool            // stepped into the Board: h/l move columns, not tabs
 	boardCol     int             // the Board column the cursor is in
 	boardOff     int             // the first column shown when they don't all fit
 	boardCur     [nStages]cursor // each column's cursor while another has it
@@ -481,6 +482,11 @@ func (m *Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return mm, cmd
 		}
 	}
+	if m.view == vBoard {
+		if mm, cmd, done := m.boardNav(k); done {
+			return mm, cmd
+		}
+	}
 	switch m.action(k) {
 	case "global.visual":
 		if !visualView(m.view) || m.count() == 0 {
@@ -571,6 +577,7 @@ func (m *Model) switchView(v view) {
 		return
 	}
 	m.view = v
+	m.boardFocus = false
 	m.visual = nil
 	m.filter.SetValue("")
 	m.refilter()
@@ -854,7 +861,12 @@ func (m *Model) subtitle() string {
 		if m.boardPrefs.Done {
 			s += " incl. done"
 		}
-		hint := sKey.Render(m.key("board.team")) + sDim.Render(" mine/team  ") + sKey.Render(m.key("board.done")) + sDim.Render(" done  ") + sKey.Render(m.key("board.later")) + sDim.Render(" future sprints")
+		hint := sKey.Render(m.key("board.team")) + sDim.Render(" mine/team  ") + sKey.Render(m.key("board.done")) + sDim.Render(" done  ") + sKey.Render(m.key("board.later")) + sDim.Render(" future sprints  ")
+		if m.boardFocus {
+			hint += sKey.Render("↑") + sDim.Render(" on a top card steps out")
+		} else {
+			hint += sKey.Render("↓") + sDim.Render(" steps in")
+		}
 		return sDim.Render(s+" by stage, worked out from Jira, MRs and sessions") + "  " + hint
 	case vUsage:
 		layout := "  " + sKey.Render(m.key("usage.layout")) + sDim.Render(" layout")
@@ -937,6 +949,9 @@ func (m *Model) help() [][2]string {
 	case vConfluence:
 		return m.hints("confluence.open", "confluence.copy")
 	case vBoard:
+		if !m.boardFocus {
+			return append([][2]string{{"↓", "step in"}}, m.hints("board.team", "board.done", "board.later")...)
+		}
 		return append([][2]string{{m.key("board.left") + "/" + m.key("board.right"), "columns"}},
 			m.hints("board.sessions", "board.claude", "board.claude_bg", "board.open", "board.mr", "board.threads", "board.move", "board.copy")...)
 	case vUsage:
