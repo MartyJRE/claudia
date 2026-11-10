@@ -112,6 +112,7 @@ type watcher struct {
 
 	status   map[string]claude.Status
 	stuck    map[string]bool // sessions told about as stuck at startup
+	closed   map[string]bool // runs whose dormant window was closed
 	reviews  map[string]bool
 	pipeline map[string]string
 	approved map[string]bool
@@ -299,6 +300,7 @@ func (w *watcher) sessions() {
 		}
 	}
 	w.settle(ran, stopped)
+	w.closeDormant(all, loc, time.Now())
 	w.contextNotes(all, loc)
 	w.stuckNotes(all, processSessions(), launch.Kinds(), loc)
 	for _, l := range tmux.Borrowed() {
@@ -503,7 +505,47 @@ func post(n note) {
 
 func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
 
-var processSessions = claude.ProcessSessions
+var (
+	processSessions = claude.ProcessSessions
+	killWindow      = tmux.KillWindow
+)
+
+// dormantAfter is how long a finished or waiting autopilot run sits idle
+// before its window closes.
+const dormantAfter = 2 * time.Minute
+
+// closeDormant closes the windows of the autopilot's runs that ended ok or
+// wait on someone else, once idle; the transcript stays to resume. A window
+// holding anything else is left alone.
+func (w *watcher) closeDormant(all []claude.Session, loc *tmux.Locator, now time.Time) {
+	if w.runs == nil {
+		return
+	}
+	var latest map[string]runs.Run
+	for _, s := range all {
+		if s.Live == nil || s.Live.Worker != "" || s.Live.Status != claude.StatusIdle || now.Sub(s.LastActive()) < dormantAfter {
+			continue
+		}
+		if latest == nil {
+			latest = w.runs.Latest()
+		}
+		r, ok := latest[s.ID]
+		if !ok || r.StartedBy != runs.ByAutopilot || r.Outcome != runs.OK && r.Outcome != runs.Waiting || now.Sub(r.Finished) < dormantAfter || w.closed[r.ID] {
+			continue
+		}
+		p, ok := loc.Pane(s.Live.PID)
+		if !ok || !loc.Alone(p) {
+			continue
+		}
+		if w.closed == nil {
+			w.closed = map[string]bool{}
+		}
+		w.closed[r.ID] = true
+		if err := killWindow(p.WindowID); err != nil {
+			fmt.Fprintln(os.Stderr, now.Format(time.TimeOnly), "close dormant:", err)
+		}
+	}
+}
 
 // stuckNotes tells once of each session claudia started whose claude runs but
 // never registered, most likely held by a dialog nobody sees in its window;

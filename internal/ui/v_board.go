@@ -452,6 +452,12 @@ func (m *Model) keyBoard(k string) (tea.Model, tea.Cmd) {
 	case "board.override":
 		m.overrideChooser(c)
 		return m, nil
+	case "board.sessions":
+		if _, hold := nextStep(c); hold != nil {
+			if r, ok := m.sessionRow(hold.Session); ok && !r.live() && r.Dir() != "" {
+				return m.runNext(c) // its window was closed while it waited: resume it
+			}
+		}
 	}
 	if c.review() {
 		return m.keyReviewCard(act, c)
