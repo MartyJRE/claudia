@@ -68,7 +68,7 @@ func Generate(s claude.Session) Summary {
 	for _, t := range s.Tail {
 		b.WriteString(t.Role + ":\n" + t.Text + "\n\n")
 	}
-	text, err := headless(instructions, b.String(), s.Profile.Dir, "--model", "haiku")
+	text, err := headless("summary", instructions, b.String(), s.Profile.Dir, "--model", "haiku")
 	out := Summary{Text: oneLine(text), For: s.Updated}
 	if err != nil {
 		out.Err = err.Error()

@@ -8,6 +8,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 )
@@ -124,7 +125,8 @@ func Encode(v any, indent string) ([]byte, error) {
 }
 
 // Check reports whether claudia would read the file as meant: every known
-// field of the right type and brief_every a duration or "off".
+// field of the right type, brief_every a duration or "off" and workers a
+// known place.
 func Check(f File) error {
 	b, err := Encode(f.top, "")
 	if err != nil {
@@ -138,7 +140,17 @@ func Check(f File) error {
 		}
 		return err
 	}
-	return CheckBriefEvery(c.BriefEveryRaw)
+	if err := CheckBriefEvery(c.BriefEveryRaw); err != nil {
+		return err
+	}
+	return CheckWorkers(c.WorkersRaw)
+}
+
+func CheckWorkers(v string) error {
+	if v == "" || slices.Contains(WorkerPlaces, strings.ToLower(strings.TrimSpace(v))) {
+		return nil
+	}
+	return fmt.Errorf("workers: %q isn't one of %s", v, strings.Join(WorkerPlaces, ", "))
 }
 
 func CheckBriefEvery(v string) error {

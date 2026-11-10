@@ -56,7 +56,7 @@ type CtlHere struct {
 // Headless builds the model from caches and live sessions without a terminal.
 func Headless() *Model {
 	m := New(Options{})
-	m.sessions = m.loadSessions()().(sessionsMsg)
+	m.sessions, m.workers = splitWorkers(m.loadSessions()().(sessionsMsg))
 	if m.vault != nil {
 		m.vault.Refresh()
 		m.vaultNotes = m.vault.All()

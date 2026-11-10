@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"cmp"
 	"fmt"
 	"os"
 	"os/exec"
@@ -66,6 +67,9 @@ func (m *Model) listSessionsTable(h int) string {
 			return m.sessionHeaderCells(rows[i])
 		}
 		r := rows[i].sess
+		if r.worker() {
+			return m.workerCells(rows[i])
+		}
 		name := sessionIndent(rows[i]) + sessionTitle(r, sel)
 		if g := rows[i].group; g != "" && (g != project(r.Dir()) || m.width < sessionCols[2].min) {
 			name += sDim.Render("  " + g)
@@ -85,6 +89,27 @@ func (m *Model) listSessionsTable(h int) string {
 			return ""
 		}
 		return summaryText(rows[i].sess, true)
+	})
+}
+
+// workerCells draws one of claudia's own runs dim, with nothing to act on.
+func (m *Model) workerCells(r srow) []string {
+	w := r.sess
+	st := sDim.Render("· " + string(w.Live.Status))
+	if w.Live.Status.Working() {
+		st = sDim.Render(spinner[m.frame%len(spinner)] + " working")
+	}
+	return []string{st, sessionIndent(r) + sDim.Render("claudia "+w.Live.Worker), "", "", "", "", sDim.Render(age(w.Started())), sDim.Render(w.Profile.Name)}
+}
+
+var workerJobs = map[string]string{"brief": "the inbox brief", "summary": "a session's one-line summary"}
+
+func (m *Model) detailWorker(r row) string {
+	job := cmp.Or(workerJobs[r.Live.Worker], r.Live.Worker)
+	return m.panel([]string{
+		sDim.Render("claudia " + r.Live.Worker),
+		sDim.Render("a headless claude -p claudia runs to write " + job + "; it keeps no transcript and ends by itself"),
+		sDim.Render(r.Profile.Name + "  ·  " + r.ShortID()),
 	})
 }
 
@@ -217,6 +242,9 @@ func (m *Model) detailSession() string {
 	if !ok {
 		return m.panel(nil)
 	}
+	if r.worker() {
+		return m.detailWorker(r)
+	}
 	head := colorDot(r) + sBold.Render(r.Name())
 	if t := m.ix.sessionTicket[r.ID]; t != "" {
 		head += "  " + sTicket.Render(t)
@@ -284,6 +312,14 @@ func (m *Model) mrRef(u string) string {
 }
 
 func (m *Model) keySessions(k string) (tea.Model, tea.Cmd) {
+	if r, ok := m.currentSession(); ok && r.worker() {
+		switch m.action(k) {
+		case "sessions.jump", "sessions.resume", "sessions.close", "sessions.mark", "sessions.split", "sessions.unsplit",
+			"sessions.set_ticket", "sessions.ticket", "sessions.mr", "sessions.plan":
+			m.setFlash("claudia's own "+r.Live.Worker+" run: nothing to do with it, it ends by itself", true)
+			return m, nil
+		}
+	}
 	switch m.action(k) {
 	case "sessions.fold":
 		m.toggleSessionFold()

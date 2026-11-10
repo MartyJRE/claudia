@@ -146,6 +146,26 @@ func TestBriefEvery(t *testing.T) {
 	}
 }
 
+func TestWorkers(t *testing.T) {
+	for raw, want := range map[string]string{
+		"":         "hidden",
+		"hidden":   "hidden",
+		" Top ":    "top",
+		"bottom":   "bottom",
+		"sideways": "hidden",
+	} {
+		fresh(t, `{"workers": "`+raw+`"}`)
+		if got := Get().Workers(); got != want {
+			t.Errorf("%q: got %s want %s", raw, got, want)
+		}
+	}
+	fresh(t, `{"workers": "top"}`)
+	t.Setenv("CLAUDIA_WORKERS", "bottom")
+	if got := Get().Workers(); got != "bottom" {
+		t.Errorf("env: %s", got)
+	}
+}
+
 func TestGetIsCached(t *testing.T) {
 	fresh(t, `{"jira_project": "ONE"}`)
 	_ = Get()

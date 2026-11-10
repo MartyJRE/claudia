@@ -51,7 +51,12 @@ func (r srow) id() string {
 type sessionPrefs struct {
 	Group     int      `json:"group"`
 	Collapsed []string `json:"collapsed"`
+	// Expanded lists the groups that start folded and were opened.
+	Expanded []string `json:"expanded"`
 }
+
+// workersKey is the group of claudia's own headless runs, folded by default.
+const workersKey = "workers"
 
 const sessionPrefsFile = "sessions-prefs.json"
 
@@ -188,9 +193,17 @@ func boolCmp(a, b bool) int {
 const recentClosed = 8
 
 // sessionRows is the Sessions tab: the tree, and unless closed sessions are
-// shown anyway, the few closed most recently, to revive with enter.
+// shown anyway, the few closed most recently, to revive with enter. Config
+// puts claudia's own workers above or below it.
 func (m *Model) sessionRows(match func(...string) bool, filtering bool) []srow {
-	return append(m.buildSessions(m.filterSessions(match), filtering), m.recentClosed(match, filtering)...)
+	out := append(m.buildSessions(m.filterSessions(match), filtering), m.recentClosed(match, filtering)...)
+	switch getConfig().Workers() {
+	case "top":
+		return append(m.workerRows(match, filtering), out...)
+	case "bottom":
+		return append(out, m.workerRows(match, filtering)...)
+	}
+	return out
 }
 
 func (m *Model) recentClosed(match func(...string) bool, filtering bool) []srow {
@@ -213,6 +226,27 @@ func (m *Model) recentClosed(match func(...string) bool, filtering bool) []srow 
 	out := []srow{h}
 	if !h.collapsed {
 		for _, r := range closed {
+			out = append(out, srow{isSess: true, sess: r, depth: 1})
+		}
+	}
+	return out
+}
+
+func (m *Model) workerRows(match func(...string) bool, filtering bool) []srow {
+	var ws []row
+	for _, r := range m.workers {
+		if match("claudia worker", r.Live.Worker, r.Profile.Name) {
+			ws = append(ws, r)
+		}
+	}
+	if len(ws) == 0 {
+		return nil
+	}
+	h := srow{key: workersKey, title: "claudia's workers", n: len(ws)}
+	h.collapsed = !filtering && !slices.Contains(m.sessPrefs.Expanded, workersKey)
+	out := []srow{h}
+	if !h.collapsed {
+		for _, r := range ws {
 			out = append(out, srow{isSess: true, sess: r, depth: 1})
 		}
 	}
@@ -311,6 +345,9 @@ func (m *Model) sessionHeaderCells(r srow) []string {
 		glyph = "▸ "
 	}
 	indent := strings.Repeat("  ", r.depth)
+	if r.key == workersKey {
+		return []string{strings.Repeat(" ", sessionCols[0].w+1) + sDim.Render(indent+glyph+r.title+fmt.Sprintf("  %d running in the background", r.n))}
+	}
 	title := sBold.Render(r.title)
 	if r.ticket != "" {
 		title = sTicket.Render(r.ticket) + " " + sBold.Render(r.title)
@@ -351,20 +388,25 @@ func (m *Model) toggleSessionFold() {
 	if key == "" {
 		return
 	}
-	if i := slices.Index(m.sessPrefs.Collapsed, key); i >= 0 {
-		m.sessPrefs.Collapsed = slices.Delete(m.sessPrefs.Collapsed, i, i+1)
+	list := &m.sessPrefs.Collapsed
+	if key == workersKey {
+		list = &m.sessPrefs.Expanded
+	}
+	if i := slices.Index(*list, key); i >= 0 {
+		*list = slices.Delete(*list, i, i+1)
 	} else {
-		m.sessPrefs.Collapsed = append(m.sessPrefs.Collapsed, key)
+		*list = append(*list, key)
 	}
 	m.saveSessionPrefs()
 	m.refilter()
 }
 
 func (m *Model) foldAllSessions(fold bool) {
-	m.sessPrefs.Collapsed = nil
+	m.sessPrefs.Collapsed, m.sessPrefs.Expanded = nil, []string{workersKey}
 	if fold {
+		m.sessPrefs.Expanded = nil
 		for _, r := range m.sessionRows(func(...string) bool { return true }, true) {
-			if !r.isSess {
+			if !r.isSess && r.key != workersKey {
 				m.sessPrefs.Collapsed = append(m.sessPrefs.Collapsed, r.key)
 			}
 		}

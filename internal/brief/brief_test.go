@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/MartyJRE/claudia/internal/state"
 )
 
 func TestSaveLoad(t *testing.T) {
@@ -45,6 +47,7 @@ func TestRequest(t *testing.T) {
 // A fake claude on PATH stands in for the real one.
 func fakeClaude(t *testing.T, script string) string {
 	t.Helper()
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "claude"), []byte("#!/bin/sh\n"+script), 0o755); err != nil {
 		t.Fatal(err)
@@ -54,7 +57,7 @@ func fakeClaude(t *testing.T, script string) string {
 }
 
 func TestGenerate(t *testing.T) {
-	dir := fakeClaude(t, `cat > "$(dirname "$0")/stdin"; echo "$CLAUDE_CONFIG_DIR" > "$(dirname "$0")/env"; echo "$@" > "$(dirname "$0")/args"; printf '  ABC-1 waits on you.\n\n'`)
+	dir := fakeClaude(t, `cat > "$(dirname "$0")/stdin"; echo "$CLAUDE_CONFIG_DIR" > "$(dirname "$0")/env"; echo "$@" > "$(dirname "$0")/args"; pwd -P > "$(dirname "$0")/cwd"; printf '  ABC-1 waits on you.\n\n'`)
 	got, err := Generate(map[string]int{"inbox": 2}, "", "/profiles/work")
 	if err != nil {
 		t.Fatal(err)
@@ -71,8 +74,13 @@ func TestGenerate(t *testing.T) {
 		t.Errorf("config dir %q", env)
 	}
 	args, _ := os.ReadFile(filepath.Join(dir, "args"))
-	if !strings.HasPrefix(string(args), "-p --no-session-persistence --tools  --system-prompt") {
+	if !strings.HasPrefix(string(args), "-p --no-session-persistence --name claudia-brief --tools  --system-prompt") {
 		t.Errorf("args %q", args)
+	}
+	cwd, _ := os.ReadFile(filepath.Join(dir, "cwd"))
+	want, _ := filepath.EvalSymlinks(state.WorkerDir("brief"))
+	if strings.TrimSpace(string(cwd)) != want {
+		t.Errorf("runs in %q, not the worker dir %q", cwd, want)
 	}
 
 	if _, err := Generate(nil, "before", ""); err != nil {
@@ -95,9 +103,16 @@ func TestGenerateErrors(t *testing.T) {
 	if _, err := Generate(func() {}, "", ""); err == nil {
 		t.Error("unmarshalable data")
 	}
+	blocked := filepath.Join(t.TempDir(), "file")
+	os.WriteFile(blocked, nil, 0o600)
+	t.Setenv("XDG_STATE_HOME", blocked)
+	if _, err := Generate(nil, "", ""); err == nil {
+		t.Error("ran without a worker dir")
+	}
 }
 
 func TestGenerateFallsBackToLocalBin(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("PATH", t.TempDir())

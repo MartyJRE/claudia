@@ -290,6 +290,11 @@ by an environment variable are shown but can't be changed there.
   and `{verb}` are filled in. Without it, sessions are named `<verb>: <summary>`.
 - `rounded_pills: false` draws pills and tabs square, for fonts without the Nerd
   Font half circles. Ghostty ships those, so the default is rounded.
+- `workers`: claudia's own headless `claude -p` runs (the brief and session
+  summaries) still register with Claude Code while they run. By default
+  (`hidden`) claudia leaves them out everywhere; `top` or `bottom` lists them
+  dim in a folded group at that end of the Sessions tab, with nothing to jump
+  to or kill. `CLAUDIA_WORKERS` overrides it.
 - `keys` rebinds any key outside text input: an action name to a key or a list
   of keys. `claudia keys` lists every action with its current keys and points out
   clashes. claudia also flags clashes when it starts.

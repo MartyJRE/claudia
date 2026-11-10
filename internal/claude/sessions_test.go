@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/MartyJRE/claudia/internal/state"
 )
 
 func writeLive(t *testing.T, dir string, l Live) {
@@ -139,5 +141,23 @@ func TestDefaultProfilesNamesDefault(t *testing.T) {
 	got := DefaultProfiles()
 	if len(got) != 1 || got[0].Name != "default" || got[0].Dir != filepath.Join(home, ".claude") {
 		t.Errorf("got %+v", got)
+	}
+}
+
+func TestReadRegistryMarksWorkers(t *testing.T) {
+	dir := t.TempDir()
+	me := os.Getpid()
+	os.MkdirAll(state.WorkerDir("brief"), 0o755)
+	resolved, _ := filepath.EvalSymlinks(state.WorkerDir("brief"))
+	writeLive(t, dir, Live{PID: me, SessionID: "sum", Cwd: state.WorkerDir("summary")})
+	writeLive(t, dir, Live{PID: me, SessionID: "brief", Cwd: resolved})
+	writeLive(t, dir, Live{PID: me, SessionID: "root", Cwd: state.WorkerDir("")})
+	writeLive(t, dir, Live{PID: me, SessionID: "user", Cwd: "/src/app"})
+	got := map[string]string{}
+	for _, l := range ReadRegistry(dir) {
+		got[l.SessionID] = l.Worker
+	}
+	if got["sum"] != "summary" || got["brief"] != "brief" || got["root"] != "" || got["user"] != "" || len(got) != 4 {
+		t.Errorf("workers %v", got)
 	}
 }
