@@ -33,6 +33,9 @@ func TestJiraTree(t *testing.T) {
 			default:
 				s += r.issue.Key
 			}
+			if r.via != "" {
+				s += "@" + r.via
+			}
 			if r.collapsed {
 				s += "+"
 			}
@@ -42,13 +45,13 @@ func TestJiraTree(t *testing.T) {
 	}
 	m := &Model{}
 	got := render(m.buildJira(issues, false))
-	want := "#S2| ABC-1|  ABC-2|   ABC-3|#S3| (ABC-9)|  ABC-4|#No sprint| ABC-5"
+	want := "#S2| ABC-1|  ABC-2|   ABC-3|ABC-4@S3 › ABC-9|ABC-5@No sprint"
 	if got != want {
 		t.Errorf("tree:\n got %s\nwant %s", got, want)
 	}
 
 	m.jiraPrefs.Collapsed = []string{"ABC-1", "sprint:S3"}
-	if got, want := render(m.buildJira(issues, false)), "#S2| ABC-1+|#S3+|#No sprint| ABC-5"; got != want {
+	if got, want := render(m.buildJira(issues, false)), "#S2| ABC-1+|ABC-4@S3 › ABC-9|ABC-5@No sprint"; got != want {
 		t.Errorf("folded:\n got %s\nwant %s", got, want)
 	}
 	if got := render(m.buildJira(issues, true)); !strings.Contains(got, "ABC-3") {

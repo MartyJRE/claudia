@@ -116,6 +116,9 @@ func rowKeysViews(rows []jrow) string {
 		default:
 			s += r.issue.Key
 		}
+		if r.via != "" {
+			s += "@" + r.via
+		}
 		if r.collapsed {
 			s += "+"
 		}

@@ -13,11 +13,11 @@ import (
 
 func TestJiraViewRendersSprintsAndStatuses(t *testing.T) {
 	m := jiraModelViews(t)
-	if got, want := rowKeysViews(m.vis.jira), "#Sprint 2| ABC-1|  ABC-3|  ABC-2|#Sprint 3| ABC-4"; got != want {
+	if got, want := rowKeysViews(m.vis.jira), "#Sprint 2| ABC-1|  ABC-3|  ABC-2|ABC-4@Sprint 3"; got != want {
 		t.Fatalf("rows:\n got %s\nwant %s", got, want)
 	}
 	s := screenViews(m)
-	for _, want := range []string{"Sprint 2 active", "Sprint 3 upcoming", "3 tickets", "Card form", "Refund flow", "Story", "Task", "In Progress", "my sprint + in progress · sprint › epic · by rank"} {
+	for _, want := range []string{"Sprint 2 active", "Sprint 3 › Next thing", "3 tickets", "Card form", "Refund flow", "Story", "Task", "In Progress", "my sprint + in progress · sprint › epic · by rank"} {
 		if !strings.Contains(s, want) {
 			t.Errorf("screen lacks %q:\n%s", want, s)
 		}
@@ -43,7 +43,7 @@ func TestJiraTeamToggle(t *testing.T) {
 	if !m.teamJira || m.cur[vJira].pos != 0 {
 		t.Fatalf("a should switch to the team and reset the cursor, team=%v pos=%d", m.teamJira, m.cur[vJira].pos)
 	}
-	if got, want := rowKeysViews(m.vis.jira), "#Sprint 2| ABC-7"; got != want {
+	if got, want := rowKeysViews(m.vis.jira), "ABC-7@Sprint 2"; got != want {
 		t.Errorf("team rows: got %s want %s", got, want)
 	}
 	if s := screenViews(m); !strings.Contains(s, "team sprint") || !strings.Contains(s, "Bob") {
@@ -130,9 +130,9 @@ func TestJiraLayoutCycles(t *testing.T) {
 func TestJiraFolding(t *testing.T) {
 	m := jiraModelViews(t)
 
-	cursorToViews(t, m, "#Sprint 3")
+	cursorToViews(t, m, "#Sprint 2")
 	pressViews(m, " ")
-	if got, want := rowKeysViews(m.vis.jira), "#Sprint 2| ABC-1|  ABC-3|  ABC-2|#Sprint 3+"; got != want {
+	if got, want := rowKeysViews(m.vis.jira), "#Sprint 2+|ABC-4@Sprint 3"; got != want {
 		t.Errorf("fold header: got %s want %s", got, want)
 	}
 	if !strings.Contains(screenViews(m), "▸") {
@@ -145,7 +145,7 @@ func TestJiraFolding(t *testing.T) {
 
 	cursorToViews(t, m, "ABC-2")
 	pressViews(m, " ")
-	if got, want := rowKeysViews(m.vis.jira), "#Sprint 2| ABC-1+|#Sprint 3| ABC-4"; got != want {
+	if got, want := rowKeysViews(m.vis.jira), "#Sprint 2| ABC-1+|ABC-4@Sprint 3"; got != want {
 		t.Errorf("space on a leaf folds its parent: got %s want %s", got, want)
 	}
 	if r := m.vis.jira[m.cur[vJira].pos]; r.issue.Key != "ABC-1" {
@@ -156,22 +156,22 @@ func TestJiraFolding(t *testing.T) {
 	}
 
 	pressViews(m, "-")
-	if got, want := rowKeysViews(m.vis.jira), "#Sprint 2+|#Sprint 3+"; got != want {
+	if got, want := rowKeysViews(m.vis.jira), "#Sprint 2+|ABC-4@Sprint 3"; got != want {
 		t.Errorf("fold all: got %s want %s", got, want)
 	}
-	if p := loadJiraPrefs(); len(p.Collapsed) != 3 {
+	if p := loadJiraPrefs(); len(p.Collapsed) != 2 {
 		t.Errorf("fold all saves every parent and sprint: %v", p.Collapsed)
 	}
 	pressViews(m, "+")
-	if got, want := rowKeysViews(m.vis.jira), "#Sprint 2| ABC-1|  ABC-3|  ABC-2|#Sprint 3| ABC-4"; got != want {
+	if got, want := rowKeysViews(m.vis.jira), "#Sprint 2| ABC-1|  ABC-3|  ABC-2|ABC-4@Sprint 3"; got != want {
 		t.Errorf("unfold all: got %s want %s", got, want)
 	}
 
 	m.cur[vJira].pos = 0
 	m.jiraPrefs.Collapsed = []string{"sprint:Sprint 2"}
-	m.filter.SetValue("refund")
+	m.filter.SetValue("ann")
 	m.refilter()
-	if got := rowKeysViews(m.vis.jira); got != "#Sprint 2| (ABC-1)|  ABC-3" {
+	if got := rowKeysViews(m.vis.jira); got != "#Sprint 2| (ABC-1)|  ABC-3|  ABC-2" {
 		t.Errorf("a filter unfolds and keeps parents of matches: %s", got)
 	}
 }
@@ -242,7 +242,7 @@ func TestJiraDetail(t *testing.T) {
 	}
 	m.teamJira = true
 	m.refilter()
-	if s := plainViews(m.detailSprint(m.vis.jira[0])); !strings.Contains(s, "0 to do  1 in progress  0 done") {
+	if s := plainViews(m.detailSprint(jrow{sprint: "Sprint 2"})); !strings.Contains(s, "0 to do  1 in progress  0 done") {
 		t.Errorf("team sprint summary:\n%s", s)
 	}
 }
@@ -394,18 +394,19 @@ func TestJiraContextParent(t *testing.T) {
 	m := &Model{}
 	issues := []atlassian.Issue{
 		{Key: "ABC-5", Summary: "child", Parent: "ABC-9", ParentSummary: "their epic", ParentType: "Epic", ParentStatus: "Open", Category: "new"},
+		{Key: "ABC-6", Summary: "sibling", Parent: "ABC-9", Category: "new"},
 	}
 	rows := m.buildJira(issues, false)
-	if got := rowKeysViews(rows); got != "#No sprint| (ABC-9)|  ABC-5" {
+	if got := rowKeysViews(rows); got != "#No sprint| (ABC-9)|  ABC-5|  ABC-6" {
 		t.Fatalf("rows %s", got)
 	}
 	ctx := rows[1]
-	if ctx.issue.Summary != "their epic" || ctx.issue.Level != 1 || ctx.count != 1 {
+	if ctx.issue.Summary != "their epic" || ctx.issue.Level != 1 || ctx.count != 2 {
 		t.Errorf("context parent %+v", ctx)
 	}
 	m.jiraPrefs.Collapsed = []string{"ABC-9"}
 	rows = m.buildJira(issues, false)
-	if got := plainViews(m.jiraSummaryCell(rows[1], false)); got != "their epic  (1)" {
+	if got := plainViews(m.jiraSummaryCell(rows[1], false)); got != "their epic  (2)" {
 		t.Errorf("folded context counts its children: %q", got)
 	}
 	if got := plainViews(m.jiraKeyCell(rows[1])); got != "  ▸ ABC-9" {
@@ -425,7 +426,7 @@ func TestJiraSprintOrder(t *testing.T) {
 		{Key: "ABC-4", Sprint: sp(4, "Soon", "future")},
 		{Key: "ABC-5", Sprint: sp(3, "Now", "active")},
 	}
-	if got, want := rowKeysViews(m.buildJira(issues, false)), "#Now| ABC-5|#Soon| ABC-4|#Later| ABC-3|#No sprint| ABC-2|#Old| ABC-1"; got != want {
+	if got, want := rowKeysViews(m.buildJira(issues, false)), "ABC-5@Now|ABC-4@Soon|ABC-3@Later|ABC-2@No sprint|ABC-1@Old"; got != want {
 		t.Errorf("got %s\nwant %s", got, want)
 	}
 }
@@ -468,5 +469,27 @@ func TestNoSprintSummarySkipsEpicsShownElsewhere(t *testing.T) {
 	}
 	if s := plainViews(m.detailSprint(jrow{sprint: "No sprint"})); !strings.Contains(s, "1 to do  0 in progress  0 done") {
 		t.Errorf("the epic sits under Sprint 2, not No sprint:\n%s", s)
+	}
+}
+
+func TestJiraLoneTicketsNameTheirGroupInline(t *testing.T) {
+	m := jiraModelViews(t)
+	cursorToViews(t, m, "ABC-4")
+	if s := screenViews(m); !strings.Contains(s, "Sprint 3 › Next thing") || strings.Contains(s, "upcoming") {
+		t.Errorf("a sprint with one ticket is that ticket's row:\n%s", s)
+	}
+	pressViews(m, "V", "up", "c")
+	if m.prompt == nil || !strings.Contains(m.prompt.title, "these 2") {
+		t.Errorf("the lone ticket is selectable like any other: %+v", m.prompt)
+	}
+
+	m.prompt = nil
+	m.jira.Sprint = append(m.jira.Sprint, atlassian.Issue{Key: "ABC-5", Summary: "Also next", Category: "new", Sprint: m.jira.Sprint[4].Sprint})
+	m.reindex()
+	if got, want := rowKeysViews(m.vis.jira), "#Sprint 2| ABC-1|  ABC-3|  ABC-2|#Sprint 3| ABC-4| ABC-5"; got != want {
+		t.Errorf("two tickets get their header back: got %s want %s", got, want)
+	}
+	if s := screenViews(m); !strings.Contains(s, "Sprint 3 upcoming  2 tickets") {
+		t.Errorf("header:\n%s", s)
 	}
 }
