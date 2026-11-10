@@ -31,7 +31,8 @@ type jrow struct {
 	context   bool // parent shown only to hold its children
 	kids      bool
 	collapsed bool
-	count     int // tickets underneath (headers and parents)
+	count     int    // tickets underneath (headers and parents)
+	via       string // groups folded into this row because it was their only child
 }
 
 func (r jrow) header() bool { return r.sprint != "" }
@@ -122,12 +123,15 @@ func (m *Model) buildJira(issues []atlassian.Issue, filtering bool) []jrow {
 	for _, g := range groups {
 		roots := forest(g.issues, known)
 		sortForest(roots, less)
-		depth := 0
-		if m.jiraPrefs.Group == groupSprint {
-			total := 0
-			for _, r := range roots {
-				total += r.size()
-			}
+		depth, via := 0, ""
+		total := 0
+		for _, r := range roots {
+			total += r.size()
+		}
+		// A sprint holding a single ticket names it inline instead of heading it.
+		if m.jiraPrefs.Group == groupSprint && total == 1 {
+			via = g.name
+		} else if m.jiraPrefs.Group == groupSprint {
 			h := jrow{sprint: g.name, state: g.state, kids: true, count: total}
 			h.collapsed = !filtering && m.folded(h.foldKey())
 			rows = append(rows, h)
@@ -137,7 +141,7 @@ func (m *Model) buildJira(issues []atlassian.Issue, filtering bool) []jrow {
 			depth = 1
 		}
 		for _, r := range roots {
-			rows = m.flatten(rows, r, depth, filtering)
+			rows = m.flatten(rows, r, depth, via, filtering)
 		}
 	}
 	return rows
@@ -181,17 +185,29 @@ func sortForest(ns []*jnode, less func(a, b atlassian.Issue) int) {
 	}
 }
 
-func (m *Model) flatten(rows []jrow, n *jnode, depth int, filtering bool) []jrow {
-	r := jrow{issue: n.issue, depth: depth, context: n.context, kids: len(n.kids) > 0, count: n.size()}
+// flatten draws a node and what's under it. A parent drawn only to hold a
+// single child gives way to that child, which names it inline.
+func (m *Model) flatten(rows []jrow, n *jnode, depth int, via string, filtering bool) []jrow {
+	if n.context && len(n.kids) == 1 {
+		return m.flatten(rows, n.kids[0], depth, joinVia(via, n.issue.Key), filtering)
+	}
+	r := jrow{issue: n.issue, depth: depth, context: n.context, kids: len(n.kids) > 0, count: n.size(), via: via}
 	r.collapsed = r.kids && !filtering && m.folded(r.foldKey())
 	rows = append(rows, r)
 	if r.collapsed {
 		return rows
 	}
 	for _, k := range n.kids {
-		rows = m.flatten(rows, k, depth+1, filtering)
+		rows = m.flatten(rows, k, depth+1, "", filtering)
 	}
 	return rows
+}
+
+func joinVia(a, b string) string {
+	if a == "" {
+		return b
+	}
+	return a + " › " + b
 }
 
 func (m *Model) folded(key string) bool { return slices.Contains(m.jiraPrefs.Collapsed, key) }
@@ -311,6 +327,9 @@ func (m *Model) jiraSummaryCell(r jrow, sel bool) string {
 		st = sDim
 	}
 	s := st.Render(is.Summary)
+	if r.via != "" {
+		s = sDim.Render(r.via+" › ") + s
+	}
 	if r.kids && r.collapsed {
 		s += sDim.Render(fmt.Sprintf("  (%d)", r.count-1+boolInt(r.context)))
 	}

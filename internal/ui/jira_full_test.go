@@ -164,7 +164,8 @@ func TestJiraSessionsAndOtherKeysFull(t *testing.T) {
 func TestJiraContextRowsFull(t *testing.T) {
 	m := jiraModelViews(t)
 	m.jira.Sprint[2].ParentSummary, m.jira.Sprint[2].ParentStatus = "Payments epic", "In Progress"
-	m.filter.SetValue("refund")
+	m.jira.Sprint[1].ParentSummary, m.jira.Sprint[1].ParentStatus = "Payments epic", "In Progress"
+	m.filter.SetValue("ann")
 	m.refilter()
 	if got := rowKeysViews(m.vis.jira); !strings.Contains(got, "(ABC-1)") {
 		t.Fatalf("the parent is shown as context: %s", got)
