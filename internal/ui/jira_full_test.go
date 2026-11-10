@@ -62,6 +62,20 @@ func TestJiraCopyBriefFull(t *testing.T) {
 	}
 }
 
+func TestJiraImagesOffWithoutKitty(t *testing.T) {
+	m := jiraModelViews(t)
+	cursorToViews(t, m, "ABC-3")
+	fake(t, &imagesShown, func() bool { return false })
+	if cmd := pressViews(m, "i"); cmd != nil {
+		t.Error("i does nothing in a terminal without the kitty protocol")
+	}
+	for _, h := range m.help() {
+		if h[1] == "images" {
+			t.Error("no images hint in a terminal without the kitty protocol")
+		}
+	}
+}
+
 func TestJiraImagesFull(t *testing.T) {
 	m := jiraModelViews(t)
 	cursorToViews(t, m, "ABC-3")

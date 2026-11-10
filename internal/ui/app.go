@@ -927,7 +927,11 @@ func (m *Model) help() [][2]string {
 		return append([][2]string{m.hint("mrs.primary", "session")},
 			m.hints("mrs.threads", "mrs.fix", "mrs.claude_bg", "mrs.open", "mrs.ticket", "mrs.rebase", "mrs.pipeline", "mrs.seen")...)
 	case vJira:
-		return m.hints("jira.fold", "jira.layout", "jira.sessions", "jira.claude", "jira.claude_bg", "jira.summary", "jira.move", "jira.statuses", "jira.sort", "jira.copy_brief", "jira.images", "jira.open")
+		ids := []string{"jira.fold", "jira.layout", "jira.sessions", "jira.claude", "jira.claude_bg", "jira.summary", "jira.move", "jira.statuses", "jira.sort", "jira.copy_brief", "jira.images", "jira.open"}
+		if !imagesShown() {
+			ids = slices.DeleteFunc(ids, func(id string) bool { return id == "jira.images" })
+		}
+		return m.hints(ids...)
 	case vMentions:
 		return m.hints("mentions.open", "mentions.dismiss", "mentions.ticket", "mentions.reply", "mentions.reply_bg")
 	case vConfluence:

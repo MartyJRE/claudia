@@ -254,8 +254,13 @@ claudia plan [pane]     # comment on the plan of the session in a tmux pane (def
 - macOS, tmux, Go 1.24+
 - [`glab`](https://gitlab.com/gitlab-org/cli), logged in (claudia uses its login)
 - Claude Code
-- Optional: Ghostty (images, notification click-through), a Swift toolchain for
-  the native notification helper, an Entra app for [Teams](#teams-setup)
+- A terminal with a Nerd Font. Ghostty is recommended and has the font built in.
+  Other terminals work too: claudia detects the one it runs in, and clicking a
+  notification brings that terminal forward. Ticket images need the kitty
+  graphics protocol (Ghostty, kitty, WezTerm, Konsole); elsewhere the images key
+  is hidden. In iTerm2 use plain `tmux`, not `tmux -CC`.
+- Optional: a Swift toolchain for the native notification helper, an Entra app
+  for [Teams](#teams-setup)
 
 ## Install
 
@@ -339,6 +344,9 @@ by an environment variable are shown but can't be changed there.
   and `{verb}` are filled in. Without it, sessions are named `<verb>: <summary>`.
 - `rounded_pills: false` draws pills and tabs square, for fonts without the Nerd
   Font half circles. Ghostty ships those, so the default is rounded.
+- `terminal` pins the terminal app claudia runs in, e.g. `"iTerm2"`, for when
+  detection gets it wrong. The default, `auto`, uses the app behind your tmux
+  client and falls back to Ghostty.
 - `animations: false` keeps the status glyphs and loading spinners still. While
   they're on, claudia redraws about eight times a second, and only while
   something on screen moves.

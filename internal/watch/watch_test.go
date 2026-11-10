@@ -18,6 +18,7 @@ import (
 	"github.com/MartyJRE/claudia/internal/claude"
 	"github.com/MartyJRE/claudia/internal/gitlab"
 	"github.com/MartyJRE/claudia/internal/state"
+	"github.com/MartyJRE/claudia/internal/tmux"
 )
 
 // jira answers the Atlassian site, which config reads once per process, so its
@@ -33,6 +34,7 @@ func TestMain(m *testing.M) {
 	os.Setenv("XDG_STATE_HOME", dir)
 	os.Setenv("CLAUDIA_GITLAB_HOST", "gitlab.example.com")
 	os.Setenv("HOME", dir)
+	terminal = func() tmux.Term { return tmux.Term{App: "Ghostty"} }
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		jira.Lock()
 		h := jira.handler
