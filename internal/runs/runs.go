@@ -5,13 +5,9 @@ package runs
 
 import (
 	"database/sql"
-	"fmt"
-	"os"
 	"time"
 
-	_ "modernc.org/sqlite"
-
-	"github.com/MartyJRE/claudia/internal/state"
+	"github.com/MartyJRE/claudia/internal/statedb"
 )
 
 const (
@@ -34,70 +30,24 @@ type Run struct {
 	Finished time.Time
 	Outcome  string
 	Reason   string
+	// StartedBy is ByAutopilot for runs the autopilot started, else empty.
+	StartedBy string
 }
+
+const ByAutopilot = "autopilot"
 
 // Settled: the run ended one way or another.
 func (r Run) Settled() bool { return r.Outcome != Running && r.Outcome != NeedsYou }
 
 type Store struct{ db *sql.DB }
 
-const file = "state.db"
-
-// migrations[i] takes the schema from user_version i to i+1.
-var migrations = []string{
-	`CREATE TABLE IF NOT EXISTS runs (
-		id       TEXT PRIMARY KEY,
-		kind     TEXT NOT NULL,
-		subject  TEXT NOT NULL,
-		step     TEXT NOT NULL,
-		session  TEXT NOT NULL DEFAULT '',
-		sha      TEXT NOT NULL DEFAULT '',
-		started  INTEGER NOT NULL,
-		finished INTEGER NOT NULL DEFAULT 0,
-		outcome  TEXT NOT NULL,
-		reason   TEXT NOT NULL DEFAULT ''
-	);
-	CREATE INDEX IF NOT EXISTS runs_subject ON runs (subject, started);
-	CREATE INDEX IF NOT EXISTS runs_session ON runs (session);`,
-}
-
-// Open opens state.db in the state dir, migrating it as needed. The TUI and
-// the watcher both write, hence WAL and a busy timeout.
+// Open opens state.db, migrating it as needed.
 func Open() (*Store, error) {
-	if err := os.MkdirAll(state.Dir(), 0o755); err != nil {
-		return nil, err
-	}
-	db, err := sql.Open("sqlite", "file:"+state.Path(file)+"?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)")
+	db, err := statedb.Open()
 	if err != nil {
 		return nil, err
 	}
-	s := &Store{db}
-	if err := s.migrate(); err != nil {
-		db.Close()
-		return nil, err
-	}
-	return s, nil
-}
-
-func (s *Store) migrate() error {
-	var v int
-	if err := s.db.QueryRow(`PRAGMA user_version`).Scan(&v); err != nil {
-		return err
-	}
-	for ; v < len(migrations); v++ {
-		tx, err := s.db.Begin()
-		if err != nil {
-			return err
-		}
-		if _, err := tx.Exec(migrations[v] + fmt.Sprintf(`; PRAGMA user_version = %d`, v+1)); err != nil {
-			tx.Rollback()
-			return fmt.Errorf("state.db migration %d: %w", v+1, err)
-		}
-		if err := tx.Commit(); err != nil {
-			return err
-		}
-	}
-	return nil
+	return &Store{db}, nil
 }
 
 func (s *Store) Close() error { return s.db.Close() }
@@ -107,9 +57,9 @@ func (s *Store) Start(r Run) error {
 	if r.Outcome == "" {
 		r.Outcome = Running
 	}
-	_, err := s.db.Exec(`INSERT INTO runs (id, kind, subject, step, session, sha, started, finished, outcome, reason)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		r.ID, r.Kind, r.Subject, r.Step, r.Session, r.SHA, ms(r.Started), ms(r.Finished), r.Outcome, r.Reason)
+	_, err := s.db.Exec(`INSERT INTO runs (id, kind, subject, step, session, sha, started, finished, outcome, reason, started_by)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		r.ID, r.Kind, r.Subject, r.Step, r.Session, r.SHA, ms(r.Started), ms(r.Finished), r.Outcome, r.Reason, r.StartedBy)
 	return err
 }
 
@@ -130,6 +80,20 @@ func (s *Store) Running() []Run {
 	return s.query(`WHERE outcome = ? ORDER BY started DESC, id`, Running)
 }
 
+// Since is every run started at or after t, newest first.
+func (s *Store) Since(t time.Time) []Run {
+	return s.query(`WHERE started >= ? ORDER BY started DESC, id`, ms(t))
+}
+
+// AutopilotUSD is what the sessions of runs the autopilot started since t
+// cost, as far as the cost ledger knows.
+func (s *Store) AutopilotUSD(since time.Time) float64 {
+	var usd float64
+	_ = s.db.QueryRow(`SELECT COALESCE(SUM(c.usd), 0) FROM costs c WHERE c.session IN
+		(SELECT session FROM runs WHERE started_by = ? AND started >= ? AND session != '')`, ByAutopilot, ms(since)).Scan(&usd)
+	return usd
+}
+
 // open is the runs a session can still change: running ones, and needs-you
 // ones whose session may carry on once answered.
 func (s *Store) open() []Run {
@@ -137,7 +101,7 @@ func (s *Store) open() []Run {
 }
 
 func (s *Store) query(where string, args ...any) []Run {
-	rows, err := s.db.Query(`SELECT id, kind, subject, step, session, sha, started, finished, outcome, reason FROM runs `+where, args...)
+	rows, err := s.db.Query(`SELECT id, kind, subject, step, session, sha, started, finished, outcome, reason, started_by FROM runs `+where, args...)
 	if err != nil {
 		return nil
 	}
@@ -146,7 +110,7 @@ func (s *Store) query(where string, args ...any) []Run {
 	for rows.Next() {
 		var r Run
 		var started, finished int64
-		if rows.Scan(&r.ID, &r.Kind, &r.Subject, &r.Step, &r.Session, &r.SHA, &started, &finished, &r.Outcome, &r.Reason) != nil {
+		if rows.Scan(&r.ID, &r.Kind, &r.Subject, &r.Step, &r.Session, &r.SHA, &started, &finished, &r.Outcome, &r.Reason, &r.StartedBy) != nil {
 			continue
 		}
 		r.Started, r.Finished = fromMS(started), fromMS(finished)
@@ -155,16 +119,6 @@ func (s *Store) query(where string, args ...any) []Run {
 	return out
 }
 
-func ms(t time.Time) int64 {
-	if t.IsZero() {
-		return 0
-	}
-	return t.UnixMilli()
-}
+func ms(t time.Time) int64 { return statedb.MS(t) }
 
-func fromMS(v int64) time.Time {
-	if v == 0 {
-		return time.Time{}
-	}
-	return time.UnixMilli(v)
-}
+func fromMS(v int64) time.Time { return statedb.FromMS(v) }

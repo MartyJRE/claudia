@@ -20,6 +20,12 @@ type Links struct {
 
 func Load() *Links {
 	l := &Links{}
+	l.load()
+	return l
+}
+
+func (l *Links) load() {
+	l.SessionMRs, l.SessionTickets = nil, nil
 	state.Load(file, l)
 	if l.SessionMRs == nil {
 		l.SessionMRs = map[string][]string{}
@@ -27,27 +33,37 @@ func Load() *Links {
 	if l.SessionTickets == nil {
 		l.SessionTickets = map[string]string{}
 	}
-	return l
 }
 
-func (l *Links) save() error { return state.Save(file, l) }
-
-func (l *Links) AddMRs(session string, urls []string) error {
+// Reload takes in what the TUI or the watcher wrote since.
+func (l *Links) Reload() {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	l.SessionMRs[session] = append(l.SessionMRs[session], urls...)
-	return l.save()
+	l.load()
+}
+
+// update applies a change to the file as it is now, so the TUI and the
+// watcher don't write over each other's links.
+func (l *Links) update(change func()) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.load()
+	change()
+	return state.Save(file, l)
+}
+
+func (l *Links) AddMRs(session string, urls []string) error {
+	return l.update(func() { l.SessionMRs[session] = append(l.SessionMRs[session], urls...) })
 }
 
 func (l *Links) SetTicket(session, key string) error {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	if key == "" {
-		delete(l.SessionTickets, session)
-	} else {
-		l.SessionTickets[session] = key
-	}
-	return l.save()
+	return l.update(func() {
+		if key == "" {
+			delete(l.SessionTickets, session)
+		} else {
+			l.SessionTickets[session] = key
+		}
+	})
 }
 
 func (l *Links) Ticket(session string) (string, bool) {
