@@ -14,7 +14,7 @@ type Proc struct {
 	Age  time.Duration
 }
 
-var psCommands = func() ([]byte, error) { return exec.Command("ps", "-axo", "pid=,etime=,command=").Output() }
+var psCommands = func() ([]byte, error) { return exec.Command("ps", "-axww", "-o", "pid=,etime=,command=").Output() }
 
 // ProcessSessions is the claude processes by the session id they were started
 // with, registered or not: claudia passes it as --session-id or --resume.
