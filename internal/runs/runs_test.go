@@ -12,6 +12,7 @@ import (
 
 	"github.com/MartyJRE/claudia/internal/claude"
 	"github.com/MartyJRE/claudia/internal/state"
+	"github.com/MartyJRE/claudia/internal/statedb"
 )
 
 func open(t *testing.T) *Store {
@@ -30,7 +31,7 @@ var t0 = time.Date(2026, 11, 10, 9, 0, 0, 0, time.Local)
 func TestMigrations(t *testing.T) {
 	s := open(t)
 	var v int
-	if err := s.db.QueryRow(`PRAGMA user_version`).Scan(&v); err != nil || v != len(migrations) {
+	if err := s.db.QueryRow(`PRAGMA user_version`).Scan(&v); err != nil || v != len(statedb.Migrations) {
 		t.Fatalf("user_version %d %v", v, err)
 	}
 	var mode string
@@ -51,10 +52,10 @@ func TestMigrations(t *testing.T) {
 		t.Errorf("reopened %+v", got)
 	}
 
-	old := migrations
-	t.Cleanup(func() { migrations = old })
-	migrations = append(slices.Clone(old), `CREATE TABLE broken (`)
-	if _, err := Open(); err == nil || !strings.Contains(err.Error(), "migration 2") {
+	old := statedb.Migrations
+	t.Cleanup(func() { statedb.Migrations = old })
+	statedb.Migrations = append(slices.Clone(old), `CREATE TABLE broken (`)
+	if _, err := Open(); err == nil || !strings.Contains(err.Error(), fmt.Sprintf("migration %d", len(old)+1)) {
 		t.Errorf("broken migration: %v", err)
 	}
 }
@@ -72,7 +73,7 @@ func TestOpenErrors(t *testing.T) {
 	if err := os.MkdirAll(state.Dir(), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(state.Path(file), []byte(strings.Repeat("not a database ", 100)), 0o600); err != nil {
+	if err := os.WriteFile(state.Path(statedb.File), []byte(strings.Repeat("not a database ", 100)), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := Open(); err == nil {

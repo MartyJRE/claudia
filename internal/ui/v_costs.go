@@ -18,6 +18,7 @@ func (m *Model) updateLedger() {
 	if m.ledger == nil {
 		m.ledger = claude.OpenLedger()
 	}
+	m.ledger.Reload()
 	changed := m.ledger.Merge(m.usageScanner.Sessions())
 	for _, r := range m.sessions {
 		t, ok := m.ix.sessionTicket[r.ID]

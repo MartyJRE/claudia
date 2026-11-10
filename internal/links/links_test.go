@@ -42,3 +42,25 @@ func TestRoundTrip(t *testing.T) {
 		t.Error("cleared ticket still set")
 	}
 }
+
+// The TUI and the watcher each hold links; neither write loses the other's.
+func TestTwoWriters(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	tui, watcher := Load(), Load()
+	if err := watcher.SetTicket("auto", "ABC-1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := tui.Ticket("auto"); ok {
+		t.Error("seen before a reload")
+	}
+	if err := tui.AddMRs("mine", []string{"u"}); err != nil {
+		t.Fatal(err)
+	}
+	if k, _ := tui.Ticket("auto"); k != "ABC-1" {
+		t.Error("the TUI's write dropped the watcher's link")
+	}
+	watcher.Reload()
+	if got := watcher.MRs("mine"); len(got) != 1 {
+		t.Errorf("reloaded %v", got)
+	}
+}

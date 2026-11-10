@@ -2,12 +2,16 @@ package claude
 
 import (
 	"cmp"
+	"database/sql"
+	"encoding/json"
 	"iter"
 	"maps"
+	"os"
 	"slices"
 	"time"
 
 	"github.com/MartyJRE/claudia/internal/state"
+	"github.com/MartyJRE/claudia/internal/statedb"
 )
 
 // SessionCost is what one session cost, its subagents included.
@@ -78,11 +82,16 @@ type EpicCost struct {
 }
 
 // Ledger keeps what every session cost, so the cost outlives Claude Code's
-// cleanup of old transcripts. It's the only thing that knows how that's stored.
+// cleanup of old transcripts. It's the only thing that knows that's the costs
+// table in state.db, which the TUI and the watcher both write.
 type Ledger struct {
+	db      *sql.DB
+	err     error
 	entries map[string]ledgerEntry
+	dirty   map[string]bool
 }
 
+// ledgerFile is where the ledger lived before state.db; it's imported once.
 const ledgerFile = "cost-ledger.json"
 
 type ledgerEntry struct {
@@ -102,17 +111,90 @@ func (e ledgerEntry) cost(id string) SessionCost {
 	return SessionCost{ID: id, Ticket: e.Ticket, Profile: e.Profile, Models: e.Models, First: e.First, Last: e.Last}.priced()
 }
 
-// OpenLedger loads the ledger; a missing or broken one starts empty.
+var openDB = statedb.Open
+
+// OpenLedger loads the ledger; when state.db can't be opened it starts empty
+// and Save says why.
 func OpenLedger() *Ledger {
-	l := &Ledger{entries: map[string]ledgerEntry{}}
-	state.Load(ledgerFile, &l.entries)
-	if l.entries == nil {
-		l.entries = map[string]ledgerEntry{}
+	l := &Ledger{entries: map[string]ledgerEntry{}, dirty: map[string]bool{}}
+	l.db, l.err = openDB()
+	if l.err != nil {
+		return l
 	}
+	l.importJSON()
+	l.Reload()
 	return l
 }
 
-func (l *Ledger) Save() error { return state.Save(ledgerFile, l.entries) }
+// importJSON moves the old JSON ledger into state.db and sets the file aside.
+func (l *Ledger) importJSON() {
+	var old map[string]ledgerEntry
+	if !state.Load(ledgerFile, &old) {
+		return
+	}
+	for id, e := range old {
+		if l.put(id, e, "INSERT OR IGNORE") != nil {
+			return
+		}
+	}
+	_ = os.Rename(state.Path(ledgerFile), state.Path(ledgerFile)+".migrated")
+}
+
+// Reload reads what the other process wrote, keeping the entries not saved yet.
+func (l *Ledger) Reload() {
+	if l.db == nil {
+		return
+	}
+	rows, err := l.db.Query(`SELECT session, ticket, linked, profile, usd, tokens, models, first, last FROM costs`)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+	fresh := map[string]ledgerEntry{}
+	for rows.Next() {
+		var id, models string
+		var e ledgerEntry
+		var first, last int64
+		if rows.Scan(&id, &e.Ticket, &e.Linked, &e.Profile, &e.USD, &e.Tokens, &models, &first, &last) != nil {
+			continue
+		}
+		_ = json.Unmarshal([]byte(models), &e.Models)
+		e.First, e.Last = statedb.FromMS(first), statedb.FromMS(last)
+		fresh[id] = e
+	}
+	for id := range l.dirty {
+		fresh[id] = l.entries[id]
+	}
+	l.entries = fresh
+}
+
+func (l *Ledger) put(id string, e ledgerEntry, verb string) error {
+	models, _ := json.Marshal(e.Models)
+	_, err := l.db.Exec(verb+` INTO costs (session, ticket, linked, profile, usd, tokens, models, first, last) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		id, e.Ticket, e.Linked, e.Profile, e.USD, e.Tokens, string(models), statedb.MS(e.First), statedb.MS(e.Last))
+	return err
+}
+
+// Save writes the entries that changed since the last save.
+func (l *Ledger) Save() error {
+	if l.db == nil {
+		return l.err
+	}
+	for id := range l.dirty {
+		if err := l.put(id, l.entries[id], "INSERT OR REPLACE"); err != nil {
+			return err
+		}
+		delete(l.dirty, id)
+	}
+	return nil
+}
+
+func (l *Ledger) Close() error {
+	if l.db == nil {
+		return nil
+	}
+	return l.db.Close()
+}
 
 // Merge takes in freshly scanned sessions and says whether anything changed.
 // A session keeps its largest total: a rescan of a transcript that still exists
@@ -133,6 +215,7 @@ func (l *Ledger) Merge(scanned []SessionCost) bool {
 			continue
 		}
 		l.entries[c.ID] = e
+		l.dirty[c.ID] = true
 		changed = true
 	}
 	return changed
@@ -147,6 +230,7 @@ func (l *Ledger) SetTicket(id, ticket string) bool {
 	}
 	e.Ticket, e.Linked = ticket, true
 	l.entries[id] = e
+	l.dirty[id] = true
 	return true
 }
 

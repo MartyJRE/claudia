@@ -328,6 +328,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.sessLoaded, m.sessLoading = true, false
 		m.restore = notLive(m.restore, m.sessions)
 		saveLive(m.sessions, m.restore != nil)
+		m.links.Reload()
 		m.reindex()
 		return m, nil
 	case planSentMsg:
