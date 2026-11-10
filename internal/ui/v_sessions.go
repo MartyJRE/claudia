@@ -148,6 +148,8 @@ func (m *Model) status(r row) string {
 		return sDim.Render("○ closed")
 	}
 	switch s := r.Live.Status; {
+	case r.Live.Starting:
+		return lipgloss.NewStyle().Foreground(yellow).Bold(true).Render("◆ stuck at startup")
 	case r.needsYou():
 		return lipgloss.NewStyle().Foreground(yellow).Bold(true).Render("◆ needs you")
 	case s.Working():

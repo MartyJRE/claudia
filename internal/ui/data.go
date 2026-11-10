@@ -2,11 +2,14 @@ package ui
 
 import (
 	"errors"
+	"slices"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/MartyJRE/claudia/internal/atlassian"
+	"github.com/MartyJRE/claudia/internal/claude"
 	"github.com/MartyJRE/claudia/internal/gitlab"
 	"github.com/MartyJRE/claudia/internal/launch"
 	"github.com/MartyJRE/claudia/internal/repos"
@@ -14,6 +17,7 @@ import (
 	"github.com/MartyJRE/claudia/internal/state"
 	"github.com/MartyJRE/claudia/internal/summary"
 	"github.com/MartyJRE/claudia/internal/teams"
+	"github.com/MartyJRE/claudia/internal/tmux"
 )
 
 type source int
@@ -50,6 +54,29 @@ type fetched struct {
 
 type sessionsMsg []row
 
+// stuckRows are sessions claudia started whose claude runs but never
+// registered, most likely held by a dialog in their window: shown as waiting
+// on you so they aren't lost, wherever they were started from.
+func stuckRows(rows []row, procs map[string]claude.Proc, kinds map[string]string, loc *tmux.Locator) []row {
+	known := map[string]bool{}
+	for _, r := range rows {
+		known[r.ID] = true
+	}
+	var out []row
+	for id, p := range procs {
+		if known[id] || kinds[id] == "" || p.Age < runs.Grace {
+			continue
+		}
+		r := row{Session: claude.Session{ID: id, Live: &claude.Live{PID: p.PID, SessionID: id, Name: p.Name, Status: claude.StatusWaiting, Starting: true}}, kind: kinds[id]}
+		if pane, ok := locatePane(loc, p.PID); ok {
+			r.pane = &pane
+		}
+		out = append(out, r)
+	}
+	slices.SortFunc(out, func(a, b row) int { return strings.Compare(a.ID, b.ID) })
+	return out
+}
+
 func (m *Model) loadSessions() tea.Cmd {
 	store, db := m.store, m.db
 	return func() tea.Msg {
@@ -68,12 +95,14 @@ func (m *Model) loadSessions() tea.Cmd {
 			}
 			rows = append(rows, r)
 		}
+		procs := processSessions()
+		rows = append(rows, stuckRows(rows, procs, kinds, loc)...)
 		if db != nil {
 			seen := make([]runs.Seen, len(rows))
 			for i, r := range rows {
 				seen[i] = runs.SeenOf(r.Session, r.summary, r.summaryFor)
 			}
-			_, _ = db.Reconcile(seen, clockNow())
+			_, _ = db.Reconcile(runs.WithStarting(seen, procs), clockNow())
 		}
 		return sessionsMsg(rows)
 	}

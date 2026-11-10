@@ -25,17 +25,18 @@ import (
 var (
 	getConfig = config.Get
 
-	startSession  = launch.Start
-	switchClient  = tmux.Switch
-	joinSplit     = tmux.JoinSplit
-	unsplitWindow = tmux.Unsplit
-	newLocator    = tmux.NewLocator
-	locatePane    = (*tmux.Locator).Pane
-	locateHost    = (*tmux.Locator).Host
-	listSessions  = (*claude.Store).Sessions
-	scanUsage     = (*claude.UsageScanner).Scan
-	killProcess   = syscall.Kill
-	openRuns      = runs.Open
+	startSession    = launch.Start
+	switchClient    = tmux.Switch
+	joinSplit       = tmux.JoinSplit
+	unsplitWindow   = tmux.Unsplit
+	newLocator      = tmux.NewLocator
+	processSessions = claude.ProcessSessions
+	locatePane      = (*tmux.Locator).Pane
+	locateHost      = (*tmux.Locator).Host
+	listSessions    = (*claude.Store).Sessions
+	scanUsage       = (*claude.UsageScanner).Scan
+	killProcess     = syscall.Kill
+	openRuns        = runs.Open
 
 	cmdOutput         = (*exec.Cmd).Output
 	cmdCombinedOutput = (*exec.Cmd).CombinedOutput

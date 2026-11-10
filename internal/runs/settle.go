@@ -33,7 +33,28 @@ type Seen struct {
 	// ContextFull: the context is all but used up, or Claude Code said so;
 	// without autocompact the session can't go on until /compact.
 	ContextFull bool
+	// Starting: its claude process runs but hasn't registered, e.g. held by a
+	// startup dialog nobody answered.
+	Starting bool
 }
+
+// WithStarting adds the sessions whose claude process runs without having
+// registered, from the ids of running processes.
+func WithStarting(seen []Seen, procs map[string]claude.Proc) []Seen {
+	known := map[string]bool{}
+	for _, sn := range seen {
+		known[sn.Session] = true
+	}
+	for id := range procs {
+		if !known[id] {
+			seen = append(seen, Seen{Session: id, Starting: true})
+		}
+	}
+	return seen
+}
+
+// StuckAtStartup is the reason on a run whose claude runs but never got going.
+const StuckAtStartup = "stuck at startup"
 
 // ContextFull is the reason a run whose context filled up waits on you.
 const ContextFull = "context full"
@@ -60,7 +81,11 @@ func SeenOf(s claude.Session, summary string, summaryFor time.Time) Seen {
 
 // grace is how long a fresh run's session may stay unseen: claude takes a
 // moment to register, and a /color run exits before the session proper starts.
-const grace = 2 * time.Minute
+const grace = Grace
+
+// Grace is how long a fresh session may run without registering before it
+// counts as stuck at startup.
+const Grace = 2 * time.Minute
 
 // Reconcile settles the open runs whose sessions stopped, and says whether any
 // changed. A session idle without a result line keeps its run running: Claude
@@ -73,6 +98,12 @@ func (s *Store) Reconcile(seen []Seen, now time.Time) (bool, error) {
 	changed := false
 	for _, r := range s.open() {
 		sn := by[r.Session]
+		if r.Outcome == Running && r.Reason == StuckAtStartup && sn.Live {
+			if err := s.Note(r.Session, ""); err != nil {
+				return changed, err
+			}
+			changed = true
+		}
 		if sn.Working {
 			continue
 		}
@@ -81,6 +112,16 @@ func (s *Store) Reconcile(seen []Seen, now time.Time) (bool, error) {
 			outcome, reason, ok = NeedsYou, ContextFull, true
 		}
 		if !sn.Live {
+			// Still running as far as the slot count goes, so nothing piles up behind it.
+			if sn.Starting {
+				if r.Outcome == Running && r.Reason != StuckAtStartup && now.Sub(r.Started) >= grace {
+					if err := s.Note(r.Session, StuckAtStartup); err != nil {
+						return changed, err
+					}
+					changed = true
+				}
+				continue
+			}
 			if r.Outcome == NeedsYou || now.Sub(r.Started) < grace {
 				continue
 			}

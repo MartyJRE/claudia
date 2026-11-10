@@ -23,6 +23,9 @@ const (
 func (s Status) Working() bool { return s == StatusBusy || s == StatusShell }
 
 type Live struct {
+	// Starting: the process runs but never registered, e.g. held by a startup
+	// dialog; claudia fills these in itself, the registry never does.
+	Starting   bool   `json:"-"`
 	PID        int    `json:"pid"`
 	SessionID  string `json:"sessionId"`
 	Cwd        string `json:"cwd"`

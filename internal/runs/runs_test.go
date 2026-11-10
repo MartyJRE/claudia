@@ -210,7 +210,7 @@ func TestSeenOf(t *testing.T) {
 	upd := t0.Add(time.Minute)
 	tr := &claude.Transcript{Updated: upd, Tail: []claude.Turn{{Role: "user", Text: "go"}, {Role: "assistant", Text: "CLAUDIA_RESULT: ok"}}}
 	s := claude.Session{ID: "s1", Transcript: tr, Live: &claude.Live{Status: claude.StatusBusy}}
-	if sn := SeenOf(s, "Done: x", upd); sn != (Seen{"s1", true, true, "CLAUDIA_RESULT: ok", "Done: x", false}) {
+	if sn := SeenOf(s, "Done: x", upd); sn != (Seen{Session: "s1", Live: true, Working: true, Reply: "CLAUDIA_RESULT: ok", Summary: "Done: x"}) {
 		t.Errorf("busy %+v", sn)
 	}
 	s.Live.Status = claude.StatusIdle
@@ -297,5 +297,69 @@ func TestReconcileError(t *testing.T) {
 	}
 	if _, err := s.Reconcile(nil, t0.Add(time.Hour)); err == nil || !strings.Contains(err.Error(), "read only") {
 		t.Errorf("settle error: %v", err)
+	}
+}
+
+func TestStuckAtStartup(t *testing.T) {
+	s := open(t)
+	now := t0.Add(time.Hour)
+	for id, age := range map[string]time.Duration{"stuck": 5 * time.Minute, "young": 30 * time.Second, "dead": 5 * time.Minute} {
+		if err := s.Start(Run{ID: id, Subject: "ABC-1", Step: "review", Session: id, Started: now.Add(-age)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	procs := map[string]claude.Proc{"stuck": {PID: 1}, "young": {PID: 2}, "known": {PID: 3}}
+	seen := WithStarting([]Seen{{Session: "known", Live: true}}, procs)
+	if len(seen) != 3 {
+		t.Fatalf("seen %+v", seen)
+	}
+	if _, err := s.Reconcile(seen, now); err != nil {
+		t.Fatal(err)
+	}
+	reason := func(id string) (string, string) {
+		r := s.For("ABC-1")
+		for _, x := range r {
+			if x.ID == id {
+				return x.Outcome, x.Reason
+			}
+		}
+		return "", ""
+	}
+	// Past the grace period a starting process keeps its run running, holding
+	// its slot, and says why; a young one is left alone; one with no process
+	// left fails as before.
+	if o, r := reason("stuck"); o != Running || r != StuckAtStartup {
+		t.Errorf("stuck: %s %q", o, r)
+	}
+	if o, r := reason("young"); o != Running || r != "" {
+		t.Errorf("young: %s %q", o, r)
+	}
+	if o, r := reason("dead"); o != Failed {
+		t.Errorf("dead: %s %q", o, r)
+	}
+	if n := len(s.Running()); n != 2 {
+		t.Errorf("running %d: a stuck run still holds its slot", n)
+	}
+	// Once it registers the reason clears and it carries on.
+	if _, err := s.Reconcile([]Seen{{Session: "stuck", Live: true, Working: true}}, now.Add(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	if o, r := reason("stuck"); o != Running || r != "" {
+		t.Errorf("registered: %s %q", o, r)
+	}
+}
+
+func TestStuckAtStartupErrors(t *testing.T) {
+	s := open(t)
+	_ = s.Start(Run{ID: "a", Subject: "X", Session: "a", Started: t0})
+	_ = s.Start(Run{ID: "b", Subject: "X", Session: "b", Started: t0, Reason: StuckAtStartup})
+	if _, err := s.db.Exec(`CREATE TRIGGER no BEFORE UPDATE ON runs BEGIN SELECT RAISE(ABORT, 'read only'); END`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Reconcile([]Seen{{Session: "a", Starting: true}}, t0.Add(time.Hour)); err == nil {
+		t.Error("noting stuck: no error")
+	}
+	if _, err := s.Reconcile([]Seen{{Session: "b", Live: true}}, t0.Add(time.Hour)); err == nil {
+		t.Error("clearing stuck: no error")
 	}
 }
