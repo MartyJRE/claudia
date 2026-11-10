@@ -175,14 +175,17 @@ const defaultAnalysisPrompt = "Read the Jira issue {key} at {brief} and analyse 
 
 const defaultReadinessPrompt = "Read the Jira issue {key} at {brief} and check it's ready to implement: a clear spec, acceptance criteria, and designs where the UI changes. " +
 	"Don't change any files. If it's under-specified, post your concrete questions as one comment on the ticket, or on its linked Confluence page when the spec lives there, " +
-	"with the Atlassian MCP, starting the comment with \"(claudia)\"; then end with `CLAUDIA_RESULT: waiting — asked N questions`. If it's ready, say what you checked."
+	"with the Atlassian MCP, mentioning who should answer: whoever last changed the description (the newest `description` change in the issue's changelog, and in the description history of a ticket it clones), else the reporter; " +
+	"never someone just for being the assignee, a reviewer or in another people field. Questions about a part the description credits to someone (\"based on analysis of X\") go to them, " +
+	"but only if their Jira account is active and can be mentioned, else to the description's author. With several people, group the questions under each one's mention in that one comment. " +
+	"Then end with `CLAUDIA_RESULT: waiting — asked N questions`. If it's ready, say what you checked."
 
 const defaultMRPrompt = "Jira issue {key} ({brief}) is implemented on this branch. Push the branch and open a merge request with `glab mr create`: " +
 	"a title in the repo's commit style and a description from the plan, saying what changed and why and what the reviewer should look at closely. " +
 	"Stop and ask if the working tree has uncommitted changes or this isn't the ticket's branch."
 
-const defaultQAPrompt = "Jira issue {key} ({brief}) is merged. Look at the MRs that went in for it, then post a comment for the tester on the ticket with the Atlassian MCP, " +
-	"starting it with \"(claudia)\": what changed, what to test with concrete steps and expected results, and the risks. Don't change any files."
+const defaultQAPrompt = "Jira issue {key} ({brief}) is merged. Look at the MRs that went in for it, then post a comment for the tester on the ticket with the Atlassian MCP: " +
+	"what changed, what to test with concrete steps and expected results, and the risks. Don't change any files."
 
 var (
 	once sync.Once

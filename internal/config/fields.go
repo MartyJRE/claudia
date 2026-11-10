@@ -122,6 +122,8 @@ var Fields = []Field{
 		Default: "720h", Help: "a review request whose MR saw no activity for this long isn't reviewed on its own, e.g. 336h; off reviews them all"},
 	{Key: "autopilot.permission_mode", Group: "Autopilot", Label: "permission mode", Kind: KindString,
 		Default: "auto", Help: "how the runs it starts ask before acting: default (your usual mode), acceptEdits, auto or bypassPermissions; bypassPermissions has no sandbox behind it, the run can do anything you can"},
+	{Key: "autopilot.comment_note", Group: "Autopilot", Label: "comment note", Kind: KindString,
+		Default: "Written by Claude, an AI assistant, on my behalf — reply here as usual.", Help: "the sentence a run's Jira and Confluence comments start with, in an info panel, and its GitLab notes, as a quote"},
 
 	{Key: "brief_every", Group: "UI", Label: "brief every", Kind: KindDuration,
 		Default: "2h", Help: "how often the inbox brief is rewritten, e.g. 30m; off leaves only the on-demand refresh"},

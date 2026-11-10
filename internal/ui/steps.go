@@ -228,7 +228,7 @@ func (m *Model) runNext(c boardCard) (tea.Model, tea.Cmd) {
 		r, ok := m.sessionRow(hold.Session)
 		switch {
 		case ok && !r.live() && r.Dir() != "":
-			return m.start(launch.Resume(r.Session).AsRun(hold.ID, hold.Step, hold.Subject))
+			return m.start(launch.Resume(r.Session).AsRun(hold.ID, hold.Step, hold.Subject, getConfig().Autopilot.CommentNote()))
 		case ok:
 			return m.jumpTo(r)
 		case hold.Outcome == runs.Running:
@@ -309,7 +309,7 @@ func startRun(db *runs.Store, sp launch.Spec, id string, pending *runs.Run) (lau
 	if db == nil {
 		return sp, errors.New("the run log isn't open")
 	}
-	return sp.AsRun(r.ID, r.Step, r.Subject), db.Start(r)
+	return sp.AsRun(r.ID, r.Step, r.Subject, getConfig().Autopilot.CommentNote()), db.Start(r)
 }
 
 type mergedMsg struct {

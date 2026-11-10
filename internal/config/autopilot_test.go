@@ -1,6 +1,7 @@
 package config
 
 import (
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -21,6 +22,17 @@ func TestAutopilotDefaults(t *testing.T) {
 	a.PermissionModeRaw = ""
 	if !a.ReviewApprove() || a.ReviewReact() != "✅" || a.MaxRunning() != 1 || a.ReviewEvery() != time.Hour {
 		t.Error("review and running")
+	}
+	if a.CommentNote() != defaultCommentNote || (Autopilot{CommentNoteRaw: " By Claude. "}).CommentNote() != "By Claude." {
+		t.Error("comment note")
+	}
+	if i := slices.IndexFunc(Fields, func(f Field) bool { return f.Key == "autopilot.comment_note" }); i < 0 || Fields[i].Default != defaultCommentNote {
+		t.Error("no comment note setting")
+	}
+	for _, p := range []string{defaultReviewPrompt, defaultImplementationPrompt, defaultAnalysisPrompt, defaultReadinessPrompt, defaultMRPrompt, defaultQAPrompt} {
+		if strings.Contains(p, "(claudia)") {
+			t.Errorf("a default prompt still says (claudia): %s", p)
+		}
 	}
 	if a.MaxFiveHour() != 60 || a.MaxFiveHourAfterHours() != 90 || a.MaxSevenDay() != 80 || a.MaxTicketUSD() != 50 || a.MaxDayUSD() != 30 {
 		t.Error("caps")

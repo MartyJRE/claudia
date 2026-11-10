@@ -2,6 +2,7 @@ package launch
 
 import (
 	"crypto/rand"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -85,10 +86,16 @@ func New(dir string, p claude.Profile, name, prompt string) (Spec, string) {
 
 // AsRun makes the session claudia run id of step on subject: it gets
 // CLAUDIA_RUN and is told to end with a result line. The note joins the
-// appended system prompt, since a second --append-system-prompt replaces the first.
-func (sp Spec) AsRun(id, step, subject string) Spec {
+// appended system prompt, since a second --append-system-prompt replaces the
+// first. Whatever the run posts starts with commentNote.
+func (sp Spec) AsRun(id, step, subject, commentNote string) Spec {
 	note := fmt.Sprintf("This is claudia run %s, step %s for %s. When you're done, or stuck, end your last message with exactly one line "+
 		"`CLAUDIA_RESULT: ok|needs-you|waiting|failed — <short reason>`; waiting means you asked someone else (on Jira, an MR, Teams) and the step can't go on until they answer. Keep your own context lean: push broad searches and big reads into subagents, since this session doesn't compact on its own.", id, step, subject)
+	text, _ := json.Marshal(commentNote)
+	note += fmt.Sprintf(" When you post anything to Jira or Confluence, use the Atlassian MCP with ADF content (contentFormat and responseContentFormat \"adf\" where the tool takes them) "+
+		"and start the body with this panel node, then the rest as normal ADF: "+
+		`{"type":"panel","attrs":{"panelType":"info"},"content":[{"type":"paragraph","content":[{"type":"text","text":%s}]}]}.`+
+		" When you post to GitLab (MR notes or threads), start with the same sentence as a markdown quote: `> %s`. Never prefix anything with \"(claudia)\".", text, commentNote)
 	switch step {
 	case "plan":
 		note += " The reason says how big the change is: `size: simple`, `size: medium` or `size: large`; simple is a small change with no open questions."
