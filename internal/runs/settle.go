@@ -38,12 +38,16 @@ type Seen struct {
 	Starting bool
 }
 
-// WithStarting adds the sessions whose claude process runs without having
-// registered, from the ids of running processes.
+// WithStarting marks the sessions whose claude process runs without having
+// registered, from the ids of running processes; one with a transcript from
+// before counts too.
 func WithStarting(seen []Seen, procs map[string]claude.Proc) []Seen {
 	known := map[string]bool{}
-	for _, sn := range seen {
+	for i, sn := range seen {
 		known[sn.Session] = true
+		if _, ok := procs[sn.Session]; ok && !sn.Live {
+			seen[i].Starting = true
+		}
 	}
 	for id := range procs {
 		if !known[id] {
@@ -64,7 +68,8 @@ const FullAt = 0.95
 
 // SeenOf reads a session; summary counts only when written for its latest turn.
 func SeenOf(s claude.Session, summary string, summaryFor time.Time) Seen {
-	sn := Seen{Session: s.ID, Live: s.Live != nil}
+	starting := s.Live != nil && s.Live.Starting
+	sn := Seen{Session: s.ID, Live: s.Live != nil && !starting, Starting: starting}
 	sn.Working = sn.Live && s.Live.Status.Working()
 	if s.Transcript == nil {
 		return sn

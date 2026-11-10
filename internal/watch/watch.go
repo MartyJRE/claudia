@@ -506,14 +506,15 @@ func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
 var processSessions = claude.ProcessSessions
 
 // stuckNotes tells once of each session claudia started whose claude runs but
-// never registered, most likely held by a dialog nobody sees in its window.
+// never registered, most likely held by a dialog nobody sees in its window;
+// one resumed from a transcript counts too.
 func (w *watcher) stuckNotes(all []claude.Session, procs map[string]claude.Proc, kinds map[string]string, loc *tmux.Locator) {
 	if w.stuck == nil {
 		w.stuck = map[string]bool{}
 	}
 	known := map[string]bool{}
 	for _, s := range all {
-		known[s.ID] = true
+		known[s.ID] = s.Live != nil
 	}
 	for id, p := range procs {
 		if known[id] || kinds[id] == "" || p.Age < runs.Grace || w.stuck[id] {

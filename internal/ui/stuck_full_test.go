@@ -23,7 +23,7 @@ func TestStuckAtStartupFull(t *testing.T) {
 		"known": {PID: 11, Age: time.Hour},
 	}
 	kinds := map[string]string{"stuck": "review", "other": "fix", "young": "review", "known": "review"}
-	got := stuckRows(rows, procs, kinds, nil)
+	got := stuckRows(rows, procs, kinds, nil)[1:]
 	if len(got) != 2 || got[0].ID != "other" || got[1].ID != "stuck" {
 		t.Fatalf("rows %+v", got)
 	}
@@ -44,6 +44,26 @@ func TestStuckAtStartupFull(t *testing.T) {
 	}
 	if !found {
 		t.Error("no inbox item for the stuck session")
+	}
+}
+
+func TestStuckRowWithTranscript(t *testing.T) {
+	m := newModelShell(t)
+	pane := tmux.Pane{ID: "%9", Session: "feeds", Window: "0", Index: "0"}
+	fake(t, &locatePane, func(_ *tmux.Locator, pid int) (tmux.Pane, bool) { return pane, pid == 7 })
+	tr := &claude.Transcript{}
+	rows := []row{{Session: claude.Session{ID: "old", Transcript: tr}, summary: "Done: x"}, {Session: claude.Session{ID: "closed", Transcript: tr}}}
+	procs := map[string]claude.Proc{"old": {PID: 7, Name: "readiness", Age: time.Hour}, "closed": {PID: 8, Age: time.Second}}
+	got := stuckRows(rows, procs, map[string]string{"old": "readiness", "closed": "fix"}, nil)
+	if len(got) != 2 || got[1].Live != nil {
+		t.Fatalf("rows %+v", got)
+	}
+	r := got[0]
+	if r.Live == nil || !r.Live.Starting || r.Live.PID != 7 || r.pane == nil || r.Transcript != tr || r.summary != "Done: x" {
+		t.Errorf("row %+v", r)
+	}
+	if s := plainShell(m.status(r)); s != "◆ stuck at startup" {
+		t.Errorf("status %q", s)
 	}
 }
 
