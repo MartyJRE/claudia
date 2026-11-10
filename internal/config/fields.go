@@ -22,6 +22,7 @@ type Field struct {
 	Help    string
 	Default string // what applies when the key isn't set
 	Env     string // the variable that overrides the file, if any
+	Example string // JSON a field of KindJSON starts from when it isn't set
 }
 
 // Fields lists every key Config reads, in the order the settings page shows them.
@@ -34,7 +35,7 @@ var Fields = []Field{
 	{Key: "jira_project", Group: "Jira", Label: "project", Kind: KindString, Env: "CLAUDIA_JIRA_PROJECT",
 		Help: "the project whose sprint the Jira view shows"},
 	{Key: "ticket_keys", Group: "Jira", Label: "ticket keys", Kind: KindJSON, Env: "CLAUDIA_JIRA_KEYS",
-		Default: "the project", Help: `project keys recognised in branches and titles, e.g. ["ABC", "OPS"]`},
+		Default: "the project", Help: "project keys recognised in branches and titles", Example: `["ABC", "OPS"]`},
 
 	{Key: "code_root", Group: "Code", Label: "code root", Kind: KindPath, Env: "CLAUDIA_CODE_ROOT",
 		Default: "~/Documents/Code", Help: "where git repos are discovered"},
@@ -42,13 +43,14 @@ var Fields = []Field{
 		Default: "Work", Help: "the folder under the code root whose repos are listed first and use the work profile"},
 
 	{Key: "profiles", Group: "Claude", Label: "profiles", Kind: KindJSON,
-		Default: "every ~/.claude and ~/.claude-<name>", Help: `Claude Code config dirs by name, e.g. {"work": "~/.claude-work"}`},
+		Default: "every ~/.claude and ~/.claude-<name>", Help: "Claude Code config dirs by name", Example: `{"work": "~/.claude-work", "personal": "~/.claude"}`},
 	{Key: "work_profile", Group: "Claude", Label: "work profile", Kind: KindString,
 		Default: "work", Help: "the profile for repos under the work dir"},
 	{Key: "remote_control", Group: "Claude", Label: "remote control", Kind: KindJSON,
-		Help: `profiles whose sessions start with Remote Control, e.g. ["work"]`},
+		Help: "profiles whose sessions start with Remote Control", Example: `["work"]`},
 	{Key: "session_names", Group: "Claude", Label: "session names", Kind: KindJSON,
-		Default: "<verb>: <summary>", Help: `names per intent, e.g. {"analysis": "{key}-analysis"}; {key}, {summary} and {verb} are filled in`},
+		Default: "<verb>: <summary>", Help: "names per intent: analysis, implementation, general, continue, test, review, fix, reply; {key}, {summary} and {verb} are filled in",
+		Example: `{"analysis": "{key}-analysis", "general": "{key}"}`},
 
 	{Key: "vault", Group: "Vault", Label: "vault", Kind: KindPath,
 		Help: "an Obsidian vault whose notes show next to tickets, e.g. ~/Documents/Notes"},
@@ -70,14 +72,14 @@ var Fields = []Field{
 	{Key: "teams.mail.direct", Group: "Teams", Label: "mail to you", Kind: KindBool,
 		Default: "on", Help: "list Focused mail with you in To; setting this or the rules turns mail on"},
 	{Key: "teams.mail.rules", Group: "Teams", Label: "mail rules", Kind: KindJSON,
-		Help: `list mail regardless of recipients, e.g. [{"from": "boss@"}, {"subject": "Approval"}]`},
+		Help: "list mail regardless of recipients when the sender or subject contains the text", Example: `[{"from": "boss@"}, {"subject": "Approval"}]`},
 
 	{Key: "brief_every", Group: "UI", Label: "brief every", Kind: KindDuration,
 		Default: "2h", Help: "how often the inbox brief is rewritten, e.g. 30m; off leaves only the on-demand refresh"},
 	{Key: "rounded_pills", Group: "UI", Label: "rounded pills", Kind: KindBool,
 		Default: "on", Help: "off draws pills square, for fonts without the Nerd Font half circles"},
 	{Key: "keys", Group: "UI", Label: "keys", Kind: KindJSON,
-		Help: `rebinds actions, e.g. {"sessions.close": "ctrl+w"}; claudia keys lists them`},
+		Help: "rebinds actions to a key or a list of keys; claudia keys lists the actions", Example: `{"sessions.close": "ctrl+w"}`},
 }
 
 // EnvValue is the environment's override of the field, or "".

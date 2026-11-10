@@ -251,7 +251,10 @@ sessions running side by side differ. The Sessions list shows it as a dot.
 
 ## Configuration
 
-`~/.config/claudia/config.json` (every field is optional):
+`~/.config/claudia/config.json` (every field is optional). Press `,` to edit it
+from inside claudia: text, paths and switches change in place, maps and lists
+open as JSON in `$EDITOR`, and `ctrl+s` saves and restarts claudia. Fields set
+by an environment variable are shown but can't be changed there.
 
 ```json
 {

@@ -156,6 +156,15 @@ func TestFieldsMatchConfig(t *testing.T) {
 		if f.Kind == KindBool && f.Default != "on" && f.Default != "off" {
 			t.Errorf("%s: a bool defaults to on or off", f.Key)
 		}
+		if f.Kind == KindJSON {
+			ex, err := File{}.With(f.Key, []byte(f.Example))
+			if err == nil {
+				err = Check(ex)
+			}
+			if err != nil || f.Example == "" {
+				t.Errorf("%s: example %q: %v", f.Key, f.Example, err)
+			}
+		}
 	}
 	slices.Sort(keys)
 	slices.Sort(fields)
