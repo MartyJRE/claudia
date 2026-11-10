@@ -72,8 +72,8 @@ func TestDefaults(t *testing.T) {
 	if c.ReviewPrompt != defaultReviewPrompt || c.AnalysisPrompt != defaultAnalysisPrompt || c.ImplementationPrompt != defaultImplementationPrompt {
 		t.Error("default prompts")
 	}
-	if len(c.TicketKeys) != 0 || !c.RoundedPills() {
-		t.Errorf("keys %v rounded %v", c.TicketKeys, c.RoundedPills())
+	if len(c.TicketKeys) != 0 || !c.RoundedPills() || !c.Animations() {
+		t.Errorf("keys %v rounded %v animations %v", c.TicketKeys, c.RoundedPills(), c.Animations())
 	}
 }
 
@@ -88,7 +88,8 @@ func TestFile(t *testing.T) {
 		"brief_every": "30m",
 		"review_prompt": "look at {urls}",
 		"keys": {"sessions.close": "ctrl+w", "sessions.kill": ["K", "ctrl+k"]},
-		"rounded_pills": false
+		"rounded_pills": false,
+		"animations": false
 	}`)
 	c := Get()
 	if c.GitLabHost != "git.acme.io" || c.AtlassianURL != "https://acme.atlassian.net" {
@@ -109,8 +110,8 @@ func TestFile(t *testing.T) {
 	if k := c.Keys["sessions.kill"]; len(k) != 2 || k[1] != "ctrl+k" || len(c.Keys["sessions.close"]) != 1 {
 		t.Errorf("keys %v", c.Keys)
 	}
-	if c.RoundedPills() {
-		t.Error("rounded_pills false ignored")
+	if c.RoundedPills() || c.Animations() {
+		t.Error("rounded_pills or animations false ignored")
 	}
 }
 
