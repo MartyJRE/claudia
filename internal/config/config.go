@@ -65,6 +65,8 @@ type Config struct {
 	// RoundedPillsRaw: false draws pills square, for fonts without the Nerd
 	// Font half circles. Ghostty ships them, so they're on by default.
 	RoundedPillsRaw *bool `json:"rounded_pills"`
+	// AnimationsRaw: false keeps status glyphs and spinners still.
+	AnimationsRaw *bool `json:"animations"`
 	// WorkersRaw places claudia's own headless claude runs (brief, summaries)
 	// in the Sessions tab: "hidden" (the default), "top" or "bottom".
 	WorkersRaw string `json:"workers"`
@@ -104,6 +106,8 @@ type MailRule struct {
 }
 
 func (c Config) RoundedPills() bool { return c.RoundedPillsRaw == nil || *c.RoundedPillsRaw }
+
+func (c Config) Animations() bool { return c.AnimationsRaw == nil || *c.AnimationsRaw }
 
 var WorkerPlaces = []string{"hidden", "top", "bottom"}
 
