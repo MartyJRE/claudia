@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/MartyJRE/claudia/internal/gitlab"
+	"github.com/MartyJRE/claudia/internal/runs"
 )
 
 // A review card is an MR waiting on my review; like a ticket's, its stage is
@@ -44,20 +45,20 @@ func (m *Model) reviewCards() []boardCard {
 		if mr.Draft {
 			continue
 		}
-		c := boardCard{mr: &mr}
+		c := boardCard{mr: &mr, runs: m.runsFor(mr.WebURL)}
 		for _, id := range m.ix.mrSessions[mr.WebURL] {
 			if r, ok := byID[id]; ok {
 				c.sessions = append(c.sessions, r)
 			}
 		}
-		c.rstage, c.turn, c.next, c.verb, c.why = reviewStage(mr, c.sessions, m.gl.Me.Username)
+		c.rstage, c.turn, c.next, c.verb, c.why = reviewStage(mr, c.sessions, c.runs, m.gl.Me.Username)
 		c.stage = allStage[c.rstage]
 		cards = append(cards, c)
 	}
 	return cards
 }
 
-func reviewStage(mr gitlab.MR, sessions []row, me string) (rstage, turn, string, string, string) {
+func reviewStage(mr gitlab.MR, sessions []row, rs []runs.Run, me string) (rstage, turn, string, string, string) {
 	var reviews []row
 	for _, r := range sessions {
 		if r.kind == "review" {
@@ -80,6 +81,13 @@ func reviewStage(mr gitlab.MR, sessions []row, me string) (rstage, turn, string,
 		return rsRequested, turnYou, "review it", "", "you're a reviewer and haven't reviewed it yet"
 	}
 	last := slices.MaxFunc(reviews, func(a, b row) int { return a.LastActive().Compare(b.LastActive()) })
+	// A review run knows the head it read: only a push makes its findings stale.
+	if i := slices.IndexFunc(rs, func(r runs.Run) bool { return r.Session == last.ID }); i >= 0 {
+		if rs[i].SHA != mr.SHA {
+			return rsRequested, turnYou, "review it again", "", fmt.Sprintf("new commits since %q reviewed it", last.Name())
+		}
+		return rsFindings, turnNeedsYou, findingHint(last), "", fmt.Sprintf("%q finished its review", last.Name())
+	}
 	// GitLab clears my review when the author asks for another, and a push or
 	// reply after the review means its findings may no longer hold.
 	if mr.UpdatedAt.After(last.LastActive()) {
@@ -203,6 +211,7 @@ func (m *Model) reviewCardLines(c boardCard, w int, sel bool) []string {
 		fit(head+badge, inner),
 		fit(sText.Render(c.mr.Title), inner),
 		fit(reviewChips(c), inner),
+		fit(m.stepStrip(c), inner),
 	}
 	for i, l := range lines {
 		bar := "  "
@@ -242,7 +251,7 @@ func (m *Model) detailReview(c boardCard) string {
 	if c.next != "" {
 		turn += sDim.Render(" · " + c.next)
 	}
-	lines = append(lines, turn+sDim.Render("  ·  "+c.why))
+	lines = append(lines, turn+sDim.Render("  ·  "+c.why), m.runLine(c))
 	for _, r := range c.sessions {
 		l := m.status(r) + " " + sText.Render(r.Name())
 		if r.summary != "" {
@@ -278,9 +287,11 @@ func (m *Model) keyReviewCard(act string, c boardCard) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m *Model) reviewHints() [][2]string {
+func (m *Model) reviewHints(c boardCard) [][2]string {
 	return [][2]string{
 		{m.key("board.left") + "/" + m.key("board.right"), "columns"},
+		m.hint("board.run", runHint(c)),
+		m.hint("board.run_bg", "in the background"),
 		{m.key("board.sessions"), "sessions"},
 		{m.key("board.claude"), "review with claude"},
 		{m.key("board.claude_bg"), "in the background"},

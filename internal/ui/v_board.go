@@ -15,7 +15,7 @@ import (
 
 const (
 	boardMinCol = 24
-	cardHeight  = 3
+	cardHeight  = 4
 )
 
 // refilterBoard rebuilds the cards, keeping the cursor on its card while the
@@ -191,6 +191,7 @@ func (m *Model) cardLines(c boardCard, w int, sel bool) []string {
 		fit(sTicket.Render(c.issue.Key)+m.cardBadge(c), inner),
 		fit(sText.Render(c.issue.Summary), inner),
 		fit(cardChips(c), inner),
+		fit(m.stepStrip(c), inner),
 	}
 	bar := "  "
 	if sel {
@@ -306,20 +307,17 @@ func (m *Model) detailBoard() string {
 	if c.next != "" {
 		turn += sDim.Render(" · " + c.next)
 	}
-	lines = append(lines, turn+sDim.Render("  ·  "+c.why))
-	if len(c.sessions) > 0 {
-		var parts []string
-		for _, r := range c.sessions {
-			parts = append(parts, m.status(r)+" "+sText.Render(r.Name()))
-		}
-		lines = append(lines, strings.Join(parts, "   "))
+	lines = append(lines, turn+sDim.Render("  ·  "+c.why), m.runLine(c))
+	// Sessions and MRs share a line, so the cost below still fits the panel.
+	var parts []string
+	for _, r := range c.sessions {
+		parts = append(parts, m.status(r)+" "+sText.Render(r.Name()))
 	}
-	if len(c.mrs) > 0 {
-		var refs []string
-		for _, mr := range c.mrs {
-			refs = append(refs, m.mrRef(mr.WebURL))
-		}
-		lines = append(lines, strings.Join(refs, "   "))
+	for _, mr := range c.mrs {
+		parts = append(parts, m.mrRef(mr.WebURL))
+	}
+	if len(parts) > 0 {
+		lines = append(lines, strings.Join(parts, "   "))
 	}
 	if c.cost.Sessions > 0 {
 		lines = append(lines, m.costLine(is.Key, c))
@@ -429,6 +427,9 @@ func (m *Model) keyBoard(k string) (tea.Model, tea.Cmd) {
 			m.setFlash("↓ steps into the board to pick a card", false)
 		}
 		return m, nil
+	}
+	if act == "board.run" || act == "board.run_bg" {
+		return m.runNext(c)
 	}
 	if c.review() {
 		return m.keyReviewCard(act, c)

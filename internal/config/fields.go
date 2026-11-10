@@ -53,7 +53,7 @@ var Fields = []Field{
 	{Key: "remote_control", Group: "Claude", Label: "remote control", Kind: KindJSON,
 		Help: "profiles whose sessions start with Remote Control", Example: `["work"]`},
 	{Key: "session_names", Group: "Claude", Label: "session names", Kind: KindJSON,
-		Default: "<verb>: <summary>", Help: "names per intent: analysis, implementation, general, continue, test, review, fix, reply; {key}, {summary} and {verb} are filled in",
+		Default: "<verb>: <summary>", Help: "names per intent: analysis, implementation, general, continue, test, review, fix, reply, readiness, mr, qa; {key}, {summary} and {verb} are filled in",
 		Example: `{"analysis": "{key}-analysis", "general": "{key}"}`},
 
 	{Key: "vault", Group: "Vault", Label: "vault", Kind: KindPath,
@@ -67,6 +67,12 @@ var Fields = []Field{
 		Default: defaultAnalysisPrompt, Help: "starts analysing a ticket; {key} is its key, {brief} where its description was exported"},
 	{Key: "implementation_prompt", Group: "Prompts", Label: "implementation", Kind: KindPrompt,
 		Default: defaultImplementationPrompt, Help: "starts implementing a ticket; {key} is its key, {brief} where its description was exported"},
+	{Key: "readiness_prompt", Group: "Prompts", Label: "readiness", Kind: KindPrompt,
+		Default: defaultReadinessPrompt, Help: "the Board's readiness step: checks a ticket is specified well enough and posts questions when it isn't; {key} and {brief} as above"},
+	{Key: "mr_prompt", Group: "Prompts", Label: "open MR", Kind: KindPrompt,
+		Default: defaultMRPrompt, Help: "the Board's open MR step: pushes the branch and opens the MR; {key} and {brief} as above"},
+	{Key: "qa_prompt", Group: "Prompts", Label: "QA notes", Kind: KindPrompt,
+		Default: defaultQAPrompt, Help: "the Board's QA notes step: a Jira comment for the tester; {key} and {brief} as above"},
 
 	{Key: "teams.tenant", Group: "Teams", Label: "tenant", Kind: KindString, Help: "the Entra tenant claudia signs in to"},
 	{Key: "teams.client_id", Group: "Teams", Label: "client id", Kind: KindString, Help: "the Entra app claudia signs in with"},

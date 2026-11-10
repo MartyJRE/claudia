@@ -69,7 +69,8 @@ its MR, `t` the MR's threads, `m` moves it in Jira, `a` shows the team's sprint.
 
 Reviews are a second kind of card, tinted apart: one per open, non-draft MR
 where you're a reviewer, with stages of their own. Requested (no review yet, or
-the MR changed since Claude reviewed it), Reviewing (a review session is at
+a push since Claude reviewed it; for a review `x` didn't start, any change to
+the MR counts), Reviewing (a review session is at
 work), Check findings (the session stopped; the card shows the first line of
 what it found and needs you), Waiting on author (you reviewed without
 approving), and Done once you approve, shown with `d`. `r` cycles the board
@@ -80,7 +81,28 @@ On Tickets a ticket whose MR waits on your review needs you; on Reviews and All
 the review card says so instead. On a review card `enter` lists its review
 sessions or starts one, `c`/`C` review it with Claude, `o` opens the MR, `t` its
 threads and `y` copies its link. `f` steps through sprints for tickets only.
-Mentions, Teams posts and mail stay in the Inbox and never make cards:
+Mentions, Teams posts and mail stay in the Inbox and never make cards.
+
+Each card's last line is its step strip, one segment per step: readiness, plan,
+implement, open MR, feedback, merge and QA notes for a ticket; review and
+findings for a review. Green is done, blue running, yellow needs you, red
+failed, dim not run yet, and the bright one is what `x` starts next, named at
+the end. `x` runs that step from the card's stage, skipping steps already done;
+`X` runs it in the background; on a step that's running or waiting on you it
+jumps to the session instead. Readiness checks the ticket is specified well
+enough and, if not, posts its questions on the ticket (or its Confluence page)
+through the Atlassian MCP, marked "(claudia)", and the card waits for answers.
+Plan and implement are the analysis and implementation sessions, open MR pushes
+and runs `glab mr create`, feedback addresses the threads on your MR, QA notes
+comments for the tester, and review is the review session. Merge is the one step
+without a session: it merges the ready MR through GitLab, after a second press.
+The prompts are `readiness_prompt`, `mr_prompt` and `qa_prompt` next to the
+others. A run is told to end with a line `CLAUDIA_RESULT: ok|needs-you|failed —
+reason`; without one, the session's summary decides, and a session that exits
+with neither failed. The detail panel shows the run now under way, the one
+before and what's next. Runs are logged in `state.db` in the state dir, which
+the watcher keeps current with claudia closed, and a review run remembers the
+commit it read, so only a push sends the card back to Requested:
 
 <img src="assets/board.svg" width="860" alt="Board: tickets in columns by stage, each saying whose turn it is">
 
@@ -359,10 +381,12 @@ by an environment variable are shown but can't be changed there.
 - `vault`: an Obsidian vault, e.g. `"~/Documents/Notes"`; `vault_projects` is its
   folder with one subfolder per ticket (default `01 - Projects`).
 - `remote_control`: profiles whose sessions start with Remote Control, e.g. `["work"]`.
-- `review_prompt`, `analysis_prompt` and `implementation_prompt` let you point at
-  your own skills; the defaults are plain prompts.
+- `review_prompt`, `analysis_prompt`, `implementation_prompt`, and the Board's
+  `readiness_prompt`, `mr_prompt` and `qa_prompt` let you point at your own
+  skills; the defaults are plain prompts.
 - `session_names` names sessions per intent: `analysis`, `implementation`,
-  `general`, `continue`, `test`, `review`, `fix`, `reply`. `{key}`, `{summary}`
+  `general`, `continue`, `test`, `review`, `fix`, `reply`, `readiness`, `mr`,
+  `qa`. `{key}`, `{summary}`
   and `{verb}` are filled in. Without it, sessions are named `<verb>: <summary>`.
 - `rounded_pills: false` draws pills and tabs square, for fonts without the Nerd
   Font half circles. Ghostty ships those, so the default is rounded.

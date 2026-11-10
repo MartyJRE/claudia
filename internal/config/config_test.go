@@ -69,7 +69,8 @@ func TestDefaults(t *testing.T) {
 	if c.BriefEvery != 2*time.Hour {
 		t.Errorf("brief every %v", c.BriefEvery)
 	}
-	if c.ReviewPrompt != defaultReviewPrompt || c.AnalysisPrompt != defaultAnalysisPrompt || c.ImplementationPrompt != defaultImplementationPrompt {
+	if c.ReviewPrompt != defaultReviewPrompt || c.AnalysisPrompt != defaultAnalysisPrompt || c.ImplementationPrompt != defaultImplementationPrompt ||
+		c.ReadinessPrompt != defaultReadinessPrompt || c.MRPrompt != defaultMRPrompt || c.QAPrompt != defaultQAPrompt {
 		t.Error("default prompts")
 	}
 	if len(c.TicketKeys) != 0 || !c.RoundedPills() || !c.Animations() {

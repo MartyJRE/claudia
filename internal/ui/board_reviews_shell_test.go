@@ -89,21 +89,21 @@ func TestReviewStageShell(t *testing.T) {
 	mr := m.gl.Review[4]
 	sess := got[32].sessions
 	mr.UpdatedAt = time.Now().Add(time.Minute)
-	if st, tn, next, _, why := reviewStage(mr, sess, "me"); st != rsRequested || tn != turnYou || next != "review it again" || !strings.Contains(why, "changed after") {
+	if st, tn, next, _, why := reviewStage(mr, sess, nil, "me"); st != rsRequested || tn != turnYou || next != "review it again" || !strings.Contains(why, "changed after") {
 		t.Errorf("stale review: %s %q %q", rstageNames[st], next, why)
 	}
 	// Of several reviews the latest one counts.
 	older := reviewSessShell("r-old", mr.WebURL, claude.StatusIdle, "")
 	older.Transcript.Updated = time.Now().Add(-48 * time.Hour)
 	mr.UpdatedAt = time.Now().Add(-24 * time.Hour)
-	if st, _, next, _, _ := reviewStage(mr, append([]row{older}, sess...), "me"); st != rsFindings || next != "two blockers in totals.go" {
+	if st, _, next, _, _ := reviewStage(mr, append([]row{older}, sess...), nil, "me"); st != rsFindings || next != "two blockers in totals.go" {
 		t.Errorf("latest review: %s %q", rstageNames[st], next)
 	}
-	if st, _, next, _, _ := reviewStage(mr, []row{older}, "me"); st != rsRequested || next != "review it again" {
+	if st, _, next, _, _ := reviewStage(mr, []row{older}, nil, "me"); st != rsRequested || next != "review it again" {
 		t.Errorf("an old review alone: %s %q", rstageNames[st], next)
 	}
 	older.Transcript.Updated = time.Now()
-	if _, _, next, _, _ := reviewStage(mr, []row{older}, "me"); next != "read the findings" {
+	if _, _, next, _, _ := reviewStage(mr, []row{older}, nil, "me"); next != "read the findings" {
 		t.Errorf("no summary: %q", next)
 	}
 }

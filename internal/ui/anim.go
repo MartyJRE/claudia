@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/MartyJRE/claudia/internal/claude"
+	"github.com/MartyJRE/claudia/internal/runs"
 )
 
 type frameMsg time.Time
@@ -104,7 +105,9 @@ func (m *Model) animates() bool {
 			return true
 		}
 		for _, col := range m.vis.board {
-			if slices.ContainsFunc(col, func(c boardCard) bool { return c.turn == turnAgent }) {
+			if slices.ContainsFunc(col, func(c boardCard) bool {
+				return c.turn == turnAgent || slices.ContainsFunc(c.runs, func(r runs.Run) bool { return r.Outcome == runs.Running })
+			}) {
 				return true
 			}
 		}

@@ -57,16 +57,8 @@ func (m *Model) claudeForTicket(key, summary string) (tea.Model, tea.Cmd) {
 	}
 
 	intents := []intent{
-		{"analysis", "Analysis", func(m *Model) (tea.Model, tea.Cmd) {
-			return m.ticketSession(key, summary, "analysis", "analyse", "analyse "+key+" in", func(path string, err error) string {
-				return fillBrief(getConfig().AnalysisPrompt, key, path, err)
-			})
-		}},
-		{"implementation", "Implementation", func(m *Model) (tea.Model, tea.Cmd) {
-			return m.ticketSession(key, summary, "implementation", "implement", "implement "+key+" in", func(path string, err error) string {
-				return fillBrief(getConfig().ImplementationPrompt, key, path, err)
-			})
-		}},
+		{"analysis", "Analysis", func(m *Model) (tea.Model, tea.Cmd) { return m.stepSession("plan", key, summary) }},
+		{"implementation", "Implementation", func(m *Model) (tea.Model, tea.Cmd) { return m.stepSession("implement", key, summary) }},
 		{"general", "General", func(m *Model) (tea.Model, tea.Cmd) { return m.briefSession(key, summary) }},
 		{"continue", "Continue", func(m *Model) (tea.Model, tea.Cmd) {
 			return m.ticketSession(key, summary, "continue", "continue", "continue "+key+" in", func(path string, err error) string {
@@ -184,6 +176,7 @@ func (m *Model) ticketSession(key, summary, intent, verb, title string, prompt f
 			names = append(names, mr.Repo())
 		}
 	}
+	pending := m.takeStep()
 	query := ""
 	if !onBranch && len(names) == 1 {
 		query = names[0]
@@ -198,7 +191,7 @@ func (m *Model) ticketSession(key, summary, intent, verb, title string, prompt f
 		return false, ""
 	}, func(m *Model, dir string, p claude.Profile) (tea.Model, tea.Cmd) {
 		name := m.sessionTitle(intent, verb, key, summary)
-		atl, bg := m.atl, m.background
+		atl, bg, db := m.atl, m.background, m.db
 		return m, func() tea.Msg {
 			path, err := "", error(nil)
 			if atl != nil {
@@ -208,8 +201,9 @@ func (m *Model) ticketSession(key, summary, intent, verb, title string, prompt f
 			}
 			sp, id := launch.New(dir, p, name, prompt(path, err))
 			sp.Kind = intent
+			sp, runErr := startRun(db, sp, id, pending)
 			_ = m.links.SetTicket(id, key)
-			return startMsg{sp, bg}
+			return startMsg{sp, bg, runErr}
 		}
 	})
 	return m, nil
@@ -242,9 +236,14 @@ func (m *Model) addressThreads(mr gitlab.MR) (tea.Model, tea.Cmd) {
 // inClone starts claude in a local clone of the MR's project, asking which one
 // when there are several and falling back to the repo picker when there is none.
 func (m *Model) inClone(mr gitlab.MR, verb, name, prompt string, urls []string) (tea.Model, tea.Cmd) {
+	pending := m.takeStep()
 	launchIn := func(m *Model, dir string) (tea.Model, tea.Cmd) {
 		sp, id := launch.New(dir, launch.ProfileFor(dir, m.store.Profiles), name, prompt)
 		sp.Kind = verb
+		sp, err := startRun(m.db, sp, id, pending)
+		if err != nil {
+			m.setFlash("run log: "+err.Error(), true)
+		}
 		if err := m.links.AddMRs(id, urls); err != nil {
 			m.setFlash(err.Error(), true)
 		}

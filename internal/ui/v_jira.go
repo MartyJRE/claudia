@@ -402,6 +402,7 @@ func (m *Model) exportBrief(key string, then func(path string) tea.Msg) tea.Cmd 
 type startMsg struct {
 	sp         launch.Spec
 	background bool
+	err        error // recording the run failed; the session starts anyway
 }
 
 type transitionsMsg struct {
