@@ -160,7 +160,7 @@ func TestMentionsKeys(t *testing.T) {
 		}
 	}
 
-	m.vis.mentions = nil
+	m.vis.mentions, m.vis.mentionRows = nil, nil
 	if _, cmd := m.Update(keyViews("o")); cmd != nil {
 		t.Error("nothing selected")
 	}

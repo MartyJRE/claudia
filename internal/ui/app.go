@@ -154,6 +154,7 @@ type Model struct {
 	vaultAt      time.Time
 	notesPrefs   notesPrefs
 	sessPrefs    sessionPrefs
+	listPrefs    listPrefs
 	brief        brief.Brief
 	briefAt      time.Time
 	briefPending time.Time
@@ -207,6 +208,7 @@ func New(opts Options) *Model {
 		vault:      newVault(),
 		notesPrefs: loadNotesPrefs(),
 		sessPrefs:  loadSessionPrefs(),
+		listPrefs:  loadListPrefs(),
 		view:       vSessions,
 		links:      links.Load(),
 		filter:     f,
@@ -769,11 +771,11 @@ func (m *Model) subtitle() string {
 	switch m.view {
 	case vNotes:
 		if m.notesPrefs.Recent {
-			return sDim.Render("recently edited notes") + "  " + sKey.Render(m.key("notes.layout")) + sDim.Render(" folders")
+			return sDim.Render("your vault · recently edited")
 		}
-		return sDim.Render("your vault") + "  " + sKey.Render(m.key("notes.layout")) + sDim.Render(" recently edited") + "  " + sKey.Render(m.key("global.ticket_notes")) + sDim.Render(" on any ticket lists its notes, ") + sKey.Render(m.key("global.write_note")) + sDim.Render(" writes one")
+		return sDim.Render("your vault · folders") + "  " + sKey.Render(m.key("global.ticket_notes")) + sDim.Render(" on any ticket lists its notes, ") + sKey.Render(m.key("global.write_note")) + sDim.Render(" writes one")
 	case vInbox:
-		s := "everyone waiting on you, oldest first"
+		s := "everyone waiting on you" + m.listMode(vInbox)
 		if m.showAll {
 			s += " · incl. snoozed"
 		}
@@ -787,11 +789,11 @@ func (m *Model) subtitle() string {
 		return sDim.Render("live sessions"+g) + layout + "  " + sKey.Render(m.key("sessions.all")) + sDim.Render(" show closed too")
 	case vReview:
 		if m.showAll {
-			return sDim.Render("all review requests") + "  " + sKey.Render(m.key("mrs.all")) + sDim.Render(" hide approved")
+			return sDim.Render("all review requests"+m.listMode(vReview)) + "  " + sKey.Render(m.key("mrs.all")) + sDim.Render(" hide approved")
 		}
-		return sDim.Render("review requests not yet approved by you") + "  " + sKey.Render(m.key("mrs.all")) + sDim.Render(" show all")
+		return sDim.Render("review requests not yet approved by you"+m.listMode(vReview)) + "  " + sKey.Render(m.key("mrs.all")) + sDim.Render(" show all")
 	case vMine:
-		return sDim.Render("open, then merged in the last 5 days")
+		return sDim.Render("open, then merged in the last 5 days" + m.listMode(vMine))
 	case vJira:
 		s := "my sprint + in progress"
 		if m.teamJira {
@@ -805,9 +807,9 @@ func (m *Model) subtitle() string {
 		return sDim.Render(s) + "  " + hint
 	case vMentions:
 		hint := sKey.Render(m.key("mentions.dismiss")) + sDim.Render(" dismiss  ") + sKey.Render(m.key("mentions.all")) + sDim.Render(" show handled")
-		return sDim.Render("Jira and Confluence mentions, last 30 days") + "  " + hint
+		return sDim.Render("Jira and Confluence mentions, last 30 days"+m.listMode(vMentions)) + "  " + hint
 	case vConfluence:
-		return sDim.Render("pages you edited recently")
+		return sDim.Render("pages you edited recently" + m.listMode(vConfluence))
 	case vUsage:
 		return sDim.Render("tokens from local transcripts incl. subagents, last 31 days, priced at API list rates")
 	}
@@ -827,7 +829,7 @@ func (m *Model) viewFooter() string {
 		keys = [][2]string{{"j/k", "extend"}, m.hint("visual.claude", fmt.Sprintf("claude on these %d", hi-lo+1)),
 			m.hint("visual.claude_bg", "in the background"), {"esc", "cancel"}}
 	} else {
-		keys = m.help()
+		keys = m.withLayout(m.help())
 		keys = append(keys, m.hints("global.assistant", "global.open_link", "global.new_session")...)
 		keys = append(keys, [2]string{"1-9", "views"})
 		keys = append(keys, m.hints("global.filter", "global.quit")...)
@@ -887,17 +889,17 @@ func (m *Model) count() int {
 	case vNotes:
 		return len(m.vis.notes)
 	case vInbox:
-		return len(m.vis.inbox)
+		return len(m.vis.inboxRows)
 	case vSessions:
 		return len(m.vis.sessions)
 	case vReview, vMine:
-		return len(m.vis.mrs)
+		return len(m.vis.mrRows)
 	case vJira:
 		return len(m.vis.jira)
 	case vMentions:
-		return len(m.vis.mentions)
+		return len(m.vis.mentionRows)
 	case vConfluence:
-		return len(m.vis.pages)
+		return len(m.vis.pageRows)
 	case vUsage:
 		return len(m.vis.usage)
 	}
@@ -913,6 +915,8 @@ type visible struct {
 	mentions []mention
 	pages    []atlassian.Page
 	usage    []usageRow
+
+	inboxRows, mrRows, mentionRows, pageRows []lrow
 }
 
 func (m *Model) refilter() {
@@ -940,6 +944,10 @@ func (m *Model) refilter() {
 	m.vis.jira = m.buildJira(m.jiraIssues(match), len(terms) > 0)
 	m.vis.mentions = m.filterMentions(match)
 	m.vis.pages = m.filterPages(match)
+	m.vis.inboxRows = m.groupRows(vInbox, len(m.vis.inbox), len(terms) > 0)
+	m.vis.mrRows = m.groupRows(m.view, len(m.vis.mrs), len(terms) > 0)
+	m.vis.mentionRows = m.groupRows(vMentions, len(m.vis.mentions), len(terms) > 0)
+	m.vis.pageRows = m.groupRows(vConfluence, len(m.vis.pages), len(terms) > 0)
 	m.vis.usage = m.usageRows()
 	for v := view(0); v < nViews; v++ {
 		saved := m.view

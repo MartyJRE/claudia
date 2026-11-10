@@ -60,7 +60,7 @@ func TestThreadsOpenFull(t *testing.T) {
 	m := newModelShell(t)
 	m.switchView(vMine)
 	ran := fakeCombined(t, "", nil)
-	pressShell(m, "v")
+	pressShell(m, "t")
 	pressShell(m, "enter")()
 	if len(*ran) != 1 || (*ran)[0] != "open thread-1" {
 		t.Errorf("picking a thread opens it: %v", *ran)

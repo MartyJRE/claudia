@@ -42,7 +42,7 @@ var actions = []action{
 
 	{"notes.read", []string{"enter"}, "read"},
 	{"notes.fold", []string{" "}, "fold"},
-	{"notes.layout", []string{"v"}, "recent/tree"},
+	{"notes.layout", []string{"v"}, "layout"},
 	{"notes.edit", []string{"e"}, "edit"},
 	{"notes.obsidian", []string{"o"}, "Obsidian"},
 	{"notes.copy", []string{"y"}, "copy path"},
@@ -52,7 +52,7 @@ var actions = []action{
 	{"inbox.all", []string{"a"}, "show snoozed"},
 	{"inbox.brief", []string{"R"}, "brief"},
 	{"inbox.review", []string{"r"}, "review with claude"},
-	{"inbox.threads", []string{"v"}, "threads"},
+	{"inbox.threads", []string{"t"}, "threads"},
 	{"inbox.rebase", []string{"B"}, "rebase"},
 	{"inbox.approve", []string{"A"}, "approve"},
 	{"inbox.snooze", []string{"x"}, "snooze"},
@@ -61,6 +61,10 @@ var actions = []action{
 	{"inbox.claude", []string{"c"}, "claude does what fits"},
 	{"inbox.claude_bg", []string{"C"}, "same, in the background"},
 	{"inbox.plan", []string{"P"}, "comment on the plan"},
+	{"inbox.layout", []string{"v"}, "layout"},
+	{"inbox.fold", []string{" "}, "fold"},
+	{"inbox.fold_all", []string{"-"}, "fold all"},
+	{"inbox.unfold_all", []string{"+", "="}, "unfold all"},
 
 	{"sessions.jump", []string{"enter"}, "jump"},
 	{"sessions.fold", []string{" "}, "fold"},
@@ -88,7 +92,7 @@ var actions = []action{
 	{"mrs.seen", []string{"s"}, "seen"},
 	{"mrs.copy", []string{"y"}, "copy link"},
 	{"mrs.sessions", []string{"c"}, "sessions"},
-	{"mrs.threads", []string{"v"}, "threads"},
+	{"mrs.threads", []string{"t"}, "threads"},
 	{"mrs.fix", []string{"f"}, "fix threads"},
 	{"mrs.rebase", []string{"B"}, "rebase"},
 	{"mrs.ticket", []string{"J"}, "ticket"},
@@ -96,6 +100,10 @@ var actions = []action{
 	{"mrs.approve", []string{"A"}, "approve"},
 	{"mrs.unapprove", []string{"U"}, "unapprove"},
 	{"mrs.claude_bg", []string{"C"}, "fix threads in the background"},
+	{"mrs.layout", []string{"v"}, "layout"},
+	{"mrs.fold", []string{" "}, "fold"},
+	{"mrs.fold_all", []string{"-"}, "fold all"},
+	{"mrs.unfold_all", []string{"+", "="}, "unfold all"},
 
 	{"jira.sessions", []string{"enter"}, "sessions"},
 	{"jira.team", []string{"a"}, "mine/team"},
@@ -122,9 +130,17 @@ var actions = []action{
 	{"mentions.copy", []string{"y"}, "copy link"},
 	{"mentions.reply", []string{"c"}, "draft reply"},
 	{"mentions.reply_bg", []string{"C"}, "draft reply in the background"},
+	{"mentions.layout", []string{"v"}, "layout"},
+	{"mentions.fold", []string{" "}, "fold"},
+	{"mentions.fold_all", []string{"-"}, "fold all"},
+	{"mentions.unfold_all", []string{"+", "="}, "unfold all"},
 
 	{"confluence.open", []string{"enter", "o"}, "open"},
 	{"confluence.copy", []string{"y"}, "copy link"},
+	{"confluence.layout", []string{"v"}, "layout"},
+	{"confluence.fold", []string{" "}, "fold"},
+	{"confluence.fold_all", []string{"-"}, "fold all"},
+	{"confluence.unfold_all", []string{"+", "="}, "unfold all"},
 }
 
 type keymap struct {

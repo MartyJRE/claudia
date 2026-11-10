@@ -94,7 +94,7 @@ func (m *Model) filterMRs(match func(...string) bool) []mrRow {
 }
 
 func (m *Model) listMRs(h int) string {
-	rows := m.vis.mrs
+	rows := m.vis.mrRows
 	empty := "nothing waiting for your review"
 	if m.view == vMine {
 		empty = "no open or recently merged MRs"
@@ -110,7 +110,11 @@ func (m *Model) listMRs(h int) string {
 		cols[2].title, cols[2].w = "REVIEWERS", 18
 	}
 	return m.table(cols, len(rows), &m.cur[m.view], h, func(i int, sel bool) []string {
-		r := rows[i]
+		lr := rows[i]
+		if lr.header() {
+			return m.listHeader(m.view, lr, 0)
+		}
+		r := m.vis.mrs[lr.item]
 		title := r.Title
 		st := sText
 		if sel {
@@ -127,8 +131,8 @@ func (m *Model) listMRs(h int) string {
 			second = reviewers(r.MR)
 		}
 		return []string{
-			sKey.Render(fmt.Sprintf("!%d", r.IID)) + " " + sText.Render(r.Repo()),
-			st.Render(title),
+			listIndent(lr) + sKey.Render(fmt.Sprintf("!%d", r.IID)) + " " + sText.Render(r.Repo()),
+			m.listInline(m.view, lr) + st.Render(title),
 			second,
 			sTicket.Render(mrTicket(r.MR)),
 			pipelineText(r),
@@ -266,14 +270,17 @@ func (m *Model) chipsText(r mrRow) string {
 }
 
 func (m *Model) currentMR() (mrRow, bool) {
-	c := m.cur[m.view].pos
-	if c < 0 || c >= len(m.vis.mrs) {
+	i, ok := m.listItem(m.view)
+	if !ok {
 		return mrRow{}, false
 	}
-	return m.vis.mrs[c], true
+	return m.vis.mrs[i], true
 }
 
 func (m *Model) detailMR() string {
+	if g, ok := m.currentGroup(m.view); ok {
+		return m.detailGroup(m.view, g)
+	}
 	r, ok := m.currentMR()
 	if !ok {
 		return m.panel(nil)
@@ -408,6 +415,9 @@ func (m *Model) sessionRefs(ids []string) string {
 func (m *Model) keyMRs(k string) (tea.Model, tea.Cmd) {
 	r, ok := m.currentMR()
 	act := m.action(k)
+	if m.keyList(act) {
+		return m, nil
+	}
 	switch act {
 	case "mrs.all":
 		m.showAll = !m.showAll

@@ -215,9 +215,13 @@ func waiting(t time.Time) string {
 func (m *Model) listInbox(h int) string {
 	top := m.viewBrief()
 	h -= lipgloss.Height(top) - 1 // its trailing empty line is the table's first
-	rows := m.vis.inbox
+	rows := m.vis.inboxRows
 	return top + m.table(inboxCols, len(rows), &m.cur[vInbox], h, func(i int, sel bool) []string {
-		it := rows[i]
+		r := rows[i]
+		if r.header() {
+			return m.listHeader(vInbox, r, 0)
+		}
+		it := m.vis.inbox[r.item]
 		st := sText
 		if sel {
 			st = sBold
@@ -229,19 +233,22 @@ func (m *Model) listInbox(h int) string {
 		if it.kind == kMention {
 			where = sTicket.Render(it.where)
 		}
-		return []string{waiting(it.since), kindStyle(it.kind).Render(kindLabel[it.kind]), where, sDim.Render(it.who), st.Render(it.text)}
+		return []string{listIndent(r) + waiting(it.since), kindStyle(it.kind).Render(kindLabel[it.kind]), where, sDim.Render(it.who), st.Render(it.text)}
 	}, "nobody is waiting on you")
 }
 
 func (m *Model) currentInbox() (inboxItem, bool) {
-	c := m.cur[vInbox].pos
-	if c < 0 || c >= len(m.vis.inbox) {
+	i, ok := m.listItem(vInbox)
+	if !ok {
 		return inboxItem{}, false
 	}
-	return m.vis.inbox[c], true
+	return m.vis.inbox[i], true
 }
 
 func (m *Model) detailInbox() string {
+	if g, ok := m.currentGroup(vInbox); ok {
+		return m.detailGroup(vInbox, g)
+	}
 	it, ok := m.currentInbox()
 	if !ok {
 		return m.panel(nil)
@@ -279,6 +286,9 @@ func (m *Model) detailInbox() string {
 
 func (m *Model) keyInbox(k string) (tea.Model, tea.Cmd) {
 	act := m.action(k)
+	if m.keyList(act) {
+		return m, nil
+	}
 	switch act {
 	case "inbox.all":
 		m.showAll = !m.showAll

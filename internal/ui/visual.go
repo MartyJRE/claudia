@@ -75,7 +75,14 @@ func (m *Model) selectedItems() []string {
 		return nil
 	}
 	var out []string
-	for i := lo; i <= hi; i++ {
+	for r := lo; r <= hi; r++ {
+		i := r
+		if rows := m.listRows(m.view); rows != nil {
+			if rows[r].header() {
+				continue
+			}
+			i = rows[r].item
+		}
 		switch m.view {
 		case vInbox:
 			it := m.vis.inbox[i]

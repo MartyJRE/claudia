@@ -321,9 +321,9 @@ func TestMineKeysShell(t *testing.T) {
 	if cmd := pressShell(m, "A"); cmd != nil || m.flash != "" {
 		t.Errorf("no approving your own MRs")
 	}
-	pressShell(m, "v")
+	pressShell(m, "t")
 	if m.chooser == nil || m.chooser.title != "threads on !21" {
-		t.Fatal("v lists threads")
+		t.Fatal("t lists threads")
 	}
 	pressShell(m, "esc")
 
@@ -369,9 +369,9 @@ func TestMineKeysShell(t *testing.T) {
 	if m.flash != "no open review threads" {
 		t.Errorf("f without threads: %q", m.flash)
 	}
-	pressShell(m, "v")
+	pressShell(m, "t")
 	if m.flash != "no review threads" {
-		t.Errorf("v without threads: %q", m.flash)
+		t.Errorf("t without threads: %q", m.flash)
 	}
 }
 
