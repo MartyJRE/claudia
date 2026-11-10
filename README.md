@@ -69,7 +69,7 @@ its MR, `t` the MR's threads, `m` moves it in Jira, `a` shows the team's sprint.
 
 Reviews are a second kind of card, tinted apart: one per open, non-draft MR
 where you're a reviewer, with stages of their own. Requested (no review yet, or
-a push since Claude reviewed it; for a review `x` didn't start, any change to
+a push since Claude reviewed it; for a review `s` didn't start, any change to
 the MR counts), Reviewing (a review session is at
 work), Check findings (the session stopped; the card shows the first line of
 what it found and needs you), Waiting on author (you reviewed without
@@ -86,22 +86,61 @@ Mentions, Teams posts and mail stay in the Inbox and never make cards.
 Each card's last line is its step strip, one segment per step: readiness, plan,
 implement, open MR, feedback, merge and QA notes for a ticket; review and
 findings for a review. Green is done, blue running, yellow needs you, red
-failed, dim not run yet, and the bright one is what `x` starts next, named at
-the end. `x` runs that step from the card's stage, skipping steps already done;
-`X` runs it in the background; on a step that's running or waiting on you it
-jumps to the session instead. Readiness checks the ticket is specified well
-enough and, if not, posts its questions on the ticket (or its Confluence page)
-through the Atlassian MCP, marked "(claudia)", and the card waits for answers.
-Plan and implement are the analysis and implementation sessions, open MR pushes
-and runs `glab mr create`, feedback addresses the threads on your MR, QA notes
-comments for the tester, and review is the review session. Merge is the one step
-without a session: it merges the ready MR through GitLab, after a second press.
-The prompts are `readiness_prompt`, `mr_prompt` and `qa_prompt` next to the
-others. A run is told to end with a line `CLAUDIA_RESULT: ok|needs-you|failed —
-reason`; without one, the session's summary decides, and a session that exits
-with neither failed. The detail panel shows the run now under way, the one
-before and what's next. Runs are logged in `state.db` in the state dir, which
-the watcher keeps current with claudia closed, and a review run remembers the
+failed, dim not run yet, and the end of the strip says what happens next.
+`s` starts the card's next step now, skipping steps already done; `S` starts it
+in the background; on a step that's running or waiting on you it jumps to the
+session instead. A ticket's step runs in the repo on the ticket's branch, the
+one you picked for it before, or the only clone of its MR, and asks only when
+that's unclear. Readiness checks the ticket is specified well enough and, if
+not, posts its questions on the ticket (or its Confluence page) through the
+Atlassian MCP, marked "(claudia)", and the card waits for answers. Plan and
+implement are the analysis and implementation sessions, open MR pushes and runs
+`glab mr create`, feedback addresses the threads on your MR, QA notes comments
+for the tester, and review is the review session. Merge is the one step without
+a session: it merges the ready MR through GitLab, after a second press. The
+prompts are `readiness_prompt`, `mr_prompt` and `qa_prompt` next to the others.
+A run is told to end with a line `CLAUDIA_RESULT: ok|needs-you|failed — reason`
+(a plan adds `size: simple|medium|large`, a review `no findings` when clean);
+without one, the session's summary decides, and a session that exits with
+neither failed. A run whose context fills up waits on you as `context full`,
+since nothing compacts it on its own; its card shows `ctx 82%` while it runs and
+the watcher pings you once at 90%. The detail panel shows the run now under
+way, the one before, what's next and each step's mode.
+
+**The autopilot** starts steps without you, from the watcher, so it works with
+claudia closed. Each step has a mode, set per step in `autopilot.steps`:
+
+| Mode | What happens | The card says |
+|---|---|---|
+| `auto` | the autopilot starts it when the limits allow | `◷ plan queued` |
+| `after-plan-ok` (implement) | auto once `p` OKs the plan, or right away when the plan run called the change simple | `◆ plan OK? · p` |
+| `ask` | waits for `s` | `◆ go ahead with merge? · s` |
+| `off` | never offered | nothing |
+
+Readiness, plan, open MR, feedback, QA notes and review are `auto` by default,
+implement `after-plan-ok`, merge `ask`; merge is never `auto` without
+`autopilot.allow_auto_merge`. `A` on a card overrides the modes for that card
+only (all auto, ask before every step, off, or step by step), shown as `⚙ ask`
+on the card. Before anything starts the limits apply: `autopilot.hours` and
+`days` (Monday to Friday, 9 to 6), `max_running` runs at once (1, yours
+included, and never two on one card), plan usage under `max_five_hour` (60%,
+90% for a window that resets after hours) and `max_seven_day` (80%), at most
+`max_ticket_usd` ($50) per ticket and `max_day_usd` ($30) a day of the
+autopilot's runs, and one review per `review_every` (1h). When the status line
+hasn't saved the plan usage lately it's unknown, and only one run goes at a
+time. A step that failed twice on its own waits for `s`. When a limit hits,
+nothing running is stopped; the header pill says why (`⏸ autopilot: 5h window
+64%`) and a notification says when it pauses and resumes. `P` pauses it by
+hand. The most blocking step goes first: merge, feedback, review, QA notes,
+readiness, plan, open MR, implement. A clean review on a green pipeline and the
+head it read is approved, and the MR's Teams post gets ✅
+(`autopilot.review_approve`, `autopilot.review_react`); findings ping you. Runs
+the autopilot starts get `--permission-mode` from `autopilot.permission_mode`
+(`auto` by default; `bypassPermissions` has no sandbox behind it), and it stays
+off a card while someone works it in a session of their own.
+
+Runs, the cost ledger and the autopilot's state are kept in `state.db` in the
+state dir, which the watcher keeps current with claudia closed, and a review run remembers the
 commit it read, so only a push sends the card back to Requested:
 
 <img src="assets/board.svg" width="860" alt="Board: tickets in columns by stage, each saying whose turn it is">
@@ -403,6 +442,8 @@ by an environment variable are shown but can't be changed there.
   to or kill. `CLAUDIA_WORKERS` overrides it.
 - `board.statuses` pins tickets in a Jira status to a Board column, e.g.
   `{"Ready for QA": "QA", "Blocked": "Up next"}`, over the column claudia works out.
+- `autopilot` turns the autopilot on (`enabled`, off by default) and sets its
+  step modes and limits; see the Board above.
 - `keys` rebinds any key outside text input: an action name to a key or a list
   of keys. `claudia keys` lists every action with its current keys and points out
   clashes. claudia also flags clashes when it starts.
