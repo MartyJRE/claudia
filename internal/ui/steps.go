@@ -159,8 +159,32 @@ func (c boardCard) passed(id string) bool {
 	return i < stageStep[c.stage]
 }
 
+// turnStyle colours the step a card is on by whose move it is: yellow when it
+// waits on me, blue while Claude carries on, grey (⧗) on someone else, and the
+// accent when it's mine to start.
+func turnStyle(t turn) (lipgloss.Style, string) {
+	switch t {
+	case turnNeedsYou:
+		return lipgloss.NewStyle().Foreground(yellow), ""
+	case turnAgent:
+		return lipgloss.NewStyle().Foreground(blue), ""
+	case turnColleague:
+		return sDim, "⧗ "
+	}
+	return sAccent, ""
+}
+
+// currentStep is the step the strip marks: x's next step, else the first one
+// the stage has ahead, so a card waiting on others still shows where it is.
+func currentStep(c boardCard, next string) string {
+	if next != "" || c.review() || stageStep[c.stage] >= len(ticketSteps) {
+		return next
+	}
+	return ticketSteps[stageStep[c.stage]].id
+}
+
 // segment is one step on the strip, coloured by how its latest run went.
-func (m *Model) segment(c boardCard, id, next string) string {
+func (m *Model) segment(c boardCard, id, cur string) string {
 	if id == "findings" {
 		switch c.rstage {
 		case rsFindings:
@@ -177,8 +201,9 @@ func (m *Model) segment(c boardCard, id, next string) string {
 	switch {
 	case r != nil && r.Outcome == runs.Running:
 		return lipgloss.NewStyle().Foreground(blue).Render(m.glyph(runFrames))
-	case id == next:
-		return sAccent.Render("━")
+	case id == cur:
+		st, _ := turnStyle(c.turn)
+		return st.Render("━")
 	case r == nil && c.passed(id):
 		return sPassed.Render("━")
 	case r == nil:
@@ -206,16 +231,18 @@ func (m *Model) stepStrip(c boardCard) string {
 		steps = reviewSteps
 	}
 	next, hold := nextStep(c)
+	cur := currentStep(c, next)
 	segs := make([]string, len(steps))
 	for i, s := range steps {
-		segs[i] = m.segment(c, s.id, next)
+		segs[i] = m.segment(c, s.id, cur)
 	}
 	strip := strings.Join(segs, " ")
 	switch {
 	case hold != nil:
 		strip += "  " + outcomeStyle(hold.Outcome).Render(stepLabel(hold.Step))
-	case next != "":
-		strip += "  " + sAccent.Render(stepLabel(next))
+	case cur != "":
+		st, prefix := turnStyle(c.turn)
+		strip += "  " + st.Render(prefix+stepLabel(cur))
 	}
 	return strip
 }

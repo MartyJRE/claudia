@@ -493,3 +493,30 @@ func TestStepStripPassedShell(t *testing.T) {
 		t.Errorf("a review past Requested: %q", seg)
 	}
 }
+
+func TestStepStripTurnShell(t *testing.T) {
+	prev := lipgloss.ColorProfile()
+	t.Cleanup(func() { lipgloss.SetColorProfile(prev) })
+	lipgloss.SetColorProfile(0) // termenv.TrueColor
+	m := newModelShell(t)
+	const yellowFG, blueFG, dimFG, nextFG = "38;2;229;192;123", "38;2;97;175;239", "38;2;92;99;112", "1;38;2;198;120;221"
+	for tn, want := range map[turn]string{turnYou: nextFG, turnNeedsYou: yellowFG, turnAgent: blueFG, turnColleague: dimFG} {
+		c := boardCard{stage: stPlan, issue: atlassian.Issue{Key: "ABC-9"}, turn: tn}
+		strip := m.stepStrip(c)
+		if seg := strings.Split(strip, " ")[2]; !strings.Contains(seg, want) {
+			t.Errorf("turn %d: segment %q, want %s", tn, seg, want)
+		}
+		if tn == turnColleague && !strings.HasSuffix(plainShell(strip), "  ⧗ implement") {
+			t.Errorf("waiting on someone: %q", plainShell(strip))
+		}
+	}
+	// In review with no step for x, the card still marks where it is: here,
+	// waiting on reviewers at feedback.
+	c := boardCard{stage: stReview, issue: atlassian.Issue{Key: "ABC-9"}, turn: turnColleague}
+	if s := plainShell(m.stepStrip(c)); s != "━ ━ ━ ━ ━ ─ ─  ⧗ feedback" {
+		t.Errorf("waiting in review: %q", s)
+	}
+	if s := plainShell(m.stepStrip(boardCard{stage: stDone, issue: atlassian.Issue{Key: "ABC-9"}})); strings.Contains(s, "  ") {
+		t.Errorf("a done card names no step: %q", s)
+	}
+}
