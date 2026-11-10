@@ -11,6 +11,7 @@ import (
 	"github.com/MartyJRE/claudia/internal/claude"
 	"github.com/MartyJRE/claudia/internal/gitlab"
 	"github.com/MartyJRE/claudia/internal/links"
+	"github.com/MartyJRE/claudia/internal/runs"
 	"github.com/MartyJRE/claudia/internal/tmux"
 )
 
@@ -510,6 +511,25 @@ func TestNeedsYouShell(t *testing.T) {
 		if got := c.r.needsYou(); got != c.want {
 			t.Errorf("%s: needsYou %v, want %v", c.name, got, c.want)
 		}
+	}
+}
+
+func TestWaitingRunShell(t *testing.T) {
+	m := newModelShell(t)
+	at := time.Now().Add(-time.Minute)
+	idle := func(id, sum string) row {
+		return row{Session: claude.Session{ID: id, Transcript: &claude.Transcript{Updated: at}, Live: &claude.Live{Status: claude.StatusIdle}}, summary: sum, summaryFor: at.Add(-time.Hour)}
+	}
+	rows := []row{idle("w", "Needs you: answer"), idle("n", "Needs you: answer"), {Session: claude.Session{ID: "gone"}}}
+	waitingRuns(rows, map[string]runs.Run{"w": {Outcome: runs.Waiting, Reason: "asked 2 questions"}, "n": {Outcome: runs.NeedsYou}, "gone": {Outcome: runs.Waiting}})
+	if r := rows[0]; r.needsYou() || r.summary != "Waiting: asked 2 questions" || plainShell(m.status(r)) != "⧗ waiting" {
+		t.Errorf("waiting row %+v %q", r, plainShell(m.status(r)))
+	}
+	if rows[1].summary != "Needs you: answer" || rows[2].summary != "" {
+		t.Errorf("others %+v", rows[1:])
+	}
+	if outcomeStyle(runs.Waiting).Render("x") != sDim.Render("x") {
+		t.Error("waiting isn't dim")
 	}
 }
 

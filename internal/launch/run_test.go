@@ -19,7 +19,7 @@ func TestAsRun(t *testing.T) {
 		t.Fatalf("args %q", run.Args)
 	}
 	note := run.Args[5]
-	for _, want := range []string{"ctl here", "This is claudia run run-1, step plan for ABC-2.", "`CLAUDIA_RESULT: ok|needs-you|failed — <short reason>`", "`size: simple`", "push broad searches and big reads into subagents"} {
+	for _, want := range []string{"ctl here", "This is claudia run run-1, step plan for ABC-2.", "`CLAUDIA_RESULT: ok|needs-you|waiting|failed — <short reason>`", "waiting means you asked someone else", "`size: simple`", "push broad searches and big reads into subagents"} {
 		if !strings.Contains(note, want) {
 			t.Errorf("note misses %q: %s", want, note)
 		}

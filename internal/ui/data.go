@@ -114,8 +114,17 @@ func (m *Model) loadSessions() tea.Cmd {
 				seen[i] = runs.SeenOf(r.Session, r.summary, r.summaryFor)
 			}
 			_, _ = db.Reconcile(runs.WithStarting(seen, procs), clockNow())
+			waitingRuns(rows, db.Latest())
 		}
 		return sessionsMsg(rows)
+	}
+}
+
+func waitingRuns(rows []row, latest map[string]runs.Run) {
+	for i, r := range rows {
+		s := r.sess()
+		s.WaitOnRun(latest)
+		rows[i].summary, rows[i].summaryFor = s.Summary, s.SummaryFor
 	}
 }
 

@@ -169,8 +169,21 @@ func TestNextStep(t *testing.T) {
 			t.Errorf("%s: %q %+v", c.name, next, hold)
 		}
 	}
-	if !WaitingForAnswers(Card{Stage: UpNext, Runs: []runs.Run{run("readiness", runs.NeedsYou, nil)}}) || WaitingForAnswers(Card{Stage: Plan}) {
+	asked := func(outcome, reason string) Card {
+		return Card{Stage: UpNext, Runs: []runs.Run{run("readiness", outcome, func(r *runs.Run) { r.Reason = reason })}}
+	}
+	if !WaitingForAnswers(asked(runs.Waiting, "")) || !WaitingForAnswers(asked(runs.NeedsYou, "asked 4 questions")) ||
+		WaitingForAnswers(asked(runs.NeedsYou, "which table?")) || WaitingForAnswers(Card{Stage: Plan}) {
 		t.Error("waiting for answers")
+	}
+	if next, hold := NextStep(asked(runs.Waiting, "asked 2 questions")); next != "readiness" || hold == nil {
+		t.Errorf("waiting holds: %q %+v", next, hold)
+	}
+	at := time.Now()
+	s := Session{Session: claude.Session{ID: "a", Transcript: &claude.Transcript{Updated: at}, Live: &claude.Live{Status: claude.StatusIdle}}, Summary: "Needs you: x"}
+	s.WaitOnRun(map[string]runs.Run{"a": {Outcome: runs.Waiting, Reason: "asked Bob"}})
+	if s.NeedsYou() || !s.Summarized(WaitingPrefix) || s.Summary != "Waiting: asked Bob" {
+		t.Errorf("waiting session %+v", s)
 	}
 	if StepLabel("mr") != "open MR" || StepLabel("findings") != "findings" || StepLabel("x") != "x" {
 		t.Error("labels")

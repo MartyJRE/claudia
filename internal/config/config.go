@@ -175,7 +175,7 @@ const defaultAnalysisPrompt = "Read the Jira issue {key} at {brief} and analyse 
 
 const defaultReadinessPrompt = "Read the Jira issue {key} at {brief} and check it's ready to implement: a clear spec, acceptance criteria, and designs where the UI changes. " +
 	"Don't change any files. If it's under-specified, post your concrete questions as one comment on the ticket, or on its linked Confluence page when the spec lives there, " +
-	"with the Atlassian MCP, starting the comment with \"(claudia)\"; then end with `CLAUDIA_RESULT: needs-you — asked N questions`. If it's ready, say what you checked."
+	"with the Atlassian MCP, starting the comment with \"(claudia)\"; then end with `CLAUDIA_RESULT: waiting — asked N questions`. If it's ready, say what you checked."
 
 const defaultMRPrompt = "Jira issue {key} ({brief}) is implemented on this branch. Push the branch and open a merge request with `glab mr create`: " +
 	"a title in the repo's commit style and a description from the plan, saying what changed and why and what the reviewer should look at closely. " +

@@ -95,6 +95,14 @@ func (s Session) NeedsYou() bool {
 	return s.Live.Status == claude.StatusWaiting || s.Summarized(NeedsYouPrefix)
 }
 
+// WaitOnRun: a session whose newest run waits on someone else doesn't need
+// you, whatever its summary says.
+func (s *Session) WaitOnRun(latest map[string]runs.Run) {
+	if r, ok := latest[s.ID]; ok && r.Outcome == runs.Waiting && s.Transcript != nil {
+		s.Summary, s.SummaryFor = WaitingPrefix+" "+r.Reason, s.Updated
+	}
+}
+
 // Done: stopped, and its summary of that very turn says nothing is left, so
 // it's likely safe to close.
 func (s Session) Done() bool {

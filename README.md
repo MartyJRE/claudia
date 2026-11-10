@@ -99,8 +99,9 @@ implement are the analysis and implementation sessions, open MR pushes and runs
 for the tester, and review is the review session. Merge is the one step without
 a session: it merges the ready MR through GitLab, after a second press. The
 prompts are `readiness_prompt`, `mr_prompt` and `qa_prompt` next to the others.
-A run is told to end with a line `CLAUDIA_RESULT: ok|needs-you|failed — reason`
-(a plan adds `size: simple|medium|large`, a review `no findings` when clean);
+A run is told to end with a line `CLAUDIA_RESULT: ok|needs-you|waiting|failed — reason`,
+waiting when it asked someone else and can't go on until they answer, which
+shows a dim `⧗` and stays out of the Inbox (a plan adds `size: simple|medium|large`, a review `no findings` when clean);
 without one, the session's summary decides, and a session that exits with
 neither failed. A run whose context fills up waits on you as `context full`,
 since nothing compacts it on its own; its card shows `ctx 82%` while it runs and

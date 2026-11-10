@@ -5,6 +5,7 @@ package runs
 
 import (
 	"database/sql"
+	"slices"
 	"time"
 
 	"github.com/MartyJRE/claudia/internal/statedb"
@@ -14,7 +15,9 @@ const (
 	Running  = "running"
 	OK       = "ok"
 	NeedsYou = "needs-you"
-	Failed   = "failed"
+	// Waiting: the run asked someone else and can't go on until they answer.
+	Waiting = "waiting"
+	Failed  = "failed"
 )
 
 // Run is one step started on a ticket (Kind "ticket", Subject its key) or a
@@ -37,7 +40,10 @@ type Run struct {
 const ByAutopilot = "autopilot"
 
 // Settled: the run ended one way or another.
-func (r Run) Settled() bool { return r.Outcome != Running && r.Outcome != NeedsYou }
+func (r Run) Settled() bool { return !slices.Contains(openOutcomes, r.Outcome) }
+
+// openOutcomes are those a run's session can still change.
+var openOutcomes = []string{Running, NeedsYou, Waiting}
 
 type Store struct{ db *sql.DB }
 
@@ -63,10 +69,12 @@ func (s *Store) Start(r Run) error {
 	return err
 }
 
-// Settle sets the outcome of the session's run while it can still change.
+// Settle sets the outcome of the session's newest run while it can still
+// change; a resumed session's older runs keep theirs.
 func (s *Store) Settle(session, outcome, reason string, at time.Time) error {
-	_, err := s.db.Exec(`UPDATE runs SET outcome = ?, reason = ?, finished = ? WHERE session = ? AND outcome IN (?, ?)`,
-		outcome, reason, ms(at), session, Running, NeedsYou)
+	_, err := s.db.Exec(`UPDATE runs SET outcome = ?, reason = ?, finished = ? WHERE id = (SELECT id FROM runs
+		WHERE session = ? AND outcome IN (?, ?, ?) ORDER BY started DESC, id LIMIT 1)`,
+		outcome, reason, ms(at), session, Running, NeedsYou, Waiting)
 	return err
 }
 
@@ -101,9 +109,29 @@ func (s *Store) AutopilotUSD(since time.Time) float64 {
 }
 
 // open is the runs a session can still change: running ones, and needs-you
-// ones whose session may carry on once answered.
+// or waiting ones whose session may carry on once answered.
 func (s *Store) open() []Run {
-	return s.query(`WHERE outcome IN (?, ?) ORDER BY started DESC, id`, Running, NeedsYou)
+	return s.query(`WHERE outcome IN (?, ?, ?) ORDER BY started DESC, id`, Running, NeedsYou, Waiting)
+}
+
+// SessionsStartedBy is the sessions of the runs started by by.
+func (s *Store) SessionsStartedBy(by string) map[string]bool {
+	out := map[string]bool{}
+	for _, r := range s.query(`WHERE started_by = ? AND session != ''`, by) {
+		out[r.Session] = true
+	}
+	return out
+}
+
+// Latest is each session's newest run.
+func (s *Store) Latest() map[string]Run {
+	out := map[string]Run{}
+	for _, r := range s.query(`WHERE session != '' ORDER BY started DESC, id`) {
+		if _, ok := out[r.Session]; !ok {
+			out[r.Session] = r
+		}
+	}
+	return out
 }
 
 func (s *Store) query(where string, args ...any) []Run {
