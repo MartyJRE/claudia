@@ -84,8 +84,9 @@ type Config struct {
 	// in the Sessions tab: "hidden" (the default), "top" or "bottom".
 	WorkersRaw string `json:"workers"`
 	// Teams links review requests posted in a Teams channel to their MRs.
-	Teams Teams `json:"teams"`
-	Board Board `json:"board"`
+	Teams     Teams     `json:"teams"`
+	Board     Board     `json:"board"`
+	Autopilot Autopilot `json:"autopilot"`
 }
 
 type Board struct {
