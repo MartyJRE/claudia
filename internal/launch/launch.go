@@ -238,8 +238,8 @@ func windowName(kind, name string) string {
 // profile under the work folder, otherwise "personal", otherwise any other one.
 func ProfileFor(dir string, profiles []claude.Profile) claude.Profile {
 	c := config.Get()
-	work := strings.HasPrefix(dir, filepath.Join(c.CodeRoot, c.WorkDir)+"/")
-	if work {
+	root := filepath.Join(c.CodeRoot, c.WorkDir)
+	if dir == root || strings.HasPrefix(dir, root+"/") {
 		return WorkProfile(profiles)
 	}
 	for _, p := range profiles {

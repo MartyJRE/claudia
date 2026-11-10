@@ -119,8 +119,10 @@ func (r row) done() bool { return r.sess().Done() }
 func (r row) needsYou() bool { return r.sess().NeedsYou() }
 
 type Model struct {
-	opts   Options
-	Result Result
+	// pickWork makes the next repo picker start on the work profile: a ticket is work.
+	pickWork bool
+	opts     Options
+	Result   Result
 
 	km     keymap
 	marked map[string]bool // session ids marked for a split
@@ -1213,9 +1215,17 @@ func (m *Model) pickDir(title, query, pinned string, preferred func(repos.Repo) 
 		}
 	}
 	shift := map[string]int{}
+	work := m.pickWork
+	m.pickWork = false
+	profile := func(m *Model, dir string) claude.Profile {
+		if work {
+			return m.shiftProfile(launch.WorkProfile(m.store.Profiles), shift[dir])
+		}
+		return m.profileFor(dir, shift[dir])
+	}
 	c := newChooser(title, append(first, rest...), func(m *Model, ch choice) (tea.Model, tea.Cmd) {
 		dir := ch.value.(string)
-		return then(m, dir, m.profileFor(dir, shift[dir]))
+		return then(m, dir, profile(m, dir))
 	})
 	c.tab = func(_ *Model, ch choice) {
 		if dir, ok := ch.value.(string); ok {
@@ -1227,7 +1237,7 @@ func (m *Model) pickDir(title, query, pinned string, preferred func(repos.Repo) 
 		if !ok {
 			return ""
 		}
-		return "profile: " + m.profileFor(dir, shift[dir]).Name
+		return "profile: " + profile(m, dir).Name
 	}
 	c.setQuery(query)
 	if len(m.repos) == 0 {
@@ -1237,8 +1247,12 @@ func (m *Model) pickDir(title, query, pinned string, preferred func(repos.Repo) 
 }
 
 func (m *Model) profileFor(dir string, shift int) claude.Profile {
+	return m.shiftProfile(launch.ProfileFor(dir, m.store.Profiles), shift)
+}
+
+// shiftProfile is the profile shift places after guess, as tab moves it.
+func (m *Model) shiftProfile(guess claude.Profile, shift int) claude.Profile {
 	ps := m.store.Profiles
-	guess := launch.ProfileFor(dir, ps)
 	for i, p := range ps {
 		if p.Name == guess.Name {
 			return ps[(i+shift)%len(ps)]

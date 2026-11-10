@@ -40,6 +40,7 @@ func TestProfileFor(t *testing.T) {
 		want     claude.Profile
 	}{
 		{"/code/Work/pay", []claude.Profile{other, personal, work}, work},
+		{"/code/Work", []claude.Profile{other, personal, work}, work},
 		{"/code/Work/pay", []claude.Profile{other, personal}, other},
 		{"/code/Workshop/x", []claude.Profile{work, personal}, personal},
 		{"/code/Personal/x", []claude.Profile{work, other}, other},

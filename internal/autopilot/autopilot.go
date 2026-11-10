@@ -191,10 +191,41 @@ func (p *Pilot) Tick(now time.Time, cfg config.Config, in Inputs) Status {
 	})
 	st.Queued = len(queue)
 
-	l, ok := readLimits(limitsPath(launch.WorkProfile(in.Profiles)))
-	reason, max, known := limit(a, now, l, ok, p.DB.AutopilotUSD(startOfDay(now)))
-	st.Reason, st.Max, st.Unknown = reason, max, !known
+	reason := limit(a, now, p.DB.AutopilotUSD(startOfDay(now)))
+	st.Reason, st.Max = reason, a.MaxRunning()
 	if reason != "" {
+		return p.done(st)
+	}
+	// Plan usage is per profile: each run is held to the windows of the
+	// profile it would run on.
+	plan := map[string]planUsage{}
+	usageOf := func(pr claude.Profile) planUsage {
+		if u, ok := plan[pr.Dir]; ok {
+			return u
+		}
+		l, ok := readLimits(limitsPath(pr))
+		r, known := usage(a, l, ok, now)
+		plan[pr.Dir] = planUsage{r, known}
+		return plan[pr.Dir]
+	}
+	// Work out first what plan usage holds back, so a tick where it holds
+	// everything reads as paused rather than resumed and paused again.
+	held, free := "", false
+	for _, q := range queue {
+		if q.step == "merge" {
+			free = true
+			continue
+		}
+		u := usageOf(runProfile(q.card, q.dir, in.Profiles))
+		st.Unknown = st.Unknown || !u.known
+		if u.reason == "" {
+			free = true
+		} else if held == "" {
+			held = u.reason
+		}
+	}
+	if len(queue) > 0 && !free {
+		st.Reason = held
 		return p.done(st)
 	}
 	p.tell("")
@@ -205,6 +236,12 @@ func (p *Pilot) Tick(now time.Time, cfg config.Config, in Inputs) Status {
 		}
 		if q.step == "review" && reviewed {
 			continue
+		}
+		if q.step != "merge" {
+			u := usageOf(runProfile(q.card, q.dir, in.Profiles))
+			if u.reason != "" || !u.known && st.Running > 0 {
+				continue
+			}
 		}
 		if err := p.start(now, cfg, in, ix, q); err != nil {
 			p.Notify(Note{Title: "Autopilot couldn't start " + board.StepLabel(q.step), Subtitle: ref(q.card), Body: err.Error(), ID: "autopilot:error:" + q.card.ID()})
@@ -217,6 +254,11 @@ func (p *Pilot) Tick(now time.Time, cfg config.Config, in Inputs) Status {
 		st.Queued--
 	}
 	return p.done(st)
+}
+
+type planUsage struct {
+	reason string
+	known  bool
 }
 
 // handsOn: someone works the card in a session of their own right now.
@@ -233,6 +275,15 @@ func plain(ss []board.Session) []claude.Session {
 		out[i] = s.Session
 	}
 	return out
+}
+
+// runProfile: a ticket's steps always run on the work profile; anything else
+// (reviews, MR work) by whether its directory is under the work dir.
+func runProfile(c board.Card, dir string, profiles []claude.Profile) claude.Profile {
+	if !c.IsReview() {
+		return launch.WorkProfile(profiles)
+	}
+	return launch.ProfileFor(dir, profiles)
 }
 
 func limitsPath(p claude.Profile) string {
@@ -323,7 +374,7 @@ func (p *Pilot) start(now time.Time, cfg config.Config, in Inputs, ix board.Inde
 	if q.step == "merge" {
 		return p.merge(now, c, run)
 	}
-	profile := launch.ProfileFor(q.dir, in.Profiles)
+	profile := runProfile(c, q.dir, in.Profiles)
 	var sp launch.Spec
 	var urls []string
 	ticket := c.Issue.Key

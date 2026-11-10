@@ -176,6 +176,8 @@ func (m *Model) ticketSession(key, summary, intent, verb, title string, prompt f
 	if !onBranch && len(names) == 1 {
 		query = names[0]
 	}
+	// A ticket is work, whatever repo it lands in.
+	m.pickWork = true
 	m.pickRepo(title, query, func(r repos.Repo) (bool, string) {
 		if strings.Contains(strings.ToLower(r.Branch), lower) {
 			return true, "on " + r.Branch

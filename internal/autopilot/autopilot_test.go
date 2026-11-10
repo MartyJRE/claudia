@@ -156,33 +156,33 @@ func TestQueueOrderAndMaxRunning(t *testing.T) {
 
 func TestLimits(t *testing.T) {
 	stale := fresh(10)
-	stale.At = now.Add(-6 * time.Hour)
+	stale.At = now.Add(-20 * time.Minute)
 	late := fresh(64)
 	late.FiveHour.ResetsAt = float64(now.Add(9 * time.Hour).Unix())
 	for _, c := range []struct {
 		name   string
-		at     time.Time
 		lim    claude.Limits
 		ok     bool
 		reason string
-		max    int
+		known  bool
 	}{
-		{"fine", now, fresh(10), true, "", 3},
-		{"evening", now.Add(10 * time.Hour), fresh(10), true, "outside working hours", 1},
-		{"saturday", now.Add(4 * 24 * time.Hour), fresh(10), true, "outside working hours", 1},
-		{"5h", now, fresh(64), true, "5h window 64%", 3},
-		{"5h resetting after hours", now, late, true, "", 3},
-		{"7d", now, claude.Limits{At: now, FiveHour: fresh(10).FiveHour, SevenDay: fresh(85).SevenDay}, true, "7d window 85%", 3},
-		{"stale", now, stale, true, "", 1},
-		{"missing", now, claude.Limits{}, false, "", 1},
+		{"fine", fresh(10), true, "", true},
+		{"5h", fresh(64), true, "5h window 64%", true},
+		{"5h resetting after hours", late, true, "", true},
+		{"7d", claude.Limits{At: now, FiveHour: fresh(10).FiveHour, SevenDay: fresh(85).SevenDay}, true, "7d window 85%", true},
+		{"older than 15 minutes", stale, true, "", false},
+		{"missing", claude.Limits{}, false, "", false},
 	} {
-		three := 3
-		reason, max, _ := limit(config.Autopilot{MaxRunningRaw: &three}, c.at, c.lim, c.ok, 0)
-		if reason != c.reason || max != c.max {
-			t.Errorf("%s: %q %d", c.name, reason, max)
+		if reason, known := usage(config.Autopilot{}, c.lim, c.ok, now); reason != c.reason || known != c.known {
+			t.Errorf("%s: %q %v", c.name, reason, known)
 		}
 	}
-	if reason, _, _ := limit(config.Autopilot{}, now, fresh(10), true, 31); reason != "spent $31 of $30 today" {
+	for at, want := range map[time.Time]string{now: "", now.Add(10 * time.Hour): "outside working hours", now.Add(4 * 24 * time.Hour): "outside working hours"} {
+		if got := limit(config.Autopilot{}, at, 0); got != want {
+			t.Errorf("%v: %q, want %q", at, got, want)
+		}
+	}
+	if reason := limit(config.Autopilot{}, now, 31); reason != "spent $31 of $30 today" {
 		t.Errorf("day budget %q", reason)
 	}
 }
@@ -438,5 +438,43 @@ func TestStaleReviewsSkipped(t *testing.T) {
 	r.tick()
 	if len(r.started) != 1 {
 		t.Errorf("stale off reviews it: %v", r.steps())
+	}
+}
+
+func TestProfilesAndTheirUsage(t *testing.T) {
+	r := newRig(t)
+	r.in.Profiles = []claude.Profile{{Name: "work", Dir: "/h/.claude"}, {Name: "personal", Dir: "/h/.claude-personal"}}
+	three := 3
+	r.cfg.Autopilot.MaxRunningRaw = &three
+	// A ticket's step runs on the work profile even outside the work dir; a
+	// review of a personal repo runs on the personal profile, and each is held
+	// to its own profile's plan usage.
+	r.in.Jira.Sprint = []atlassian.Issue{issue("ABC-1", "To Do")}
+	r.in.GL.Review = []gitlab.MR{mr(1, nil)}
+	r.in.Repos = []repos.Repo{pay}
+	personalBusy := func(path string) (claude.Limits, bool) {
+		if strings.Contains(path, "claude-personal") {
+			return fresh(70), true
+		}
+		return fresh(10), true
+	}
+	fake(t, &readLimits, personalBusy)
+	st := r.tick()
+	if len(r.started) != 1 || r.started[0].Profile.Name != "work" || !strings.Contains(r.started[0].Name, "ABC-1") {
+		t.Fatalf("the ticket runs on work, the review waits: %v %+v", r.steps(), st)
+	}
+	if st.Reason != "" || st.Queued != 1 {
+		t.Errorf("status %+v", st)
+	}
+	// With only the held review left, the status says why.
+	r.in.Jira.Sprint = nil
+	if st := r.tick(); len(r.started) != 1 || st.Reason != "5h window 70%" {
+		t.Errorf("held by the personal window: %v %+v", r.steps(), st)
+	}
+	// Unknown usage lets one run go, not a second.
+	fake(t, &readLimits, func(string) (claude.Limits, bool) { return claude.Limits{}, false })
+	r.in.Jira.Sprint = []atlassian.Issue{issue("ABC-2", "To Do")}
+	if st := r.tick(); len(r.started) != 1 || !st.Unknown {
+		t.Errorf("unknown with a run going: %v %+v", r.steps(), st)
 	}
 }
