@@ -536,3 +536,42 @@ func TestBoardStepInOutShell(t *testing.T) {
 		t.Error("stepped into an empty board")
 	}
 }
+
+func TestBoardSprintNamesShell(t *testing.T) {
+	m := boardModelShell(t)
+	active := func(name string) *atlassian.Sprint { return &atlassian.Sprint{Name: name, State: "active"} }
+	for i := range m.jira.Sprint {
+		switch m.jira.Sprint[i].Key {
+		case "ABC-4":
+			m.jira.Sprint[i].Sprint = active("Sprint 8")
+		case "ABC-1":
+			m.jira.Sprint[i].Sprint = active("Discussion 2")
+		case "ABC-2":
+			m.jira.Sprint[i].Sprint = active("Sprint 8")
+		}
+	}
+	m.reindex()
+	m.refilter()
+	if got := m.currentSprint(); got != "Sprint 8" {
+		t.Errorf("current sprint %q", got)
+	}
+	pressShell(m, "f")
+	s := screenShell(m)
+	containsAllShell(t, "future", s, "my tickets in Sprint 8 by stage", "ABC-5", "Sprint 9")
+	for _, l := range strings.Split(s, "\n") {
+		if strings.Contains(l, "Sprint 8") && !strings.Contains(l, "my tickets") && !strings.Contains(l, "Up next") {
+			t.Errorf("a current-sprint card names its sprint: %q", l)
+		}
+	}
+	containsAllShell(t, "detail", plainShell(m.detailBoard()), "Sprint 8")
+
+	// A tie goes to the name that sorts first, so it doesn't flicker.
+	m.vis.board = [][]boardCard{{
+		{issue: atlassian.Issue{Sprint: active("B")}},
+		{issue: atlassian.Issue{Sprint: active("A")}},
+		{issue: atlassian.Issue{Sprint: &atlassian.Sprint{Name: "C", State: "future"}}},
+	}}
+	if got := m.currentSprint(); got != "A" {
+		t.Errorf("tie: %q", got)
+	}
+}

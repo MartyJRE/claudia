@@ -229,6 +229,9 @@ func costText(usd float64, unknown bool) string {
 // cardChips is the card's dim last line: cost, sessions, MRs and what's next.
 func cardChips(c boardCard) string {
 	var chips []string
+	if later(c) {
+		chips = append(chips, lipgloss.NewStyle().Foreground(cyan).Render(c.issue.Sprint.Name))
+	}
 	if c.cost.Sessions > 0 {
 		chips = append(chips, costText(c.cost.USD, c.cost.Unknown))
 	}
@@ -278,7 +281,11 @@ func (m *Model) detailBoard() string {
 	is := c.issue
 	lines := []string{sTicket.Render(is.Key) + " " + sBold.Render(is.Summary)}
 	meta := []string{sAccent.Render(stageNames[c.stage]), statusText(is)}
-	for _, s := range []string{typeName(is.Type), is.Assignee} {
+	sprint := ""
+	if is.Sprint != nil {
+		sprint = is.Sprint.Name
+	}
+	for _, s := range []string{typeName(is.Type), is.Assignee, sprint} {
 		if s != "" {
 			meta = append(meta, sDim.Render(s))
 		}

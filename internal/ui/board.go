@@ -304,6 +304,23 @@ func later(c boardCard) bool {
 	return c.stage == stUpNext && is.Category != "indeterminate" && is.Sprint != nil && is.Sprint.State == "future"
 }
 
+// currentSprint names the active sprint most of the board's cards are in.
+func (m *Model) currentSprint() string {
+	n := map[string]int{}
+	best := ""
+	for _, col := range m.vis.board {
+		for _, c := range col {
+			if s := c.issue.Sprint; s != nil && s.State == "active" {
+				n[s.Name]++
+				if n[s.Name] > n[best] || (n[s.Name] == n[best] && s.Name < best) {
+					best = s.Name
+				}
+			}
+		}
+	}
+	return best
+}
+
 func boolRank(b bool) int {
 	if b {
 		return 1
