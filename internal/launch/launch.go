@@ -44,6 +44,9 @@ var kindIcons = map[string]string{
 	"continue":       "\U000F040A", // md-play
 	"look":           "\U000F0337", // md-link
 	"batch":          "\U000F0756", // md-format_list_checks
+	"readiness":      "\U000F014C", // md-clipboard_check
+	"mr":             "\U000F04C2", // md-source_pull
+	"qa":             "\U000F014D", // md-clipboard_text
 }
 
 const kindsFile = "session-kinds.json"
@@ -86,6 +89,12 @@ func New(dir string, p claude.Profile, name, prompt string) (Spec, string) {
 func (sp Spec) AsRun(id, step, subject string) Spec {
 	note := fmt.Sprintf("This is claudia run %s, step %s for %s. When you're done, or stuck, end your last message with exactly one line "+
 		"`CLAUDIA_RESULT: ok|needs-you|failed — <short reason>`.", id, step, subject)
+	switch step {
+	case "plan":
+		note += " The reason says how big the change is: `size: simple`, `size: medium` or `size: large`; simple is a small change with no open questions."
+	case "review":
+		note += " End with `CLAUDIA_RESULT: ok — no findings` when there's nothing the author should change, else `CLAUDIA_RESULT: needs-you — <n> findings`."
+	}
 	sp.Args = slices.Clone(sp.Args)
 	if i := slices.Index(sp.Args, "--append-system-prompt"); i >= 0 && i+1 < len(sp.Args) {
 		sp.Args[i+1] += " " + note

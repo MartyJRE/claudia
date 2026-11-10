@@ -16,6 +16,7 @@ import (
 	"github.com/MartyJRE/claudia/internal/launch"
 	"github.com/MartyJRE/claudia/internal/repos"
 	"github.com/MartyJRE/claudia/internal/runs"
+	"github.com/MartyJRE/claudia/internal/steps"
 	"github.com/MartyJRE/claudia/internal/tmux"
 )
 
@@ -267,12 +268,13 @@ func TestRunKeyStartsStepsShell(t *testing.T) {
 	containsAllShell(t, "hint", screenShell(m), "x run readiness")
 
 	// X: readiness in the background, recorded as a run once the session starts.
-	pressShell(m, "X")
-	if m.chooser == nil || m.chooser.title != "check ABC-4 in" || m.step != nil {
-		t.Fatalf("x opens the repo picker: %+v", m.chooser)
+	// Readiness needs no particular repo: it starts in the work dir without asking.
+	cmd := pressShell(m, "X")
+	if m.chooser != nil || m.step != nil || cmd == nil {
+		t.Fatalf("x asks for a repo: %+v", m.chooser)
 	}
-	msg := pressShell(m, "enter")().(startMsg)
-	if !msg.background || msg.err != nil || msg.sp.Kind != "readiness" || promptOf(msg.sp) != "R ABC-4 Jira (use the Atlassian MCP)" {
+	msg := cmd().(startMsg)
+	if !msg.background || msg.err != nil || msg.sp.Kind != "readiness" || msg.sp.Dir != steps.Anywhere(getConfig()) || promptOf(msg.sp) != "R ABC-4 Jira (use the Atlassian MCP)" {
 		t.Errorf("start %+v", msg)
 	}
 	got := db.For("ABC-4")
@@ -322,11 +324,11 @@ func TestRunKeyStartsStepsShell(t *testing.T) {
 	m.runCache = nil
 	m.reindex()
 	m.chooser = nil
-	pressShell(m, "x")
-	if m.chooser == nil || m.chooser.title != "check ABC-4 in" {
+	if cmd := pressShell(m, "x"); cmd == nil {
 		t.Error("x reruns a step whose session is gone")
+	} else if again := cmd().(startMsg); again.sp.Kind != "readiness" {
+		t.Errorf("rerun %+v", again.sp)
 	}
-	m.chooser = nil
 }
 
 func TestRunKeyOnOtherStagesShell(t *testing.T) {

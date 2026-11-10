@@ -11,10 +11,10 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/MartyJRE/claudia/internal/board"
-	"github.com/MartyJRE/claudia/internal/config"
 	"github.com/MartyJRE/claudia/internal/gitlab"
 	"github.com/MartyJRE/claudia/internal/launch"
 	"github.com/MartyJRE/claudia/internal/runs"
+	"github.com/MartyJRE/claudia/internal/steps"
 )
 
 type step = board.Step
@@ -25,21 +25,6 @@ var (
 	stepLabel   = board.StepLabel
 	stageStep   = board.StageStep
 )
-
-// sessionStep is how a ticket step starts its session: the intent, the verb
-// in its title and the configured prompt.
-type sessionStep struct {
-	intent, verb string
-	prompt       func(config.Config) string
-}
-
-var ticketSessions = map[string]sessionStep{
-	"readiness": {"readiness", "check", func(c config.Config) string { return c.ReadinessPrompt }},
-	"plan":      {"analysis", "analyse", func(c config.Config) string { return c.AnalysisPrompt }},
-	"implement": {"implementation", "implement", func(c config.Config) string { return c.ImplementationPrompt }},
-	"mr":        {"mr", "open MR", func(c config.Config) string { return c.MRPrompt }},
-	"qa":        {"qa", "QA notes", func(c config.Config) string { return c.QAPrompt }},
-}
 
 // runsFor is the subject's runs, newest first, read once per refresh.
 func (m *Model) runsFor(subject string) []runs.Run {
@@ -255,14 +240,36 @@ func (m *Model) runNext(c boardCard) (tea.Model, tea.Cmd) {
 		return m.addressThreads(mr)
 	}
 	m.step = &run
+	if dir, ok := m.stepDir(next, c); ok {
+		s := steps.Ticket[next]
+		key := c.issue.Key
+		start := m.ticketLaunch(key, c.issue.Summary, s.Intent, s.Verb, func(path string, err error) string {
+			return fillBrief(s.Prompt(getConfig()), key, path, err)
+		})
+		return start(m, dir, launch.ProfileFor(dir, m.store.Profiles))
+	}
 	return m.stepSession(next, c.issue.Key, c.issue.Summary)
+}
+
+// stepDir is where a ticket's step runs without asking, as the autopilot
+// would run it; readiness needs no particular repo.
+func (m *Model) stepDir(id string, c boardCard) (string, bool) {
+	if id == "readiness" {
+		return steps.Anywhere(getConfig()), true
+	}
+	picked := ""
+	if m.db != nil {
+		picked, _ = m.db.Get(repoKey(c.issue.Key))
+	}
+	r, ok := steps.TicketRepo(m.repos, c.issue.Key, c.mrs, picked)
+	return r.Dir, ok
 }
 
 // stepSession starts a ticket step's session with its configured prompt.
 func (m *Model) stepSession(id, key, summary string) (tea.Model, tea.Cmd) {
-	s := ticketSessions[id]
-	return m.ticketSession(key, summary, s.intent, s.verb, s.verb+" "+key+" in", func(path string, err error) string {
-		return fillBrief(s.prompt(getConfig()), key, path, err)
+	s := steps.Ticket[id]
+	return m.ticketSession(key, summary, s.Intent, s.Verb, s.Verb+" "+key+" in", func(path string, err error) string {
+		return fillBrief(s.Prompt(getConfig()), key, path, err)
 	})
 }
 

@@ -2,7 +2,6 @@ package ui
 
 import (
 	"fmt"
-	"regexp"
 	"slices"
 	"strings"
 
@@ -12,6 +11,7 @@ import (
 	"github.com/MartyJRE/claudia/internal/gitlab"
 	"github.com/MartyJRE/claudia/internal/launch"
 	"github.com/MartyJRE/claudia/internal/repos"
+	"github.com/MartyJRE/claudia/internal/steps"
 )
 
 // What `c` does depends on what's waiting: a review request gets reviewed, a
@@ -117,13 +117,7 @@ func (m *Model) claudeForTicket(key, summary string) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func fillBrief(prompt, key, path string, err error) string {
-	brief := path
-	if err != nil {
-		brief = "Jira (use the Atlassian MCP)"
-	}
-	return strings.NewReplacer("{key}", key, "{brief}", brief).Replace(prompt)
-}
+var fillBrief = steps.FillBrief
 
 // briefSession is the plain "what is this ticket about" session.
 func (m *Model) briefSession(key, summary string) (tea.Model, tea.Cmd) {
@@ -176,7 +170,7 @@ func (m *Model) ticketSession(key, summary, intent, verb, title string, prompt f
 			names = append(names, mr.Repo())
 		}
 	}
-	pending := m.takeStep()
+	start := m.ticketLaunch(key, summary, intent, verb, prompt)
 	query := ""
 	if !onBranch && len(names) == 1 {
 		query = names[0]
@@ -189,9 +183,20 @@ func (m *Model) ticketSession(key, summary, intent, verb, title string, prompt f
 			return true, iid + " · " + r.Branch
 		}
 		return false, ""
-	}, func(m *Model, dir string, p claude.Profile) (tea.Model, tea.Cmd) {
+	}, start)
+	return m, nil
+}
+
+// ticketLaunch starts the ticket's session in the dir it's given, as the run
+// s is starting if there is one.
+func (m *Model) ticketLaunch(key, summary, intent, verb string, prompt func(path string, err error) string) func(*Model, string, claude.Profile) (tea.Model, tea.Cmd) {
+	pending := m.takeStep()
+	return func(m *Model, dir string, p claude.Profile) (tea.Model, tea.Cmd) {
 		name := m.sessionTitle(intent, verb, key, summary)
 		atl, bg, db := m.atl, m.background, m.db
+		if pending != nil && db != nil {
+			_ = db.Set(repoKey(key), dir)
+		}
 		return m, func() tea.Msg {
 			path, err := "", error(nil)
 			if atl != nil {
@@ -205,9 +210,12 @@ func (m *Model) ticketSession(key, summary, intent, verb, title string, prompt f
 			_ = m.links.SetTicket(id, key)
 			return startMsg{sp, bg, runErr}
 		}
-	})
-	return m, nil
+	}
 }
+
+// repoKey is where the repo picked for a ticket's steps is kept, so the next
+// step, and the autopilot, run there without asking.
+func repoKey(key string) string { return "repo:" + key }
 
 // reviewWithClaude runs the review-mr skill on the MR together with the related
 // MRs of the same change.
@@ -219,17 +227,14 @@ func (m *Model) reviewWithClaude(mr gitlab.MR) (tea.Model, tea.Cmd) {
 	}
 	m.seen.mark(rel...)
 	name := m.sessionTitle("review", "review", mrTicket(mr), mr.Title)
-	prompt := strings.ReplaceAll(getConfig().ReviewPrompt, "{urls}", strings.Join(urls, " ")) + m.teamsReplyNote(urls)
+	prompt := steps.ReviewPrompt(getConfig(), urls) + m.teamsReplyNote(urls)
 	return m.inClone(mr, "review", name, prompt, urls)
 }
 
 // addressThreads works through the open review remarks on one of my MRs.
 func (m *Model) addressThreads(mr gitlab.MR) (tea.Model, tea.Cmd) {
 	m.seen.mark(mr)
-	prompt := fmt.Sprintf("Address the unresolved review threads on my MR %s (branch %s). If this clone isn't on %s, check it out first, and stop and ask if the working tree has changes. "+
-		"Read the threads with `glab api projects/%d/merge_requests/%d/discussions`. For each one, decide whether the remark is right: if it is, fix it on this branch; if not, draft a reply explaining why. "+
-		"Then summarise the changes and the replies you propose. Don't push, post replies or resolve threads until I confirm.",
-		mr.WebURL, mr.SourceBranch, mr.SourceBranch, mr.ProjectID, mr.IID)
+	prompt := steps.ThreadsPrompt(mr)
 	return m.inClone(mr, "fix", m.sessionTitle("fix", "fix threads", mrTicket(mr), mr.Title), prompt, []string{mr.WebURL})
 }
 
@@ -294,30 +299,9 @@ func (m *Model) claudeForInbox(it inboxItem) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-var commitPrefix = regexp.MustCompile(`^(?i)(draft:\s*)?([a-z]+(\([^)]*\))?!?:\s*)?`)
-
-// sessionTitle names a session after what it's about rather than its ticket
-// key: "review: Expose gender on suggestions". The ticket's summary wins; else
-// the MR title without its "feat(KEY):" prefix. session_names in the config
-// overrides the shape per intent.
+// sessionTitle names a session after what it's about rather than its ticket key.
 func (m *Model) sessionTitle(intent, verb, key, fallback string) string {
-	about := commitPrefix.ReplaceAllString(strings.TrimSpace(fallback), "")
-	if is, ok := m.ix.Issues[key]; ok && is.Summary != "" {
-		about = is.Summary
-	}
-	if about == "" {
-		about = key
-	}
-	if r := []rune(about); len(r) > 50 {
-		about = strings.TrimSpace(string(r[:49])) + "…"
-	}
-	if tpl := getConfig().SessionNames[intent]; tpl != "" {
-		name := strings.NewReplacer("{key}", key, "{summary}", about, "{verb}", verb).Replace(tpl)
-		if name = strings.Trim(name, " -:_"); name != "" {
-			return name
-		}
-	}
-	return verb + ": " + about
+	return steps.Title(getConfig(), m.ix.Issues, intent, verb, key, fallback)
 }
 
 func firstName(s string) string {

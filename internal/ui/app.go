@@ -22,6 +22,7 @@ import (
 	"github.com/MartyJRE/claudia/internal/links"
 	"github.com/MartyJRE/claudia/internal/repos"
 	"github.com/MartyJRE/claudia/internal/runs"
+	"github.com/MartyJRE/claudia/internal/steps"
 	"github.com/MartyJRE/claudia/internal/teams"
 	"github.com/MartyJRE/claudia/internal/tmux"
 	"github.com/MartyJRE/claudia/internal/vault"
@@ -1145,12 +1146,7 @@ func (m *Model) colored(sp launch.Spec, also []string) launch.Spec {
 			used[r.Color]++
 		}
 	}
-	sp.Color = launch.Colors[0]
-	for _, c := range launch.Colors {
-		if used[c] < used[sp.Color] {
-			sp.Color = c
-		}
-	}
+	sp.Color = steps.Color(used)
 	return sp
 }
 
