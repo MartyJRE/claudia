@@ -79,7 +79,8 @@ starts a plain session in any repo, or in a new one: its last row, `+ new repo`,
 creates the folder, `git init`s it and adds an empty remote as origin. Under
 `personal_dir` (default `Personal`) the remote goes on GitHub via `gh`, private
 unless you pick otherwise. Next to your clones under `work_dir` it goes in their
-GitLab group via `glab`, internal unless you pick otherwise.
+GitLab group via `glab`, internal unless you pick otherwise. The default branch
+is asked last, prefilled with `master` on GitLab and `main` on GitHub.
 
 The Inbox opens with a short brief in plain English, written by a headless
 `claude -p` over claudia's own data (no tools): who's waited longest, what's

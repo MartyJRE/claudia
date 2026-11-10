@@ -29,6 +29,14 @@ func TestGroups(t *testing.T) {
 	}
 }
 
+func TestValidBranch(t *testing.T) {
+	for b, ok := range map[string]bool{"main": true, "master": true, "release/1.0": true, "-x": false, "a..b": false, "a/": false, "a b": false, "x.lock": false, "": false} {
+		if ValidBranch(b) != ok {
+			t.Errorf("%q: want %v", b, ok)
+		}
+	}
+}
+
 func TestValidName(t *testing.T) {
 	for name, ok := range map[string]bool{"tool": true, "my_tool-2.0": true, ".hidden": false, "a b": false, "x/y": false, "repo.git": false, "": false} {
 		if ValidName(name) != ok {
@@ -65,7 +73,7 @@ func remote(dir string) string {
 func TestCreateGitHub(t *testing.T) {
 	log := filepath.Join(fakeCLIs(t), "calls.log")
 	dir := filepath.Join(t.TempDir(), "Personal", "tool")
-	if err := Create(New{Dir: dir, Visibility: "private"}); err != nil {
+	if err := Create(New{Dir: dir, Visibility: "private", Branch: "main"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".git")); err != nil {
@@ -80,15 +88,18 @@ func TestCreateGitHub(t *testing.T) {
 func TestCreateGitLab(t *testing.T) {
 	log := filepath.Join(fakeCLIs(t), "calls.log")
 	dir := filepath.Join(t.TempDir(), "acme", "devops", "tool")
-	if err := Create(New{Dir: dir, Group: "acme/devops", GitLabHost: "gitlab.example.com", Visibility: "internal"}); err != nil {
+	if err := Create(New{Dir: dir, Group: "acme/devops", GitLabHost: "gitlab.example.com", Visibility: "internal", Branch: "master"}); err != nil {
 		t.Fatal(err)
 	}
 	calls, _ := os.ReadFile(log)
-	if want := "glab repo create --group acme/devops --internal --defaultBranch main @ "; !strings.Contains(string(calls), want) || !strings.Contains(string(calls), "gitlab.example.com") {
+	if want := "glab repo create --group acme/devops --internal --defaultBranch master @ "; !strings.Contains(string(calls), want) || !strings.Contains(string(calls), "gitlab.example.com") {
 		t.Errorf("calls %q", calls)
 	}
 	if got := remote(dir); got != "git@gitlab.example.com:acme/devops/tool.git" {
 		t.Errorf("origin %q", got)
+	}
+	if head, _ := os.ReadFile(filepath.Join(dir, ".git", "HEAD")); string(head) != "ref: refs/heads/master\n" {
+		t.Errorf("HEAD %q", head)
 	}
 }
 
@@ -96,7 +107,7 @@ func TestCreateReportsTheFailingCLI(t *testing.T) {
 	bin := fakeCLIs(t)
 	os.WriteFile(filepath.Join(bin, "gh"), []byte("#!/bin/sh\necho 'name already exists on this account' >&2\nexit 1\n"), 0o755)
 	dir := filepath.Join(t.TempDir(), "tool")
-	err := Create(New{Dir: dir, Visibility: "private"})
+	err := Create(New{Dir: dir, Visibility: "private", Branch: "main"})
 	if err == nil || !strings.Contains(err.Error(), "gh repo: name already exists") {
 		t.Errorf("err %v", err)
 	}

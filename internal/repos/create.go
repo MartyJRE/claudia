@@ -16,6 +16,7 @@ type New struct {
 	Group      string
 	GitLabHost string
 	Visibility string // private, internal or public
+	Branch     string
 }
 
 var nameRe = regexp.MustCompile(`^[A-Za-z0-9_-][A-Za-z0-9._-]*$`)
@@ -23,13 +24,21 @@ var nameRe = regexp.MustCompile(`^[A-Za-z0-9_-][A-Za-z0-9._-]*$`)
 // ValidName says whether name works as both a folder and a GitHub/GitLab repo name.
 func ValidName(name string) bool { return nameRe.MatchString(name) && !strings.HasSuffix(name, ".git") }
 
+var branchRe = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9._/-]*$`)
+
+// ValidBranch rejects what git would, short of asking it.
+func ValidBranch(b string) bool {
+	return branchRe.MatchString(b) && !strings.Contains(b, "..") && !strings.Contains(b, "//") &&
+		!strings.HasSuffix(b, "/") && !strings.HasSuffix(b, ".") && !strings.HasSuffix(b, ".lock")
+}
+
 // Create makes Dir a git repo whose origin is a new, empty remote. The local
 // repo stays when the remote can't be made.
 func Create(n New) error {
 	if err := os.MkdirAll(n.Dir, 0o755); err != nil {
 		return err
 	}
-	if err := runIn(n.Dir, nil, "git", "init", "-b", "main"); err != nil {
+	if err := runIn(n.Dir, nil, "git", "init", "-b", n.Branch); err != nil {
 		return err
 	}
 	name := filepath.Base(n.Dir)
@@ -38,7 +47,7 @@ func Create(n New) error {
 	}
 	host := []string{"GITLAB_HOST=" + n.GitLabHost}
 	// Without a path glab names the project after the cwd and makes it origin; with one it sets up another folder.
-	if err := runIn(n.Dir, host, "glab", "repo", "create", "--group", n.Group, "--"+n.Visibility, "--defaultBranch", "main"); err != nil {
+	if err := runIn(n.Dir, host, "glab", "repo", "create", "--group", n.Group, "--"+n.Visibility, "--defaultBranch", n.Branch); err != nil {
 		return err
 	}
 	if runIn(n.Dir, nil, "git", "remote", "get-url", "origin") == nil {

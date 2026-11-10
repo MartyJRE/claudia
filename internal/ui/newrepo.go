@@ -102,9 +102,34 @@ func (m *Model) pickVisibility(spec repos.New) {
 	}
 	m.chooser = newChooser(filepath.Base(spec.Dir)+" is", vis, func(m *Model, ch choice) (tea.Model, tea.Cmd) {
 		spec.Visibility = ch.value.(string)
-		m.setFlash("creating "+filepath.Base(spec.Dir)+"…", false)
-		return m, func() tea.Msg { return repoCreatedMsg{spec, createRepo(spec)} }
+		spec.Branch = "main"
+		if spec.Group != "" {
+			spec.Branch = "master"
+		}
+		return m, m.nameBranch(spec)
 	})
+}
+
+func (m *Model) nameBranch(spec repos.New) tea.Cmd {
+	in := newInput("branch › ", "default branch")
+	in.SetValue(spec.Branch)
+	in.CursorEnd()
+	in.Width = max(40, m.width-12)
+	m.prompt = &promptBox{
+		title: "default branch of " + filepath.Base(spec.Dir),
+		verb:  "create",
+		in:    in,
+		submit: func(m *Model, branch string) (tea.Model, tea.Cmd) {
+			spec.Branch = branch
+			if !repos.ValidBranch(branch) {
+				m.setFlash("not a branch name git takes", true)
+				return m, m.nameBranch(spec)
+			}
+			m.setFlash("creating "+filepath.Base(spec.Dir)+"…", false)
+			return m, func() tea.Msg { return repoCreatedMsg{spec, createRepo(spec)} }
+		},
+	}
+	return m.prompt.in.Focus()
 }
 
 func (m *Model) repoCreated(msg repoCreatedMsg) (tea.Model, tea.Cmd) {
@@ -114,7 +139,7 @@ func (m *Model) repoCreated(msg repoCreatedMsg) (tea.Model, tea.Cmd) {
 		if msg.spec.Group != "" {
 			project = msg.spec.Group + "/" + filepath.Base(dir)
 		}
-		m.repos = append(m.repos, repos.Repo{Dir: dir, Branch: "main", Project: project, Touched: clockNow()})
+		m.repos = append(m.repos, repos.Repo{Dir: dir, Branch: msg.spec.Branch, Project: project, Touched: clockNow()})
 	}
 	if msg.err != nil {
 		m.setFlash(msg.err.Error(), true)
