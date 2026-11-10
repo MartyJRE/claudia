@@ -463,29 +463,31 @@ func (m *Model) listNotes(h int) string {
 	} else if m.vaultNotes == nil {
 		empty = m.spin() + " reading the vault…"
 	}
-	return m.table(noteCols, len(rows), &m.cur[vNotes], h, func(i int, sel bool) []string {
-		r := rows[i]
-		indent := strings.Repeat("  ", r.depth)
-		if r.isFolder() {
-			glyph := "▸ "
-			if r.open {
-				glyph = "▾ "
-			}
-			return []string{sDim.Render(indent) + sAccent.Render(glyph) + sBold.Render(filepath.Base(r.folder)) + sDim.Render(fmt.Sprintf("  %d", r.count)), "", ""}
+	return m.table(noteCols, m.vis.widths.notes, len(rows), &m.cur[vNotes], h, m.noteCells, empty)
+}
+
+func (m *Model) noteCells(i int, sel bool) []string {
+	r := m.vis.notes[i]
+	indent := strings.Repeat("  ", r.depth)
+	if r.isFolder() {
+		glyph := "▸ "
+		if r.open {
+			glyph = "▾ "
 		}
-		st := sText
-		if sel {
-			st = sBold
-		}
-		title := sDim.Render(indent+"  ") + st.Render(r.note.Title)
-		if r.via != "" {
-			title += sDim.Render("  " + r.via)
-		}
-		if r.flatTitle {
-			title = st.Render(r.note.Title) + sDim.Render("  "+r.note.Folder())
-		}
-		return []string{title, sTicket.Render(strings.Join(r.note.Keys, " ")), sDim.Render(age(r.note.Modified))}
-	}, empty)
+		return []string{sDim.Render(indent) + sAccent.Render(glyph) + sBold.Render(filepath.Base(r.folder)) + sDim.Render(fmt.Sprintf("  %d", r.count)), "", ""}
+	}
+	st := sText
+	if sel {
+		st = sBold
+	}
+	title := sDim.Render(indent+"  ") + st.Render(r.note.Title)
+	if r.via != "" {
+		title += sDim.Render("  " + r.via)
+	}
+	if r.flatTitle {
+		title = st.Render(r.note.Title) + sDim.Render("  "+r.note.Folder())
+	}
+	return []string{title, sTicket.Render(strings.Join(r.note.Keys, " ")), sDim.Render(age(r.note.Modified))}
 }
 
 func (m *Model) currentNoteRow() (nrow, bool) {

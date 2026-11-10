@@ -30,18 +30,20 @@ func (m *Model) listConfluence(h int) string {
 	} else if m.conf.FetchedAt.IsZero() {
 		empty = m.spin() + " asking Confluence…"
 	}
-	return m.table(pageCols, len(rows), &m.cur[vConfluence], h, func(i int, sel bool) []string {
-		r := rows[i]
-		if r.header() {
-			return m.listHeader(vConfluence, r, 0)
-		}
-		p := m.vis.pages[r.item]
-		st := sText
-		if sel {
-			st = sBold
-		}
-		return []string{sDim.Render(listIndent(r) + p.Space), st.Render(p.Title), sDim.Render(age(p.Modified))}
-	}, empty)
+	return m.table(pageCols, m.vis.widths.pages, len(rows), &m.cur[vConfluence], h, m.pageCells, empty)
+}
+
+func (m *Model) pageCells(i int, sel bool) []string {
+	r := m.vis.pageRows[i]
+	if r.header() {
+		return m.listHeader(vConfluence, r, 0)
+	}
+	p := m.vis.pages[r.item]
+	st := sText
+	if sel {
+		st = sBold
+	}
+	return []string{sDim.Render(listIndent(r) + p.Space), st.Render(p.Title), sDim.Render(age(p.Modified))}
 }
 
 func (m *Model) currentPage() (atlassian.Page, bool) {

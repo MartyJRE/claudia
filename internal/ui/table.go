@@ -20,10 +20,17 @@ func (c *cursor) clamp(n int) {
 	c.pos = max(0, min(c.pos, n-1))
 }
 
+// flexFloor is how narrow the stretching column may get so another can show
+// all of its content.
+const flexFloor = 40
+
 // layout resolves column widths for the terminal width; hidden columns get -1.
-func layout(cols []col, width int) []int {
+// With natural (the widest content per column, from measure) a column fits its
+// content up to its w, and one whose content is wider may take what the others
+// gave back, up to twice its w, as long as the stretching column keeps flexFloor.
+func layout(cols []col, width int, natural []int) []int {
 	ws := make([]int, len(cols))
-	used, flex := 3, -1
+	used, flex, freed := 3, -1, 0
 	for i, c := range cols {
 		switch {
 		case c.min > 0 && width < c.min:
@@ -32,11 +39,46 @@ func layout(cols []col, width int) []int {
 			flex = i
 		default:
 			ws[i] = c.w
-			used += c.w + 1
+			if i < len(natural) {
+				ws[i] = min(c.w, max(1, lipgloss.Width(c.title), natural[i]))
+				freed += c.w - ws[i]
+			}
+			used += ws[i] + 1
 		}
 	}
 	if flex >= 0 {
+		room := min(freed, width-used-1-flexFloor)
+		for i, c := range cols {
+			if room <= 0 {
+				break
+			}
+			if ws[i] < 0 || c.w == 0 || i >= len(natural) || natural[i] <= ws[i] {
+				continue
+			}
+			add := min(min(natural[i], 2*c.w)-ws[i], room)
+			ws[i] += add
+			used += add
+			room -= add
+		}
 		ws[flex] = max(10, width-used-1)
+	}
+	return ws
+}
+
+// measure is the widest cell each column holds over n rows; group headers
+// (single cells) don't count.
+func measure(cols []col, n int, cell func(i int, selected bool) []string) []int {
+	ws := make([]int, len(cols))
+	for i := range n {
+		cells := cell(i, false)
+		if len(cells) == 1 {
+			continue
+		}
+		for j, c := range cells {
+			if j < len(ws) {
+				ws[j] = max(ws[j], lipgloss.Width(c))
+			}
+		}
 	}
 	return ws
 }
@@ -61,14 +103,14 @@ func joinCells(ws []int, cells []string, hl int) string {
 // table renders a scrolling list with a header row and a highlighted cursor
 // row. sub, when given, adds a dim second line under a row, starting at its
 // main column; an empty one keeps the row to one line.
-func (m *Model) table(cols []col, n int, cur *cursor, h int, cell func(i int, selected bool) []string, empty string, sub ...func(i int) string) string {
+func (m *Model) table(cols []col, natural []int, n int, cur *cursor, h int, cell func(i int, selected bool) []string, empty string, sub ...func(i int) string) string {
 	if h <= 0 {
 		return ""
 	}
 	if n == 0 {
 		return lipgloss.Place(m.width, h, lipgloss.Center, lipgloss.Center, sDim.Render(empty))
 	}
-	ws := layout(cols, m.width)
+	ws := layout(cols, m.width, natural)
 	var titles []string
 	for _, c := range cols {
 		titles = append(titles, sDim.Render(c.title))

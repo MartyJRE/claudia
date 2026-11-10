@@ -987,6 +987,13 @@ type visible struct {
 	usage    []usageRow
 
 	inboxRows, mrRows, mentionRows, pageRows []lrow
+
+	widths tableWidths
+}
+
+// tableWidths is the widest content of each table's columns, for layout.
+type tableWidths struct {
+	inbox, sessions, mrs, jira, mentions, pages, notes, usage, costs []int
 }
 
 func (m *Model) refilter() {
@@ -1000,26 +1007,19 @@ func (m *Model) refilter() {
 		}
 		return true
 	}
-	m.vis.inbox = m.filterInbox(match)
-	m.vis.notes = m.filterNotes(match, len(terms) > 0)
 	selected := ""
 	if c := m.cur[vSessions].pos; c >= 0 && c < len(m.vis.sessions) {
 		selected = m.vis.sessions[c].id()
 	}
-	m.vis.sessions = m.sessionRows(match, len(terms) > 0)
+	// Columns fit everything there is, open and filtered out alike, so folding
+	// or typing never moves them.
+	m.buildVisible(func(...string) bool { return true }, true)
+	widths := m.measureTables()
+	m.buildVisible(match, len(terms) > 0)
+	m.vis.widths = widths
 	if i := slices.IndexFunc(m.vis.sessions, func(r srow) bool { return r.id() == selected }); selected != "" && i >= 0 {
 		m.cur[vSessions].pos = i
 	}
-	m.vis.mrs = m.filterMRs(match)
-	m.vis.jira = m.buildJira(m.jiraIssues(match), len(terms) > 0)
-	m.vis.mentions = m.filterMentions(match)
-	m.vis.pages = m.filterPages(match)
-	m.vis.inboxRows = m.groupRows(vInbox, len(m.vis.inbox), len(terms) > 0)
-	m.vis.mrRows = m.groupRows(m.view, len(m.vis.mrs), len(terms) > 0)
-	m.vis.mentionRows = m.groupRows(vMentions, len(m.vis.mentions), len(terms) > 0)
-	m.vis.pageRows = m.groupRows(vConfluence, len(m.vis.pages), len(terms) > 0)
-	m.vis.usage = m.usageRows()
-	m.vis.costRows = m.costRows()
 	m.refilterBoard(match)
 	for v := view(0); v < nViews; v++ {
 		saved := m.view
@@ -1027,6 +1027,39 @@ func (m *Model) refilter() {
 		m.cur[v].clamp(m.count())
 		m.view = saved
 	}
+}
+
+func (m *Model) buildVisible(match func(...string) bool, filtering bool) {
+	m.vis.inbox = m.filterInbox(match)
+	m.vis.notes = m.filterNotes(match, filtering)
+	m.vis.sessions = m.sessionRows(match, filtering)
+	m.vis.mrs = m.filterMRs(match)
+	m.vis.jira = m.buildJira(m.jiraIssues(match), filtering)
+	m.vis.mentions = m.filterMentions(match)
+	m.vis.pages = m.filterPages(match)
+	m.vis.inboxRows = m.groupRows(vInbox, len(m.vis.inbox), filtering)
+	m.vis.mrRows = m.groupRows(m.view, len(m.vis.mrs), filtering)
+	m.vis.mentionRows = m.groupRows(vMentions, len(m.vis.mentions), filtering)
+	m.vis.pageRows = m.groupRows(vConfluence, len(m.vis.pages), filtering)
+	m.vis.usage = m.usageRows()
+	m.vis.costRows = m.costRows()
+}
+
+func (m *Model) measureTables() tableWidths {
+	w := tableWidths{
+		inbox:    measure(inboxCols, len(m.vis.inboxRows), m.inboxCells),
+		sessions: measure(sessionCols, len(m.vis.sessions), m.sessionCells),
+		mrs:      measure(mrCols, len(m.vis.mrRows), m.mrCells),
+		jira:     measure(jiraCols, len(m.vis.jira), m.jiraCells),
+		mentions: measure(mentionCols, len(m.vis.mentionRows), m.mentionCells),
+		pages:    measure(pageCols, len(m.vis.pageRows), m.pageCells),
+		notes:    measure(noteCols, len(m.vis.notes), m.noteCells),
+		usage:    measure(usageCols, len(m.vis.usage), m.usageCells(0)),
+		costs:    measure(costCols, len(m.vis.costRows), m.costCells(0)),
+	}
+	// The status animates through verbs of different lengths.
+	w.sessions[0] = sessionCols[0].w
+	return w
 }
 
 // start opens a claude window and jumps to it.

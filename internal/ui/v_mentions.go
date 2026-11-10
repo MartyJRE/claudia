@@ -114,28 +114,30 @@ func (m *Model) listMentions(h int) string {
 	if m.atl == nil && m.atlErr != nil {
 		empty = m.atlErr.Error()
 	}
-	return m.table(mentionCols, len(rows), &m.cur[vMentions], h, func(i int, sel bool) []string {
-		r := rows[i]
-		if r.header() {
-			return m.listHeader(vMentions, r, mentionCols[0].w+1)
-		}
-		x := m.vis.mentions[r.item]
-		dot := lipgloss.NewStyle().Foreground(purple).Render("●")
-		st := sText
-		if !m.open(x) {
-			dot, st = sDim.Render("○"), sDim
-		} else if !x.jira {
-			dot = lipgloss.NewStyle().Foreground(blue).Render("◇")
-		}
-		if sel {
-			st = st.Bold(true)
-		}
-		where := sTicket.Render(x.where)
-		if !x.jira {
-			where = sDim.Render(x.where)
-		}
-		return []string{dot, listIndent(r) + where, st.Render(x.author), sDim.Render(x.title), st.Render(x.text), sDim.Render(age(x.at))}
-	}, empty)
+	return m.table(mentionCols, m.vis.widths.mentions, len(rows), &m.cur[vMentions], h, m.mentionCells, empty)
+}
+
+func (m *Model) mentionCells(i int, sel bool) []string {
+	r := m.vis.mentionRows[i]
+	if r.header() {
+		return m.listHeader(vMentions, r, colStart(layout(mentionCols, m.width, m.vis.widths.mentions), 1))
+	}
+	x := m.vis.mentions[r.item]
+	dot := lipgloss.NewStyle().Foreground(purple).Render("●")
+	st := sText
+	if !m.open(x) {
+		dot, st = sDim.Render("○"), sDim
+	} else if !x.jira {
+		dot = lipgloss.NewStyle().Foreground(blue).Render("◇")
+	}
+	if sel {
+		st = st.Bold(true)
+	}
+	where := sTicket.Render(x.where)
+	if !x.jira {
+		where = sDim.Render(x.where)
+	}
+	return []string{dot, listIndent(r) + where, st.Render(x.author), sDim.Render(x.title), st.Render(x.text), sDim.Render(age(x.at))}
 }
 
 func (m *Model) currentMention() (mention, bool) {

@@ -209,25 +209,27 @@ func (m *Model) listJira(h int) string {
 	} else if m.jira.FetchedAt.IsZero() {
 		empty = m.spin() + " asking Jira…"
 	}
-	return m.table(jiraCols, len(rows), &m.cur[vJira], h, func(i int, sel bool) []string {
-		r := rows[i]
-		if r.header() {
-			return []string{m.jiraKeyCell(r), m.jiraSummaryCell(r, sel)}
-		}
-		is := r.issue
-		if r.context {
-			return []string{m.jiraKeyCell(r), m.jiraSummaryCell(r, sel), sDim.Render(typeName(is.Type)), sDim.Render(is.Status)}
-		}
-		return []string{
-			m.jiraKeyCell(r),
-			m.jiraSummaryCell(r, sel),
-			sDim.Render(typeName(is.Type)),
-			statusText(is),
-			sDim.Render(is.Assignee),
-			m.issueMRs(is.Key),
-			m.issueSessions(is.Key),
-		}
-	}, empty)
+	return m.table(jiraCols, m.vis.widths.jira, len(rows), &m.cur[vJira], h, m.jiraCells, empty)
+}
+
+func (m *Model) jiraCells(i int, sel bool) []string {
+	r := m.vis.jira[i]
+	if r.header() {
+		return []string{m.jiraKeyCell(r), m.jiraSummaryCell(r, sel)}
+	}
+	is := r.issue
+	if r.context {
+		return []string{m.jiraKeyCell(r), m.jiraSummaryCell(r, sel), sDim.Render(typeName(is.Type)), sDim.Render(is.Status)}
+	}
+	return []string{
+		m.jiraKeyCell(r),
+		m.jiraSummaryCell(r, sel),
+		sDim.Render(typeName(is.Type)),
+		statusText(is),
+		sDim.Render(is.Assignee),
+		m.issueMRs(is.Key),
+		m.issueSessions(is.Key),
+	}
 }
 
 func (m *Model) issueMRs(key string) string {

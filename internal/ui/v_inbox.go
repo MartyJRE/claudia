@@ -215,26 +215,27 @@ func waiting(t time.Time) string {
 func (m *Model) listInbox(h int) string {
 	top := m.viewBrief()
 	h -= lipgloss.Height(top) - 1 // its trailing empty line is the table's first
-	rows := m.vis.inboxRows
-	return top + m.table(inboxCols, len(rows), &m.cur[vInbox], h, func(i int, sel bool) []string {
-		r := rows[i]
-		if r.header() {
-			return m.listHeader(vInbox, r, 0)
-		}
-		it := m.vis.inbox[r.item]
-		st := sText
-		if sel {
-			st = sBold
-		}
-		if _, snoozed := m.dismissed[it.id]; snoozed {
-			st = sDim
-		}
-		where := sText.Render(it.where)
-		if it.kind == kMention {
-			where = sTicket.Render(it.where)
-		}
-		return []string{listIndent(r) + waiting(it.since), kindStyle(it.kind).Render(kindLabel[it.kind]), where, sDim.Render(it.who), st.Render(it.text)}
-	}, "nobody is waiting on you")
+	return top + m.table(inboxCols, m.vis.widths.inbox, len(m.vis.inboxRows), &m.cur[vInbox], h, m.inboxCells, "nobody is waiting on you")
+}
+
+func (m *Model) inboxCells(i int, sel bool) []string {
+	r := m.vis.inboxRows[i]
+	if r.header() {
+		return m.listHeader(vInbox, r, 0)
+	}
+	it := m.vis.inbox[r.item]
+	st := sText
+	if sel {
+		st = sBold
+	}
+	if _, snoozed := m.dismissed[it.id]; snoozed {
+		st = sDim
+	}
+	where := sText.Render(it.where)
+	if it.kind == kMention {
+		where = sTicket.Render(it.where)
+	}
+	return []string{listIndent(r) + waiting(it.since), kindStyle(it.kind).Render(kindLabel[it.kind]), where, sDim.Render(it.who), st.Render(it.text)}
 }
 
 func (m *Model) currentInbox() (inboxItem, bool) {
