@@ -272,6 +272,10 @@ func Rebase(m MR) error {
 	return call("PUT", fmt.Sprintf("projects/%d/merge_requests/%d/rebase", m.ProjectID, m.IID), nil)
 }
 
+func Merge(m MR) error {
+	return call("PUT", fmt.Sprintf("projects/%d/merge_requests/%d/merge", m.ProjectID, m.IID), nil)
+}
+
 // Thread is one review discussion on an MR.
 type Thread struct {
 	ID       string    `json:"id"`

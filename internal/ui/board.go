@@ -8,6 +8,7 @@ import (
 	"github.com/MartyJRE/claudia/internal/atlassian"
 	"github.com/MartyJRE/claudia/internal/claude"
 	"github.com/MartyJRE/claudia/internal/gitlab"
+	"github.com/MartyJRE/claudia/internal/runs"
 	"github.com/MartyJRE/claudia/internal/state"
 )
 
@@ -50,6 +51,7 @@ type boardCard struct {
 	cost     claude.TicketCost
 	mr       *gitlab.MR // set on a review card, which has no issue
 	rstage   rstage
+	runs     []runs.Run // newest first
 }
 
 type boardPrefs struct {
@@ -114,7 +116,7 @@ func (m *Model) boardCards() []boardCard {
 		if is.Level >= 1 {
 			continue
 		}
-		c := boardCard{issue: is, mrs: m.ix.ticketMRs[is.Key], cost: m.costs[is.Key]}
+		c := boardCard{issue: is, mrs: m.ix.ticketMRs[is.Key], cost: m.costs[is.Key], runs: m.runsFor(is.Key)}
 		for _, id := range m.ix.ticketSess[is.Key] {
 			if r, ok := byID[id]; ok {
 				c.sessions = append(c.sessions, r)
@@ -236,9 +238,12 @@ func stageNamed(s string) (stage, bool) {
 	return 0, false
 }
 
-var nextStep = [nStages]string{"plan it", "implement", "open MR", "get it reviewed", "merge", "QA notes", ""}
+var stageNext = [nStages]string{"plan it", "implement", "open MR", "get it reviewed", "merge", "QA notes", ""}
 
 func cardTurn(c boardCard, waiting []inboxItem) (turn, string, string) {
+	if waitingForAnswers(c) && len(waiting) == 0 {
+		return turnColleague, "waiting for answers", ""
+	}
 	for _, r := range c.sessions {
 		if r.needsYou() {
 			return turnNeedsYou, "answer " + r.Name(), ""
@@ -273,7 +278,7 @@ func cardTurn(c boardCard, waiting []inboxItem) (turn, string, string) {
 	if onHold(c.issue.Status) {
 		return turnColleague, "on hold: " + c.issue.Status, ""
 	}
-	next := nextStep[c.stage]
+	next := stageNext[c.stage]
 	for _, mr := range c.mrs {
 		if !openMR(mr) {
 			continue

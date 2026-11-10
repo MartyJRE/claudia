@@ -160,9 +160,10 @@ func TestActions(t *testing.T) {
 		"POST projects/7/merge_requests/5/approve":   `{}`,
 		"POST projects/7/merge_requests/5/unapprove": `{}`,
 		"PUT projects/7/merge_requests/5/rebase":     `{"rebase_in_progress":true}`,
+		"PUT projects/7/merge_requests/5/merge":      `{"state":"merged"}`,
 	})
 	m := MR{ProjectID: 7, IID: 5}
-	for _, f := range []func(MR) error{Approve, Unapprove, Rebase} {
+	for _, f := range []func(MR) error{Approve, Unapprove, Rebase, Merge} {
 		if err := f(m); err != nil {
 			t.Error(err)
 		}
@@ -174,6 +175,7 @@ func TestActions(t *testing.T) {
 	want := "gitlab.example.com POST projects/7/merge_requests/5/approve\n" +
 		"gitlab.example.com POST projects/7/merge_requests/5/unapprove\n" +
 		"gitlab.example.com PUT projects/7/merge_requests/5/rebase\n" +
+		"gitlab.example.com PUT projects/7/merge_requests/5/merge\n" +
 		"gitlab.example.com POST projects/7/merge_requests/6/approve\n"
 	if string(calls) != want {
 		t.Errorf("calls:\n%s", calls)

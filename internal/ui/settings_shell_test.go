@@ -71,10 +71,10 @@ func TestSettingsEditSaveRestartShell(t *testing.T) {
 	pressShell(m, "enter", "ctrl+u")
 	typeShell(m, "Corp")
 	pressShell(m, "enter")
+	containsAllShell(t, "edited", screenShell(m), "● work dir", "Corp")
 	cursorToShell(t, m, "rounded_pills")
 	pressShell(m, "enter")
-	s := screenShell(m)
-	containsAllShell(t, "edited", s, "● work dir", "Corp", "● rounded pills", "off", "● 2 unsaved")
+	containsAllShell(t, "edited", screenShell(m), "● rounded pills", "off", "● 2 unsaved")
 
 	cmd := saveShell(m)
 	if !isQuitShell(cmd) || !m.Result.Restart || stopped != 1 {

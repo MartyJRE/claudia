@@ -20,6 +20,7 @@ import (
 	"github.com/MartyJRE/claudia/internal/launch"
 	"github.com/MartyJRE/claudia/internal/links"
 	"github.com/MartyJRE/claudia/internal/repos"
+	"github.com/MartyJRE/claudia/internal/runs"
 	"github.com/MartyJRE/claudia/internal/teams"
 	"github.com/MartyJRE/claudia/internal/tmux"
 	"github.com/MartyJRE/claudia/internal/vault"
@@ -148,6 +149,10 @@ type Model struct {
 	boardSprint   int             // 0 the current sprint, n the nth future one (f)
 	boardFutures  []string
 	boardNeeds    int
+	db            *runs.Store // the run log; nil when it couldn't be opened
+	dbErr         error
+	runCache      map[string][]runs.Run // per subject, until the next refresh
+	step          *runs.Run             // the run x is starting, for the next session launched
 	sessLoaded    bool
 	sessLoading   bool
 	gl            gitlab.Snapshot
@@ -234,6 +239,7 @@ func New(opts Options) *Model {
 	var problems []string
 	m.km, problems = newKeymap(getConfig().Keys)
 	m.atl, m.atlErr = atlassian.New()
+	m.db, m.dbErr = openRuns()
 	m.tm, _ = newTeams()
 	m.seen, m.seenExisted = loadSeen()
 	m.loadCaches()
@@ -318,6 +324,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case sessionsMsg:
 		m.sessions, m.workers = splitWorkers(msg)
+		m.runCache = nil
 		m.sessLoaded, m.sessLoading = true, false
 		m.restore = notLive(m.restore, m.sessions)
 		saveLive(m.sessions, m.restore != nil)
@@ -391,7 +398,13 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.openImages(msg)
 	case startMsg:
 		m.background = msg.background
-		return m.start(msg.sp)
+		mm, cmd := m.start(msg.sp)
+		if msg.err != nil {
+			m.setFlash("run log: "+msg.err.Error(), true)
+		}
+		return mm, cmd
+	case mergedMsg:
+		return m, m.merged(msg)
 	case transitionsMsg:
 		m.showTransitions(msg)
 		return m, nil
@@ -967,10 +980,11 @@ func (m *Model) help() [][2]string {
 		if !m.boardFocus {
 			return append([][2]string{{"↓", "step in"}}, m.hints("board.reviews", "board.team", "board.done", "board.later")...)
 		}
-		if c, ok := m.currentCard(); ok && c.review() {
-			return m.reviewHints()
+		c, _ := m.currentCard()
+		if c.review() {
+			return m.reviewHints(c)
 		}
-		return append([][2]string{{m.key("board.left") + "/" + m.key("board.right"), "columns"}},
+		return append([][2]string{{m.key("board.left") + "/" + m.key("board.right"), "columns"}, m.hint("board.run", runHint(c)), m.hint("board.run_bg", "in the background")},
 			m.hints("board.sessions", "board.claude", "board.claude_bg", "board.open", "board.mr", "board.threads", "board.move", "board.copy")...)
 	case vUsage:
 		return m.hints("usage.layout")
@@ -1098,6 +1112,7 @@ func (m *Model) measureTables() tableWidths {
 
 // start opens a claude window and jumps to it.
 func (m *Model) start(sp launch.Spec) (tea.Model, tea.Cmd) {
+	m.runCache = nil
 	sp = m.colored(sp, nil)
 	target, err := startSession(sp)
 	if err != nil {

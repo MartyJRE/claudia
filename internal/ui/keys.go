@@ -81,6 +81,8 @@ var actions = []action{
 	{"board.done", []string{"d"}, "show done"},
 	{"board.later", []string{"f"}, "next sprint"},
 	{"board.reviews", []string{"r"}, "tickets/reviews/all"},
+	{"board.run", []string{"x"}, "run the next step"},
+	{"board.run_bg", []string{"X"}, "run it in the background"},
 
 	{"usage.layout", []string{"v"}, "layout"},
 

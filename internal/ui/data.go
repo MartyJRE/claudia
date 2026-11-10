@@ -10,6 +10,7 @@ import (
 	"github.com/MartyJRE/claudia/internal/gitlab"
 	"github.com/MartyJRE/claudia/internal/launch"
 	"github.com/MartyJRE/claudia/internal/repos"
+	"github.com/MartyJRE/claudia/internal/runs"
 	"github.com/MartyJRE/claudia/internal/state"
 	"github.com/MartyJRE/claudia/internal/summary"
 	"github.com/MartyJRE/claudia/internal/teams"
@@ -50,7 +51,7 @@ type fetched struct {
 type sessionsMsg []row
 
 func (m *Model) loadSessions() tea.Cmd {
-	store := m.store
+	store, db := m.store, m.db
 	return func() tea.Msg {
 		loc := newLocator()
 		sums := summary.Load()
@@ -66,6 +67,13 @@ func (m *Model) loadSessions() tea.Cmd {
 				}
 			}
 			rows = append(rows, r)
+		}
+		if db != nil {
+			seen := make([]runs.Seen, len(rows))
+			for i, r := range rows {
+				seen[i] = runs.SeenOf(r.Session, r.summary, r.summaryFor)
+			}
+			_, _ = db.Reconcile(seen, clockNow())
 		}
 		return sessionsMsg(rows)
 	}
