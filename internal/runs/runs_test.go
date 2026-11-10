@@ -210,7 +210,7 @@ func TestSeenOf(t *testing.T) {
 	upd := t0.Add(time.Minute)
 	tr := &claude.Transcript{Updated: upd, Tail: []claude.Turn{{Role: "user", Text: "go"}, {Role: "assistant", Text: "CLAUDIA_RESULT: ok"}}}
 	s := claude.Session{ID: "s1", Transcript: tr, Live: &claude.Live{Status: claude.StatusBusy}}
-	if sn := SeenOf(s, "Done: x", upd); sn != (Seen{"s1", true, true, "CLAUDIA_RESULT: ok", "Done: x"}) {
+	if sn := SeenOf(s, "Done: x", upd); sn != (Seen{"s1", true, true, "CLAUDIA_RESULT: ok", "Done: x", false}) {
 		t.Errorf("busy %+v", sn)
 	}
 	s.Live.Status = claude.StatusIdle

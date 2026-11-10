@@ -30,7 +30,16 @@ type Seen struct {
 	Working bool   // and is busy
 	Reply   string // the last turn, when it's Claude's reply
 	Summary string // the watcher's summary of that very turn, if written
+	// ContextFull: the context is all but used up, or Claude Code said so;
+	// without autocompact the session can't go on until /compact.
+	ContextFull bool
 }
+
+// ContextFull is the reason a run whose context filled up waits on you.
+const ContextFull = "context full"
+
+// FullAt is the context fill a stopped run counts as full from.
+const FullAt = 0.95
 
 // SeenOf reads a session; summary counts only when written for its latest turn.
 func SeenOf(s claude.Session, summary string, summaryFor time.Time) Seen {
@@ -39,6 +48,7 @@ func SeenOf(s claude.Session, summary string, summaryFor time.Time) Seen {
 	if s.Transcript == nil {
 		return sn
 	}
+	sn.ContextFull = s.ContextFull || s.ContextFill() >= FullAt
 	if n := len(s.Tail); n > 0 && s.Tail[n-1].Role == "assistant" {
 		sn.Reply = s.Tail[n-1].Text
 	}
@@ -67,6 +77,9 @@ func (s *Store) Reconcile(seen []Seen, now time.Time) (bool, error) {
 			continue
 		}
 		outcome, reason, ok := Result(sn.Reply)
+		if !ok && sn.ContextFull {
+			outcome, reason, ok = NeedsYou, ContextFull, true
+		}
 		if !sn.Live {
 			if r.Outcome == NeedsYou || now.Sub(r.Started) < grace {
 				continue
