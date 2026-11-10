@@ -90,10 +90,16 @@ func run(args []string) {
 		switch {
 		case err != nil:
 			fmt.Println("couldn't ask GitHub what's new:", err)
-		case len(p.Commits) == 0:
+		case len(p.Commits) == 0 && len(p.Releases) == 0:
 			fmt.Println("already up to date; reinstalling", p.Latest)
 		default:
 			fmt.Printf("updating to %s, what's new:\n", p.Latest)
+			for _, r := range p.Releases {
+				fmt.Printf("  %s  %s\n", r.Tag, r.Published.Format(time.DateOnly))
+				for l := range strings.SplitSeq(strings.TrimSpace(r.Body), "\n") {
+					fmt.Println("    " + strings.TrimRight(l, "\r"))
+				}
+			}
 			for _, c := range p.Commits {
 				fmt.Printf("  %s  %s\n", c.SHA, c.Subject)
 			}
