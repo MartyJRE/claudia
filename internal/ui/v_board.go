@@ -25,6 +25,7 @@ func (m *Model) refilterBoard(match func(...string) bool) {
 	if c, ok := m.cardUnderCursor(); ok {
 		sel = c.id()
 	}
+	m.loadAutopilot()
 	cards, reviews := m.boardCards(), m.reviewCards()
 	m.boardNeeds, m.boardRevNeeds = 0, 0
 	for _, c := range append(slices.Clip(cards), reviews...) {
@@ -220,6 +221,9 @@ func (m *Model) turnBadge(c boardCard) string {
 	case turnNeedsYou:
 		return lipgloss.NewStyle().Foreground(yellow).Bold(true).Render("◆ needs you")
 	case turnAgent:
+		if c.verb == queuedVerb {
+			return lipgloss.NewStyle().Foreground(blue).Render("◷ queued")
+		}
 		return sOK.Render(m.activityGlyph(c.verb))
 	case turnColleague:
 		return sDim.Render("⧗ waiting")
@@ -247,7 +251,12 @@ func cardChips(c boardCard) string {
 	for _, mr := range c.mrs {
 		chips = append(chips, mrChip(mr))
 	}
-	if c.next != "" {
+	for _, ch := range []string{ctxChip(c.ctx), overrideChip(c.over)} {
+		if ch != "" {
+			chips = append(chips, ch)
+		}
+	}
+	if c.next != "" && !c.hinted {
 		label := "→ "
 		if c.turn == turnAgent || c.turn == turnColleague {
 			label = ""
@@ -308,6 +317,9 @@ func (m *Model) detailBoard() string {
 		turn += sDim.Render(" · " + c.next)
 	}
 	lines = append(lines, turn+sDim.Render("  ·  "+c.why), m.runLine(c))
+	if c.auto {
+		lines = append(lines, modesLine(c))
+	}
 	// Sessions and MRs share a line, so the cost below still fits the panel.
 	var parts []string
 	for _, r := range c.sessions {
@@ -406,6 +418,9 @@ func (m *Model) keyBoard(k string) (tea.Model, tea.Cmd) {
 		m.saveBoardPrefs()
 		m.refilter()
 		return m, nil
+	case "board.pause":
+		m.togglePause()
+		return m, nil
 	case "board.later":
 		if m.boardPrefs.view() == bvReviews {
 			m.setFlash("sprints are for tickets: "+m.key("board.reviews")+" shows them", false)
@@ -428,8 +443,15 @@ func (m *Model) keyBoard(k string) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	}
-	if act == "board.run" || act == "board.run_bg" {
+	switch act {
+	case "board.run", "board.run_bg":
 		return m.runNext(c)
+	case "board.plan_ok":
+		m.planOK(c)
+		return m, nil
+	case "board.override":
+		m.overrideChooser(c)
+		return m, nil
 	}
 	if c.review() {
 		return m.keyReviewCard(act, c)

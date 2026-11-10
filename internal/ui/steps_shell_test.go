@@ -188,7 +188,7 @@ func TestRunLineShell(t *testing.T) {
 	plan := runShell("plan", runs.Running, func(r *runs.Run) { r.Session = "aaaaaaaa-wait" })
 	ready := runShell("readiness", runs.OK, func(r *runs.Run) { r.Reason = "spec is clear" })
 	c := boardCard{stage: stUpNext, runs: []runs.Run{plan, ready}}
-	if s := plainShell(m.runLine(c)); s != "now plan running Opus 5.5 · 1h   before readiness ok · spec is clear · 10m   next x jumps to it" {
+	if s := plainShell(m.runLine(c)); s != "now plan running Opus 5.5 · 1h   before readiness ok · spec is clear · 10m   next s jumps to it" {
 		t.Errorf("running %q", s)
 	}
 	c.runs[0].Session = "gone"
@@ -196,11 +196,11 @@ func TestRunLineShell(t *testing.T) {
 		t.Errorf("no session row %q", s)
 	}
 	c.runs = []runs.Run{runShell("readiness", runs.Failed, nil)}
-	if s := plainShell(m.runLine(c)); s != "before readiness failed · 10m   next readiness · x starts it" {
+	if s := plainShell(m.runLine(c)); s != "before readiness failed · 10m   next readiness · s starts it" {
 		t.Errorf("failed %q", s)
 	}
 	c = boardCard{stage: stMerge, mrs: []gitlab.MR{boardMR(6, "opened", nil)}}
-	if s := plainShell(m.runLine(c)); s != "next merge · x twice merges it" {
+	if s := plainShell(m.runLine(c)); s != "next merge · s twice merges it" {
 		t.Errorf("merge %q", s)
 	}
 	if s := plainShell(m.runLine(boardCard{stage: stDone})); s != "next —" {
@@ -223,8 +223,8 @@ func TestBoardShowsRunsShell(t *testing.T) {
 	_ = db.Start(runs.Run{ID: "r1", Kind: "ticket", Subject: "ABC-4", Step: "readiness", Session: "gone", Started: time.Now().Add(-time.Hour), Finished: time.Now(), Outcome: runs.NeedsYou, Reason: "asked 2 questions"})
 	m.reindex()
 	s := screenSizedShell(t, m, "runs")
-	containsAllShell(t, "card", s, "ABC-4  ⧗ waiting", "waiting for answers", "━ ─ ─ ─ ─ ─ ─  readiness", "x jump to readiness", "X in the background")
-	containsAllShell(t, "detail", plainShell(m.detailBoard()), "now readiness needs-you · 1h   next x jumps to it")
+	containsAllShell(t, "card", s, "ABC-4  ⧗ waiting", "waiting for answers", "━ ─ ─ ─ ─ ─ ─  ⧗ waitin…", "s jump to readiness", "S in the background")
+	containsAllShell(t, "detail", plainShell(m.detailBoard()), "now readiness needs-you · 1h   next s jumps to it")
 	if len(m.runCache) == 0 {
 		t.Error("the runs aren't cached")
 	}
@@ -265,11 +265,11 @@ func TestRunKeyStartsStepsShell(t *testing.T) {
 	if c, _ := m.currentCard(); c.issue.Key != "ABC-4" {
 		t.Fatalf("on %+v", c)
 	}
-	containsAllShell(t, "hint", screenShell(m), "x run readiness")
+	containsAllShell(t, "hint", screenShell(m), "s run readiness")
 
 	// X: readiness in the background, recorded as a run once the session starts.
 	// Readiness needs no particular repo: it starts in the work dir without asking.
-	cmd := pressShell(m, "X")
+	cmd := pressShell(m, "S")
 	if m.chooser != nil || m.step != nil || cmd == nil {
 		t.Fatalf("x asks for a repo: %+v", m.chooser)
 	}
@@ -301,20 +301,20 @@ func TestRunKeyStartsStepsShell(t *testing.T) {
 	// The run is under way: x jumps to its session, resuming it when closed.
 	m.sessions = append(m.sessions, row{Session: claude.Session{ID: got[0].Session, Transcript: &claude.Transcript{Cwd: "/code/payments", AITitle: "check"}}})
 	m.reindex()
-	pressShell(m, "x")
+	pressShell(m, "s")
 	if len(*started) != 2 || (*started)[1].Args[1] != got[0].Session || !slices.Contains((*started)[1].Env, "CLAUDIA_RUN="+got[0].ID) {
 		t.Fatalf("resumed as the run: %+v", (*started)[1:])
 	}
 	m.sessions[len(m.sessions)-1].Live = &claude.Live{Status: claude.StatusIdle}
 	m.sessions[len(m.sessions)-1].pane = &tmux.Pane{ID: "%9", Session: "payments", Window: "1", Index: "0"}
 	m.reindex()
-	pressShell(m, "x")
+	pressShell(m, "s")
 	if m.Result.Attach != "payments:1.0" {
 		t.Errorf("x on a live run jumps: %q", m.Result.Attach)
 	}
 	m.sessions = m.sessions[:len(m.sessions)-1]
 	m.reindex()
-	pressShell(m, "x")
+	pressShell(m, "s")
 	if !strings.Contains(m.flash, "readiness is running, but its session isn't around") {
 		t.Errorf("flash %q", m.flash)
 	}
@@ -324,7 +324,7 @@ func TestRunKeyStartsStepsShell(t *testing.T) {
 	m.runCache = nil
 	m.reindex()
 	m.chooser = nil
-	if cmd := pressShell(m, "x"); cmd == nil {
+	if cmd := pressShell(m, "s"); cmd == nil {
 		t.Error("x reruns a step whose session is gone")
 	} else if again := cmd().(startMsg); again.sp.Kind != "readiness" {
 		t.Errorf("rerun %+v", again.sp)
@@ -340,7 +340,7 @@ func TestRunKeyOnOtherStagesShell(t *testing.T) {
 	// ABC-2 is in review with a thread on my MR: x addresses it, the run keeps the head.
 	m.boardCol = slices.IndexFunc(m.vis.boardCols, func(c boardCol) bool { return c.st == stReview })
 	m.cur[vBoard].pos = slices.IndexFunc(m.vis.board[m.boardCol], func(c boardCard) bool { return c.issue.Key == "ABC-2" })
-	pressShell(m, "x")
+	pressShell(m, "s")
 	if len(*started) != 1 || (*started)[0].Kind != "fix" {
 		t.Fatalf("feedback started %+v", *started)
 	}
@@ -350,14 +350,14 @@ func TestRunKeyOnOtherStagesShell(t *testing.T) {
 
 	// Nothing to run on a card that waits on others.
 	m.cur[vBoard].pos = slices.IndexFunc(m.vis.board[m.boardCol], func(c boardCard) bool { return c.issue.Key == "ABC-1" })
-	pressShell(m, "x")
-	if !strings.Contains(m.flash, "nothing for x to run on ABC-1") {
+	pressShell(m, "s")
+	if !strings.Contains(m.flash, "nothing for s to run on ABC-1") {
 		t.Errorf("flash %q", m.flash)
 	}
 
 	// Without a run log x says why.
 	m.db, m.dbErr = nil, errors.New("disk full")
-	pressShell(m, "x")
+	pressShell(m, "s")
 	if m.flash != "the run log isn't open: disk full" {
 		t.Errorf("flash %q", m.flash)
 	}
@@ -387,8 +387,8 @@ func TestRunKeyOnReviewShell(t *testing.T) {
 	started := fakeStart(t, "payments:1", nil)
 	m.repos = []repos.Repo{{Dir: "/code/payments", Project: "g/payments"}}
 	pressShell(m, "r", "down")
-	containsAllShell(t, "hint", screenShell(m), "x run review")
-	pressShell(m, "x")
+	containsAllShell(t, "hint", screenShell(m), "s run review")
+	pressShell(m, "s")
 	if len(*started) != 1 || (*started)[0].Kind != "review" {
 		t.Fatalf("review started %+v", *started)
 	}
@@ -398,8 +398,8 @@ func TestRunKeyOnReviewShell(t *testing.T) {
 	}
 	// Findings are mine to read: x has nothing to start.
 	pressShell(m, "l", "l")
-	pressShell(m, "x")
-	if !strings.Contains(m.flash, "nothing for x to run on !32") {
+	pressShell(m, "s")
+	if !strings.Contains(m.flash, "nothing for s to run on !32") {
 		t.Errorf("flash %q", m.flash)
 	}
 }

@@ -10,7 +10,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/MartyJRE/claudia/internal/autopilot"
 	"github.com/MartyJRE/claudia/internal/board"
+	"github.com/MartyJRE/claudia/internal/config"
 	"github.com/MartyJRE/claudia/internal/gitlab"
 	"github.com/MartyJRE/claudia/internal/launch"
 	"github.com/MartyJRE/claudia/internal/runs"
@@ -105,6 +107,14 @@ func (m *Model) segment(c boardCard, id, cur string) string {
 		return st.Render("━")
 	case r == nil && c.passed(id):
 		return sPassed.Render("━")
+	case r == nil && c.auto:
+		switch mode, _ := autopilot.Mode(getConfig().Autopilot, c.over, id); mode {
+		case config.ModeOff:
+			return sRule.Render("·")
+		case config.ModeAuto:
+			return lipgloss.NewStyle().Foreground(blue).Render("─")
+		}
+		return sRule.Render("─")
 	case r == nil:
 		return sRule.Render("─")
 	}
@@ -136,6 +146,9 @@ func (m *Model) stepStrip(c boardCard) string {
 		segs[i] = m.segment(c, s.ID, cur)
 	}
 	strip := strings.Join(segs, " ")
+	if hint, ok := m.stripHint(c, next, hold); ok {
+		return strip + "  " + hint
+	}
 	switch {
 	case hold != nil:
 		strip += "  " + outcomeStyle(hold.Outcome).Render(stepLabel(hold.Step))
@@ -155,6 +168,9 @@ func (m *Model) runLine(c boardCard) string {
 		if r, ok := m.sessionRow(hold.Session); ok && r.Transcript != nil && r.Model != "" {
 			f, v := modelName(r.Model)
 			now += " " + lipgloss.NewStyle().Foreground(modelColor(f)).Render(f+" "+v)
+		}
+		if ch := ctxChip(c.ctx); ch != "" {
+			now += sDim.Render(" · ") + ch
 		}
 		parts = append(parts, sDim.Render("now ")+now+sDim.Render(" · "+age(hold.Started)))
 	}
@@ -259,7 +275,7 @@ func (m *Model) stepDir(id string, c boardCard) (string, bool) {
 	}
 	picked := ""
 	if m.db != nil {
-		picked, _ = m.db.Get(repoKey(c.issue.Key))
+		picked, _ = m.db.Get(autopilot.RepoKey(c.issue.Key))
 	}
 	r, ok := steps.TicketRepo(m.repos, c.issue.Key, c.mrs, picked)
 	return r.Dir, ok

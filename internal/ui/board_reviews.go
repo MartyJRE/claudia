@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/MartyJRE/claudia/internal/autopilot"
 	"github.com/MartyJRE/claudia/internal/board"
 	"github.com/MartyJRE/claudia/internal/gitlab"
 	"github.com/MartyJRE/claudia/internal/runs"
@@ -34,7 +35,14 @@ func (m *Model) reviewCards() []boardCard {
 	byID := m.rowsByID()
 	var cards []boardCard
 	for _, bc := range board.ReviewCards(m.gl, m.ix, sessionsOf(m.sessions), m.runsFor) {
-		cards = append(cards, m.fromBoard(bc, byID))
+		c := m.fromBoard(bc, byID)
+		m.applyAutopilot(&c)
+		next, hold := nextStep(c)
+		if t, n, verb, ok := autoTurn(c, next); ok && hold == nil && c.gate != autopilot.Off {
+			c.turn, c.next, c.verb = t, n, verb
+		}
+		_, c.hinted = m.stripHint(c, next, hold)
+		cards = append(cards, c)
 	}
 	return cards
 }
@@ -80,6 +88,11 @@ func reviewChips(c boardCard) string {
 	}
 	if p := pipelineChip(*mr); p != "" {
 		chips = append(chips, p)
+	}
+	for _, ch := range []string{ctxChip(c.ctx), overrideChip(c.over)} {
+		if ch != "" {
+			chips = append(chips, ch)
+		}
 	}
 	if c.next != "" {
 		label := "→ "
@@ -185,6 +198,9 @@ func (m *Model) detailReview(c boardCard) string {
 		turn += sDim.Render(" · " + c.next)
 	}
 	lines = append(lines, turn+sDim.Render("  ·  "+c.why), m.runLine(c))
+	if c.auto {
+		lines = append(lines, modesLine(c))
+	}
 	for _, r := range c.sessions {
 		l := m.status(r) + " " + sText.Render(r.Name())
 		if r.summary != "" {
@@ -225,6 +241,7 @@ func (m *Model) reviewHints(c boardCard) [][2]string {
 		{m.key("board.left") + "/" + m.key("board.right"), "columns"},
 		m.hint("board.run", runHint(c)),
 		m.hint("board.run_bg", "in the background"),
+		m.hint("board.override", "autopilot"),
 		{m.key("board.sessions"), "sessions"},
 		{m.key("board.claude"), "review with claude"},
 		{m.key("board.claude_bg"), "in the background"},

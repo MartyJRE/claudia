@@ -7,6 +7,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/MartyJRE/claudia/internal/autopilot"
 	"github.com/MartyJRE/claudia/internal/claude"
 	"github.com/MartyJRE/claudia/internal/gitlab"
 	"github.com/MartyJRE/claudia/internal/launch"
@@ -195,7 +196,7 @@ func (m *Model) ticketLaunch(key, summary, intent, verb string, prompt func(path
 		name := m.sessionTitle(intent, verb, key, summary)
 		atl, bg, db := m.atl, m.background, m.db
 		if pending != nil && db != nil {
-			_ = db.Set(repoKey(key), dir)
+			_ = db.Set(autopilot.RepoKey(key), dir)
 		}
 		return m, func() tea.Msg {
 			path, err := "", error(nil)
@@ -212,10 +213,6 @@ func (m *Model) ticketLaunch(key, summary, intent, verb string, prompt func(path
 		}
 	}
 }
-
-// repoKey is where the repo picked for a ticket's steps is kept, so the next
-// step, and the autopilot, run there without asking.
-func repoKey(key string) string { return "repo:" + key }
 
 // reviewWithClaude runs the review-mr skill on the MR together with the related
 // MRs of the same change.
