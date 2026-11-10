@@ -122,7 +122,7 @@ func TestPrompt(t *testing.T) {
 	m := newModelViews(t)
 	var got string
 	newPrompt := func() {
-		m.prompt = &promptBox{title: "open a link in Claude", in: newInput("link › ", "GitLab MR"), submit: func(m *Model, s string) (tea.Model, tea.Cmd) {
+		m.prompt = &promptBox{title: "open a link in Claude", hint: linkHint, in: newInput("link › ", "GitLab MR"), submit: func(m *Model, s string) (tea.Model, tea.Cmd) {
 			got = s
 			return m, nil
 		}}

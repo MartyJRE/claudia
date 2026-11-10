@@ -24,6 +24,8 @@ const openRequestFile = "open-request.json"
 
 type promptBox struct {
 	title  string
+	hint   string
+	verb   string // what enter does; "open" when empty
 	in     textinput.Model
 	submit func(*Model, string) (tea.Model, tea.Cmd)
 }
@@ -37,7 +39,7 @@ func (m *Model) askLink() tea.Cmd {
 			in.CursorEnd()
 		}
 	}
-	m.prompt = &promptBox{title: "open a link in Claude", in: in, submit: func(m *Model, s string) (tea.Model, tea.Cmd) {
+	m.prompt = &promptBox{title: "open a link in Claude", hint: linkHint, in: in, submit: func(m *Model, s string) (tea.Model, tea.Cmd) {
 		return m.openLink(s)
 	}}
 	return m.prompt.in.Focus()
@@ -70,9 +72,13 @@ func (m *Model) updatePrompt(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+const linkHint = "an MR gets reviewed, a Jira ticket gets what its state calls for, anything else: pick a repo and Claude takes a look"
+
 func (m *Model) viewPrompt(h int) string {
-	body := " " + sBold.Render(m.prompt.title) + "\n\n " + m.prompt.in.View() + "\n\n" +
-		sDim.Render(" an MR gets reviewed, a Jira ticket gets what its state calls for, anything else: pick a repo and Claude takes a look")
+	body := " " + sBold.Render(m.prompt.title) + "\n\n " + m.prompt.in.View()
+	if m.prompt.hint != "" {
+		body += "\n\n" + sDim.Render(" "+m.prompt.hint)
+	}
 	return lipgloss.NewStyle().Height(h).MaxHeight(h).Render(body)
 }
 

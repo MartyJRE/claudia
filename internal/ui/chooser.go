@@ -26,6 +26,7 @@ type chooser struct {
 	pick   func(*Model, choice) (tea.Model, tea.Cmd)
 	tab    func(*Model, choice) // optional: tab cycles an option, e.g. the profile
 	status func(*Model, choice) string
+	extra  func(query string) []choice // optional: rows always listed last, e.g. "+ new repo"
 }
 
 func newChooser(title string, items []choice, pick func(*Model, choice) (tea.Model, tea.Cmd)) *chooser {
@@ -77,6 +78,9 @@ func (c *chooser) filter() {
 	c.shown = c.shown[:0]
 	for _, b := range buckets {
 		c.shown = append(c.shown, b...)
+	}
+	if c.extra != nil {
+		c.shown = append(c.shown, c.extra(c.in.Value())...)
 	}
 	c.cur.clamp(len(c.shown))
 }

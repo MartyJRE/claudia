@@ -28,6 +28,9 @@ type Config struct {
 	// WorkDir is the folder under CodeRoot whose repos are listed first and
 	// started with the work profile; defaults to "Work".
 	WorkDir string `json:"work_dir"`
+	// PersonalDir is the folder under CodeRoot where new GitHub repos go;
+	// defaults to "Personal".
+	PersonalDir string `json:"personal_dir"`
 	// Profiles names Claude Code config dirs, e.g. {"work": "~/.claude-work"}.
 	// Without it every ~/.claude and ~/.claude-<name> dir is used, named
 	// "default" and <name>.
@@ -217,6 +220,9 @@ func Get() Config {
 		}
 		if cfg.WorkDir == "" {
 			cfg.WorkDir = "Work"
+		}
+		if cfg.PersonalDir == "" {
+			cfg.PersonalDir = "Personal"
 		}
 		if cfg.ReviewPrompt == "" {
 			cfg.ReviewPrompt = defaultReviewPrompt
