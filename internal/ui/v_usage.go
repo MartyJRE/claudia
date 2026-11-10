@@ -74,18 +74,23 @@ func (m *Model) listUsage(h int) string {
 	if m.usageByTicket() {
 		return top + m.listCosts(h)
 	}
+	empty := m.spin() + " reading transcripts…"
+	if m.usageLoaded {
+		empty = "no usage in the last 31 days"
+	}
+	ws := layout(usageCols, m.width, m.vis.widths.usage)
+	table := m.table(usageCols, m.vis.widths.usage, len(m.vis.usage), &m.cur[vUsage], h, m.usageCells(max(0, ws[len(ws)-1])), empty)
+	return top + table
+}
+
+// usageCells draws the days, with a cost bar barW wide for the costliest.
+func (m *Model) usageCells(barW int) func(int, bool) []string {
 	rows := m.vis.usage
 	peak := 0.0
 	for _, r := range rows {
 		peak = max(peak, r.cost)
 	}
-	empty := m.spin() + " reading transcripts…"
-	if m.usageLoaded {
-		empty = "no usage in the last 31 days"
-	}
-	ws := layout(usageCols, m.width)
-	barW := max(0, ws[len(ws)-1])
-	table := m.table(usageCols, len(rows), &m.cur[vUsage], h, func(i int, sel bool) []string {
+	return func(i int, sel bool) []string {
 		r := rows[i]
 		t, _ := time.ParseInLocation("2006-01-02", r.day, time.Local)
 		dayStyle := sText
@@ -116,8 +121,7 @@ func (m *Model) listUsage(h int) string {
 			lipgloss.NewStyle().Foreground(yellow).Render(cost),
 			bar,
 		}
-	}, empty)
-	return top + table
+	}
 }
 
 // stackedBar splits a bar by model, each segment as long as that model's

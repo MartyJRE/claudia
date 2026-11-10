@@ -20,11 +20,11 @@ func TestLayoutShell(t *testing.T) {
 		{99, []int{5, 84, -1, 4}},
 		{20, []int{5, 10, -1, 4}},
 	} {
-		if got := layout(cols, c.width); !slices.Equal(got, c.want) {
+		if got := layout(cols, c.width, nil); !slices.Equal(got, c.want) {
 			t.Errorf("width %d: %v, want %v", c.width, got, c.want)
 		}
 	}
-	if got := layout([]col{{"A", 3, 0}}, 80); !slices.Equal(got, []int{3}) {
+	if got := layout([]col{{"A", 3, 0}}, 80, nil); !slices.Equal(got, []int{3}) {
 		t.Errorf("no flex column: %v", got)
 	}
 }
@@ -57,7 +57,7 @@ func TestTableScrollShell(t *testing.T) {
 	cols := []col{{"N", 4, 0}, {"NAME", 0, 0}}
 	cell := func(i int, sel bool) []string { return []string{fmt.Sprint(i), fmt.Sprintf("item-%02d", i)} }
 	cur := &cursor{pos: 30}
-	out := m.table(cols, 50, cur, 10, cell, "empty")
+	out := m.table(cols, nil, 50, cur, 10, cell, "empty")
 	if h := lipgloss.Height(out); h != 10 {
 		t.Fatalf("height %d", h)
 	}
@@ -69,24 +69,24 @@ func TestTableScrollShell(t *testing.T) {
 		t.Errorf("cursor scrolled into view at the bottom: offset %d, last %q", cur.offset, lines[9])
 	}
 	cur.pos = 5
-	lines = strings.Split(plainShell(m.table(cols, 50, cur, 10, cell, "")), "\n")
+	lines = strings.Split(plainShell(m.table(cols, nil, 50, cur, 10, cell, "")), "\n")
 	if cur.offset != 5 || !strings.Contains(lines[1], "item-05") {
 		t.Errorf("scrolling up puts the cursor on top: offset %d %q", cur.offset, lines[1])
 	}
 	cur.pos = 99
-	m.table(cols, 50, cur, 10, cell, "")
+	m.table(cols, nil, 50, cur, 10, cell, "")
 	if cur.pos != 49 || cur.offset != 41 {
 		t.Errorf("cursor clamps to the last row: %+v", *cur)
 	}
 	cur.pos, cur.offset = 0, 40
-	m.table(cols, 3, cur, 10, cell, "")
+	m.table(cols, nil, 3, cur, 10, cell, "")
 	if cur.offset != 0 {
 		t.Errorf("a list that shrank resets the offset: %+v", *cur)
 	}
-	if got := m.table(cols, 5, cur, 0, cell, ""); got != "" {
+	if got := m.table(cols, nil, 5, cur, 0, cell, ""); got != "" {
 		t.Errorf("no room renders nothing: %q", got)
 	}
-	empty := plainShell(m.table(cols, 0, cur, 5, cell, "nothing here"))
+	empty := plainShell(m.table(cols, nil, 0, cur, 5, cell, "nothing here"))
 	if lipgloss.Height(empty) != 5 || !strings.Contains(empty, "nothing here") {
 		t.Errorf("empty message centered in the space: %q", empty)
 	}
@@ -101,7 +101,7 @@ func TestTableGroupHeaderShell(t *testing.T) {
 		}
 		return []string{"x", "y"}
 	}
-	lines := strings.Split(plainShell(m.table(cols, 2, &cursor{}, 3, cell, "")), "\n")
+	lines := strings.Split(plainShell(m.table(cols, nil, 2, &cursor{}, 3, cell, "")), "\n")
 	if w := ansi.StringWidth(lines[1]); w > 40 || !strings.HasSuffix(lines[1], "…") {
 		t.Errorf("header spans the row and is cut to it: %d %q", w, lines[1])
 	}
@@ -152,7 +152,7 @@ func TestTableSubLinesShell(t *testing.T) {
 	}
 	render := func(cur *cursor, h int) []string {
 		var out []string
-		for _, l := range strings.Split(plainShell(m.table(cols, 6, cur, h, cell, "", sub)), "\n") {
+		for _, l := range strings.Split(plainShell(m.table(cols, nil, 6, cur, h, cell, "", sub)), "\n") {
 			out = append(out, strings.TrimRight(l, " "))
 		}
 		return out
@@ -175,11 +175,11 @@ func TestTableSubLinesShell(t *testing.T) {
 
 	cur = &cursor{}
 	long := func(int) string { return strings.Repeat("x", 40) }
-	lines := strings.Split(plainShell(m.table(cols, 1, cur, 3, cell, "", long)), "\n")
+	lines := strings.Split(plainShell(m.table(cols, nil, 1, cur, 3, cell, "", long)), "\n")
 	if lines[2] != " ▌      "+strings.Repeat("x", 20)+"…" {
 		t.Errorf("a long sub line is cut to the width: %q", lines[2])
 	}
-	if got := plainShell(m.table(cols, 2, cur, 3, cell, "", nil)); strings.Count(got, "item-") != 2 {
+	if got := plainShell(m.table(cols, nil, 2, cur, 3, cell, "", nil)); strings.Count(got, "item-") != 2 {
 		t.Errorf("a nil sub keeps rows to one line:\n%s", got)
 	}
 }

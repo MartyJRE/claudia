@@ -105,42 +105,48 @@ func (m *Model) listMRs(h int) string {
 			empty = m.errs[srcGitlab].Error()
 		}
 	}
+	return m.table(m.mrCols(), m.vis.widths.mrs, len(rows), &m.cur[m.view], h, m.mrCells, empty)
+}
+
+func (m *Model) mrCols() []col {
 	cols := slices.Clone(mrCols)
 	if m.view == vMine {
 		cols[2].title, cols[2].w = "REVIEWERS", 18
 	}
-	return m.table(cols, len(rows), &m.cur[m.view], h, func(i int, sel bool) []string {
-		lr := rows[i]
-		if lr.header() {
-			return m.listHeader(m.view, lr, 0)
-		}
-		r := m.vis.mrs[lr.item]
-		title := r.Title
-		st := sText
-		if sel {
-			st = sBold
-		}
-		if r.Draft || r.merged {
-			st = sDim
-		}
-		if r.Draft {
-			title = "Draft: " + strings.TrimPrefix(title, "Draft: ")
-		}
-		second := sDim.Render(r.Author.Username)
-		if m.view == vMine {
-			second = reviewers(r.MR)
-		}
-		return []string{
-			listIndent(lr) + sKey.Render(fmt.Sprintf("!%d", r.IID)) + " " + sText.Render(r.Repo()),
-			m.listInline(m.view, lr) + st.Render(title),
-			second,
-			sTicket.Render(mrTicket(r.MR)),
-			pipelineText(r),
-			m.approvalText(r.MR),
-			m.chipsText(r),
-			sDim.Render(age(r.UpdatedAt)),
-		}
-	}, empty)
+	return cols
+}
+
+func (m *Model) mrCells(i int, sel bool) []string {
+	lr := m.vis.mrRows[i]
+	if lr.header() {
+		return m.listHeader(m.view, lr, 0)
+	}
+	r := m.vis.mrs[lr.item]
+	title := r.Title
+	st := sText
+	if sel {
+		st = sBold
+	}
+	if r.Draft || r.merged {
+		st = sDim
+	}
+	if r.Draft {
+		title = "Draft: " + strings.TrimPrefix(title, "Draft: ")
+	}
+	second := sDim.Render(r.Author.Username)
+	if m.view == vMine {
+		second = reviewers(r.MR)
+	}
+	return []string{
+		listIndent(lr) + sKey.Render(fmt.Sprintf("!%d", r.IID)) + " " + sText.Render(r.Repo()),
+		m.listInline(m.view, lr) + st.Render(title),
+		second,
+		sTicket.Render(mrTicket(r.MR)),
+		pipelineText(r),
+		m.approvalText(r.MR),
+		m.chipsText(r),
+		sDim.Render(age(r.UpdatedAt)),
+	}
 }
 
 func pipelineText(r mrRow) string {

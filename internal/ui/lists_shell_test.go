@@ -244,7 +244,7 @@ func TestMentionsAndPagesGroupedShell(t *testing.T) {
 	if got, want := listRowsShell(m, vConfluence, title), "#OPS| Deploys| Oncall|Roadmap"; got != want {
 		t.Errorf("pages by space:\n got %s\nwant %s", got, want)
 	}
-	containsAllShell(t, "pages", screenShell(m), "pages you edited recently · by space", "▾ OPS  2 pages", "  OPS    Oncall")
+	containsAllShell(t, "pages", screenShell(m), "pages you edited recently · by space", "▾ OPS  2 pages", "  OPS Oncall")
 	cursorToRowShell(t, m, vConfluence, "#OPS", title)
 	containsAllShell(t, "page group detail", screenShell(m), "2 pages · space folds")
 	if cmd := pressShell(m, "o"); cmd != nil {

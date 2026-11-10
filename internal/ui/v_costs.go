@@ -129,18 +129,23 @@ func (m *Model) issueSummary(key string) string {
 }
 
 func (m *Model) listCosts(h int) string {
+	ws := layout(costCols, m.width, m.vis.widths.costs)
+	empty := m.spin() + " reading transcripts…"
+	if m.usageLoaded {
+		empty = "no sessions in the cost ledger yet"
+	}
+	return m.table(costCols, m.vis.widths.costs, len(m.vis.costRows), &m.cur[vUsage], h, m.costCells(max(0, ws[len(ws)-1])), empty)
+}
+
+// costCells draws the tickets, with a cost bar barW wide for the costliest
+// epic and ticket.
+func (m *Model) costCells(barW int) func(int, bool) []string {
 	rows := m.vis.costRows
 	peak := map[bool]float64{}
 	for _, r := range rows {
 		peak[r.epic] = max(peak[r.epic], r.cost.USD)
 	}
-	ws := layout(costCols, m.width)
-	barW := max(0, ws[len(ws)-1])
-	empty := m.spin() + " reading transcripts…"
-	if m.usageLoaded {
-		empty = "no sessions in the cost ledger yet"
-	}
-	return m.table(costCols, len(rows), &m.cur[vUsage], h, func(i int, sel bool) []string {
+	return func(i int, sel bool) []string {
 		r := rows[i]
 		key, st := r.cost.Ticket, sTicket
 		switch {
@@ -174,7 +179,7 @@ func (m *Model) listCosts(h int) string {
 			costText(r.cost.USD, r.cost.Unknown),
 			bar,
 		}
-	}, empty)
+	}
 }
 
 // detailCost breaks a row down: an epic by model, a ticket by session.

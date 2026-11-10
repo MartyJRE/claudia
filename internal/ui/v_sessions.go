@@ -62,37 +62,40 @@ func (m *Model) listSessionsTable(h int) string {
 		empty = "nothing matches"
 	}
 	rows := m.vis.sessions
-	return m.table(sessionCols, len(rows), &m.cur[vSessions], h, func(i int, sel bool) []string {
-		if !rows[i].isSess {
-			return m.sessionHeaderCells(rows[i])
-		}
-		r := rows[i].sess
-		if r.worker() {
-			return m.workerCells(rows[i])
-		}
-		name := sessionIndent(rows[i]) + sessionTitle(r, sel)
-		if g := rows[i].group; g != "" && (g != project(r.Dir()) || m.width < sessionCols[2].min) {
-			name += sDim.Render("  " + g)
-		}
-		if d := workingOn(r); d != "" {
-			name += sDim.Render("  " + d)
-		}
-		return []string{
-			m.status(r),
-			name,
-			sText.Render(project(r.Dir())),
-			sBranch.Render(branch(r)),
-			sTicket.Render(m.ix.sessionTicket[r.ID]),
-			modelChip(r),
-			sDim.Render(age(r.LastActive())),
-			m.where(r),
-		}
-	}, empty, func(i int) string {
+	return m.table(sessionCols, m.vis.widths.sessions, len(rows), &m.cur[vSessions], h, m.sessionCells, empty, func(i int) string {
 		if !rows[i].isSess {
 			return ""
 		}
 		return summaryText(rows[i].sess, true)
 	})
+}
+
+func (m *Model) sessionCells(i int, sel bool) []string {
+	rows := m.vis.sessions
+	if !rows[i].isSess {
+		return m.sessionHeaderCells(rows[i])
+	}
+	r := rows[i].sess
+	if r.worker() {
+		return m.workerCells(rows[i])
+	}
+	name := sessionIndent(rows[i]) + sessionTitle(r, sel)
+	if g := rows[i].group; g != "" && (g != project(r.Dir()) || m.width < sessionCols[2].min) {
+		name += sDim.Render("  " + g)
+	}
+	if d := workingOn(r); d != "" {
+		name += sDim.Render("  " + d)
+	}
+	return []string{
+		m.status(r),
+		name,
+		sText.Render(project(r.Dir())),
+		sBranch.Render(branch(r)),
+		sTicket.Render(m.ix.sessionTicket[r.ID]),
+		modelChip(r),
+		sDim.Render(age(r.LastActive())),
+		m.where(r),
+	}
 }
 
 // workerCells draws one of claudia's own runs dim, with nothing to act on.

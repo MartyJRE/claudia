@@ -339,6 +339,8 @@ func (m *Model) buildSessions(sessions []row, filtering bool) []srow {
 	return out
 }
 
+func (m *Model) sessionWidths() []int { return layout(sessionCols, m.width, m.vis.widths.sessions) }
+
 func (m *Model) sessionHeaderCells(r srow) []string {
 	glyph := "▾ "
 	if r.collapsed {
@@ -346,7 +348,7 @@ func (m *Model) sessionHeaderCells(r srow) []string {
 	}
 	indent := strings.Repeat("  ", r.depth)
 	if r.key == workersKey {
-		return []string{strings.Repeat(" ", sessionCols[0].w+1) + sDim.Render(indent+glyph+r.title+fmt.Sprintf("  %d running in the background", r.n))}
+		return []string{strings.Repeat(" ", colStart(m.sessionWidths(), 1)) + sDim.Render(indent+glyph+r.title+fmt.Sprintf("  %d running in the background", r.n))}
 	}
 	title := sBold.Render(r.title)
 	if r.ticket != "" {
@@ -366,7 +368,7 @@ func (m *Model) sessionHeaderCells(r srow) []string {
 		counts += sDim.Render(" · ") + sOK.Render(fmt.Sprintf("%d done", r.done))
 	}
 	// Spans the row, starting where the SESSION column starts.
-	return []string{strings.Repeat(" ", sessionCols[0].w+1) + sDim.Render(indent) + sAccent.Render(glyph) + title + counts}
+	return []string{strings.Repeat(" ", colStart(m.sessionWidths(), 1)) + sDim.Render(indent) + sAccent.Render(glyph) + title + counts}
 }
 
 func (m *Model) toggleSessionFold() {
