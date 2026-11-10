@@ -363,3 +363,29 @@ func TestStuckAtStartupErrors(t *testing.T) {
 		t.Error("clearing stuck: no error")
 	}
 }
+
+func TestStuckWithTranscript(t *testing.T) {
+	s := open(t)
+	now := t0.Add(time.Hour)
+	if err := s.Start(Run{ID: "r", Subject: "ABC-1", Step: "review", Session: "old", Started: now.Add(-5 * time.Minute)}); err != nil {
+		t.Fatal(err)
+	}
+	// A session with a transcript but no registration: listed, not live.
+	seen := WithStarting([]Seen{{Session: "old", Reply: "CLAUDIA_RESULT: ok"}, {Session: "gone"}}, map[string]claude.Proc{"old": {PID: 1}})
+	if len(seen) != 2 || !seen[0].Starting || seen[1].Starting {
+		t.Fatalf("seen %+v", seen)
+	}
+	if _, err := s.Reconcile(seen, now); err != nil {
+		t.Fatal(err)
+	}
+	if r := s.For("ABC-1")[0]; r.Outcome != Running || r.Reason != StuckAtStartup {
+		t.Errorf("run %+v", r)
+	}
+}
+
+func TestSeenOfStarting(t *testing.T) {
+	sn := SeenOf(claude.Session{ID: "a", Live: &claude.Live{Starting: true}}, "", time.Time{})
+	if sn.Live || !sn.Starting {
+		t.Errorf("seen %+v", sn)
+	}
+}

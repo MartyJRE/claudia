@@ -56,25 +56,36 @@ type sessionsMsg []row
 
 // stuckRows are sessions claudia started whose claude runs but never
 // registered, most likely held by a dialog in their window: shown as waiting
-// on you so they aren't lost, wherever they were started from.
+// on you so they aren't lost, wherever they were started from. One resumed
+// from a transcript already has a row, which gets the overlay.
 func stuckRows(rows []row, procs map[string]claude.Proc, kinds map[string]string, loc *tmux.Locator) []row {
-	known := map[string]bool{}
-	for _, r := range rows {
-		known[r.ID] = true
+	at := map[string]int{}
+	for i, r := range rows {
+		at[r.ID] = i
 	}
 	var out []row
 	for id, p := range procs {
-		if known[id] || kinds[id] == "" || p.Age < runs.Grace {
+		i, known := at[id]
+		if known && rows[i].Live != nil || kinds[id] == "" || p.Age < runs.Grace {
 			continue
 		}
-		r := row{Session: claude.Session{ID: id, Live: &claude.Live{PID: p.PID, SessionID: id, Name: p.Name, Status: claude.StatusWaiting, Starting: true}}, kind: kinds[id]}
+		live := &claude.Live{PID: p.PID, SessionID: id, Name: p.Name, Status: claude.StatusWaiting, Starting: true}
+		r := row{Session: claude.Session{ID: id}, kind: kinds[id]}
+		if known {
+			r = rows[i]
+		}
+		r.Live = live
 		if pane, ok := locatePane(loc, p.PID); ok {
 			r.pane = &pane
+		}
+		if known {
+			rows[i] = r
+			continue
 		}
 		out = append(out, r)
 	}
 	slices.SortFunc(out, func(a, b row) int { return strings.Compare(a.ID, b.ID) })
-	return out
+	return append(rows, out...)
 }
 
 func (m *Model) loadSessions() tea.Cmd {
@@ -96,7 +107,7 @@ func (m *Model) loadSessions() tea.Cmd {
 			rows = append(rows, r)
 		}
 		procs := processSessions()
-		rows = append(rows, stuckRows(rows, procs, kinds, loc)...)
+		rows = stuckRows(rows, procs, kinds, loc)
 		if db != nil {
 			seen := make([]runs.Seen, len(rows))
 			for i, r := range rows {
