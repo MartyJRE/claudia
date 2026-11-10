@@ -26,6 +26,7 @@ var actions = []action{
 	{"global.next_view", []string{"tab", "right", "l"}, "next view"},
 	{"global.prev_view", []string{"shift+tab", "left", "h"}, "previous view"},
 	{"global.assistant", []string{"@"}, "assistant"},
+	{"global.assistant_fresh", []string{"!"}, "fresh assistant"},
 	{"global.update", []string{"ctrl+u"}, "update claudia"},
 	{"global.releases", []string{"W"}, "what's new"},
 	{"global.settings", []string{","}, "settings"},

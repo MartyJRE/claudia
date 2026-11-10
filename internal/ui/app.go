@@ -526,6 +526,8 @@ func (m *Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "global.assistant":
 		return m.openAssistant()
+	case "global.assistant_fresh":
+		return m.freshAssistant()
 	case "global.update":
 		return m, m.startUpdate()
 	case "global.releases":
@@ -1141,9 +1143,20 @@ func (m *Model) goTo(target string) (tea.Model, tea.Cmd) {
 // pickRepo opens the repo chooser with query already typed in; preferred repos
 // are listed first.
 func (m *Model) pickRepo(title, query string, preferred func(repos.Repo) (bool, string), then func(*Model, string, claude.Profile) (tea.Model, tea.Cmd)) {
+	m.pickDir(title, query, "", preferred, then)
+}
+
+// pickDir is pickRepo with pinned, a dir that needn't be a repo, listed first.
+func (m *Model) pickDir(title, query, pinned string, preferred func(repos.Repo) (bool, string), then func(*Model, string, claude.Profile) (tea.Model, tea.Cmd)) {
 	root := repos.Root()
 	var first, rest []choice
+	if pinned != "" {
+		first = append(first, pathChoice(pinned, root, "default", pinned))
+	}
 	for _, r := range repos.ByPreference(m.repos, root) {
+		if r.Dir == pinned {
+			continue
+		}
 		ok, hint := false, ""
 		if preferred != nil {
 			ok, hint = preferred(r)

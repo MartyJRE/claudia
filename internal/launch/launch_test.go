@@ -155,7 +155,7 @@ func TestResume(t *testing.T) {
 
 func TestAssistant(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", "/state")
-	sp := Assistant(work, "id-1", false)
+	sp := Assistant(work, "/code", "id-1", false)
 	if sp.Dir != "/code" || sp.Session != AssistantSession || sp.Name != "assistant" || sp.Profile != work {
 		t.Errorf("spec %+v", sp)
 	}
@@ -168,12 +168,12 @@ func TestAssistant(t *testing.T) {
 			t.Errorf("note misses %q: %s", want, note)
 		}
 	}
-	if r := Assistant(work, "id-1", true); !slices.Equal(r.Args[:3], []string{"--resume", "id-1", "--append-system-prompt"}) {
+	if r := Assistant(work, "/code", "id-1", true); !slices.Equal(r.Args[:3], []string{"--resume", "id-1", "--append-system-prompt"}) {
 		t.Errorf("resume args %q", r.Args)
 	}
 	t.Setenv("XDG_STATE_HOME", "")
 	t.Setenv("HOME", "/home/me")
-	if !strings.Contains(Assistant(work, "x", false).Args[5], "/home/me/.local/state/claudia/brief.json") {
+	if !strings.Contains(Assistant(work, "/code", "x", false).Args[5], "/home/me/.local/state/claudia/brief.json") {
 		t.Error("default state dir")
 	}
 }
@@ -285,7 +285,7 @@ func TestNoExecutable(t *testing.T) {
 	if sp, _ := New("/x", work, "n", ""); !strings.Contains(sp.Args[5], "`claudia ctl here`") {
 		t.Errorf("hint %q", sp.Args[5])
 	}
-	if sp := Assistant(work, "id", false); !strings.Contains(sp.Args[5], "`claudia ctl inbox`") {
+	if sp := Assistant(work, "/code", "id", false); !strings.Contains(sp.Args[5], "`claudia ctl inbox`") {
 		t.Errorf("note %q", sp.Args[5])
 	}
 }

@@ -13,6 +13,7 @@ import (
 
 	"github.com/MartyJRE/claudia/internal/atlassian"
 	"github.com/MartyJRE/claudia/internal/claude"
+	"github.com/MartyJRE/claudia/internal/config"
 	"github.com/MartyJRE/claudia/internal/launch"
 	"github.com/MartyJRE/claudia/internal/repos"
 	"github.com/MartyJRE/claudia/internal/state"
@@ -175,23 +176,46 @@ func TestMRRefPlainLinkFull(t *testing.T) {
 
 func TestAssistantFull(t *testing.T) {
 	m := newModelShell(t)
+	withConfig(t, func(c *config.Config) { c.AssistantDir = "/code/mono" })
+	day := time.Date(2026, 11, 10, 9, 0, 0, 0, time.Local)
+	fake(t, &clockNow, func() time.Time { return day })
+	m.repos = []repos.Repo{{Dir: "/code/billing"}, {Dir: "/code/mono"}}
 	started := fakeStart(t, "assistant:1", nil)
+
 	m.Update(keyShell("@"))
-	var saved struct{ ID string }
-	if !state.Load(assistantFile, &saved) || saved.ID == "" {
-		t.Fatal("a new assistant's id is remembered")
+	if m.chooser == nil || m.chooser.title != "assistant in" {
+		t.Fatal("@ with no assistant asks where to start it")
 	}
-	if sp := (*started)[0]; sp.Session != launch.AssistantSession || !slices.Contains(sp.Args, saved.ID) {
+	if first, _ := m.chooser.selected(); first.value != "/code/mono" || first.hint != "default" {
+		t.Errorf("the assistant dir comes first: %+v", first)
+	}
+	if n := len(m.chooser.all); n != 2 {
+		t.Errorf("the default dir isn't listed twice: %d choices", n)
+	}
+	m.Update(keyShell("enter"))
+	var saved assistant
+	if !state.Load(assistantFile, &saved) || saved.ID == "" || saved.Dir != "/code/mono" || saved.Day != "2026-11-10" {
+		t.Fatalf("a new assistant is remembered with its dir and day: %+v", saved)
+	}
+	if sp := (*started)[0]; sp.Session != launch.AssistantSession || sp.Dir != "/code/mono" || !slices.Contains(sp.Args, saved.ID) || slices.Contains(sp.Args, "--resume") {
 		t.Errorf("first start: %+v", sp)
 	}
 
-	m.sessions = append(m.sessions, row{Session: claude.Session{ID: saved.ID, Profile: claude.Profile{Name: "personal"}, Transcript: &claude.Transcript{Cwd: "/x"}}})
+	m.sessions = append(m.sessions, row{Session: claude.Session{ID: saved.ID, Profile: claude.Profile{Name: "personal"}, Transcript: &claude.Transcript{Cwd: "/code/mono"}}})
 	m.Update(keyShell("@"))
-	if sp := (*started)[1]; sp.Profile.Name != "personal" || !slices.Contains(sp.Args, "--resume") {
-		t.Errorf("an ended assistant is resumed in its profile: %+v", sp)
+	if sp := (*started)[1]; sp.Profile.Name != "personal" || sp.Dir != "/code/mono" || !slices.Contains(sp.Args, "--resume") {
+		t.Errorf("an assistant that ended today is resumed in its dir and profile: %+v", sp)
 	}
 
-	m.sessions[len(m.sessions)-1].Live = &claude.Live{SessionID: saved.ID}
+	day = day.AddDate(0, 0, 1)
+	m.Update(keyShell("@"))
+	if len(*started) != 2 || m.chooser == nil {
+		t.Fatal("yesterday's assistant isn't resumed; a new one is picked")
+	}
+	m.chooser = nil
+	day = day.AddDate(0, 0, -1)
+
+	m.sessions[len(m.sessions)-1].Live = &claude.Live{SessionID: saved.ID, PID: 4242}
 	m.sessions[len(m.sessions)-1].pane = &tmux.Pane{Session: "assistant", Window: "1", Index: "0"}
 	m.Result.Attach = ""
 	m.Update(keyShell("@"))
@@ -199,8 +223,29 @@ func TestAssistantFull(t *testing.T) {
 		t.Errorf("a live assistant is jumped to: %q", m.Result.Attach)
 	}
 
+	var killed []int
+	fake(t, &killProcess, func(pid int, _ syscall.Signal) error { killed = append(killed, pid); return nil })
+	m.Update(keyShell("!"))
+	if !slices.Equal(killed, []int{4242}) || m.chooser == nil || m.chooser.title != "assistant in" {
+		t.Fatalf("! closes the live assistant and asks where to start a new one: killed %v", killed)
+	}
+	m.Update(keyShell("enter"))
+	var fresh assistant
+	state.Load(assistantFile, &fresh)
+	if fresh.ID == saved.ID || len(*started) != 3 || slices.Contains((*started)[2].Args, "--resume") {
+		t.Errorf("! starts a clean assistant: %+v", fresh)
+	}
+
+	fake(t, &killProcess, func(int, syscall.Signal) error { return errors.New("operation not permitted") })
+	m.sessions[len(m.sessions)-1].Session.ID = fresh.ID
+	if m.Update(keyShell("!")); m.chooser != nil || !m.flashErr {
+		t.Errorf("a failed close starts nothing: %q", m.flash)
+	}
+
 	breakState(t)
-	if _, cmd := m.openAssistant(); cmd != nil || !m.flashErr || len(*started) != 2 {
+	m.sessions = nil
+	m.pickAssistantDir()
+	if _, cmd := m.chooser.pick(m, m.chooser.all[0]); cmd != nil || !m.flashErr || len(*started) != 3 {
 		t.Errorf("an unsaved id starts nothing: %q", m.flash)
 	}
 }

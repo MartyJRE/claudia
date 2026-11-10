@@ -285,6 +285,7 @@ func TestGlobalKeysFull(t *testing.T) {
 	m := newModelShell(t)
 	fakeStart(t, "assistant:1", nil)
 	pressShell(m, "@")
+	pressShell(m, "enter")
 	if m.Result.Attach != "assistant:1" {
 		t.Errorf("@ opens the assistant: %q", m.Result.Attach)
 	}
