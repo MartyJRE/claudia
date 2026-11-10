@@ -70,6 +70,12 @@ func (s *Store) Settle(session, outcome, reason string, at time.Time) error {
 	return err
 }
 
+// Note sets the reason on a run still under way, leaving it running.
+func (s *Store) Note(session, reason string) error {
+	_, err := s.db.Exec(`UPDATE runs SET reason = ? WHERE session = ? AND outcome = ?`, reason, session, Running)
+	return err
+}
+
 // For is the subject's runs, newest first.
 func (s *Store) For(subject string) []Run {
 	return s.query(`WHERE subject = ? ORDER BY started DESC, id`, subject)

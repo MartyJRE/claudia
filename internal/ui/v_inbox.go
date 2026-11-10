@@ -136,6 +136,9 @@ func (m *Model) inbox() []inboxItem {
 		if ask := strings.TrimSpace(strings.TrimPrefix(r.summary, needsYouPrefix)); ask != r.summary && ask != "" && r.Live.Status != claude.StatusWaiting {
 			text += " · " + ask
 		}
+		if r.Live.Starting {
+			text += " · stuck at startup, a prompt in its window waits for you"
+		}
 		out = append(out, inboxItem{
 			id: fmt.Sprintf("cc:%s:%d", r.ID, r.Live.UpdatedAt), kind: kClaude,
 			where: project(r.Dir()), who: "claude", text: text, since: r.Live.Since(),

@@ -170,6 +170,9 @@ func cardTurn(c boardCard, waiting []inboxItem) (turn, string, string) {
 		return turnNeedsYou, "context full", ""
 	}
 	for _, r := range c.sessions {
+		if r.Live != nil && r.Live.Starting {
+			return turnNeedsYou, "stuck at startup", ""
+		}
 		if r.needsYou() {
 			return turnNeedsYou, "answer " + r.Name(), ""
 		}

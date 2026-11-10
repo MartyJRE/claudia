@@ -19,6 +19,7 @@ import (
 	"github.com/MartyJRE/claudia/internal/claude"
 	"github.com/MartyJRE/claudia/internal/config"
 	"github.com/MartyJRE/claudia/internal/gitlab"
+	"github.com/MartyJRE/claudia/internal/launch"
 	"github.com/MartyJRE/claudia/internal/runs"
 	"github.com/MartyJRE/claudia/internal/state"
 	"github.com/MartyJRE/claudia/internal/summary"
@@ -110,6 +111,7 @@ type watcher struct {
 	atl   *atlassian.Client
 
 	status   map[string]claude.Status
+	stuck    map[string]bool // sessions told about as stuck at startup
 	reviews  map[string]bool
 	pipeline map[string]string
 	approved map[string]bool
@@ -298,6 +300,7 @@ func (w *watcher) sessions() {
 	}
 	w.settle(ran, stopped)
 	w.contextNotes(all, loc)
+	w.stuckNotes(all, processSessions(), launch.Kinds(), loc)
 	for _, l := range tmux.Borrowed() {
 		if !waiting[l.WindowID] && !l.Viewed {
 			_ = tmux.Unborrow(l)
@@ -313,7 +316,7 @@ func (w *watcher) settle(seen []runs.Seen, stopped bool) {
 		return
 	}
 	w.settledAt = time.Now()
-	if _, err := w.runs.Reconcile(seen, w.settledAt); err != nil {
+	if _, err := w.runs.Reconcile(runs.WithStarting(seen, claude.ProcessSessions()), w.settledAt); err != nil {
 		fmt.Fprintln(os.Stderr, w.settledAt.Format(time.TimeOnly), "runs:", err)
 	}
 }
@@ -499,3 +502,29 @@ func post(n note) {
 }
 
 func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
+
+var processSessions = claude.ProcessSessions
+
+// stuckNotes tells once of each session claudia started whose claude runs but
+// never registered, most likely held by a dialog nobody sees in its window.
+func (w *watcher) stuckNotes(all []claude.Session, procs map[string]claude.Proc, kinds map[string]string, loc *tmux.Locator) {
+	if w.stuck == nil {
+		w.stuck = map[string]bool{}
+	}
+	known := map[string]bool{}
+	for _, s := range all {
+		known[s.ID] = true
+	}
+	for id, p := range procs {
+		if known[id] || kinds[id] == "" || p.Age < runs.Grace || w.stuck[id] {
+			continue
+		}
+		w.stuck[id] = true
+		n := note{title: "Claude is stuck at startup", subtitle: p.Name, body: "a prompt in its window waits for you",
+			thread: "claude", id: "stuck:" + id}
+		if pane, ok := loc.Pane(p.PID); ok {
+			n.target = pane.Target() + "." + pane.Index
+		}
+		notify(n)
+	}
+}
