@@ -28,6 +28,8 @@ type Config struct {
 	// WorkDir is the folder under CodeRoot whose repos are listed first and
 	// started with the work profile; defaults to "Work".
 	WorkDir string `json:"work_dir"`
+	// AssistantDir is where the @ assistant's picker starts; defaults to CodeRoot.
+	AssistantDir string `json:"assistant_dir"`
 	// PersonalDir is the folder under CodeRoot where new GitHub repos go;
 	// defaults to "Personal".
 	PersonalDir string `json:"personal_dir"`
@@ -235,6 +237,11 @@ func Get() Config {
 			cfg.CodeRoot = filepath.Join(home, "Documents", "Code")
 		} else if strings.HasPrefix(cfg.CodeRoot, "~/") {
 			cfg.CodeRoot = filepath.Join(home, cfg.CodeRoot[2:])
+		}
+		if cfg.AssistantDir == "" {
+			cfg.AssistantDir = cfg.CodeRoot
+		} else if strings.HasPrefix(cfg.AssistantDir, "~/") {
+			cfg.AssistantDir = filepath.Join(home, cfg.AssistantDir[2:])
 		}
 		if cfg.WorkDir == "" {
 			cfg.WorkDir = "Work"

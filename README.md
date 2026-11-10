@@ -115,9 +115,11 @@ is asked last, prefilled with `master` on GitLab and `main` on GitHub.
 The Inbox opens with a short brief in plain English, written by a headless
 `claude -p` over claudia's own data (no tools): who's waited longest, what's
 failing, what to do next. It's rewritten every `brief_every` (default `2h`, `off`
-to disable) and on `R`; `claudia brief` prints a fresh one. `@` opens a
-long-lived assistant session that knows claudia's commands, for "what should I
-do first?" and small errands.
+to disable) and on `R`; `claudia brief` prints a fresh one. `@` opens an
+assistant session that knows claudia's commands, for "what should I do first?"
+and small errands. It lasts the day: `@` jumps back to it or resumes it, and the
+next day asks where to start a fresh one (`assistant_dir` is listed first). `!`
+closes it and starts a clean one now.
 
 With an Obsidian vault configured, every ticket shows its notes: the ones in
 its project folder and every note that mentions the key (an epic includes its
@@ -334,6 +336,8 @@ by an environment variable are shown but can't be changed there.
   started with the `work` profile (`work_profile` to pick another); other repos
   use `personal` if it exists.
 - `personal_dir` is the folder under `code_root` where `n`'s new GitHub repos go.
+- `assistant_dir` is where `@`'s assistant starts unless you pick another dir;
+  it needn't be a repo (default `code_root`).
 - `vault`: an Obsidian vault, e.g. `"~/Documents/Notes"`; `vault_projects` is its
   folder with one subfolder per ticket (default `01 - Projects`).
 - `remote_control`: profiles whose sessions start with Remote Control, e.g. `["work"]`.

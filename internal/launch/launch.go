@@ -222,7 +222,7 @@ const AssistantSession = "assistant"
 
 // Assistant is the long-lived helper session claudia opens on @: it knows the
 // dashboard's own commands and asks before writing anywhere. id resumes it.
-func Assistant(p claude.Profile, id string, resume bool) Spec {
+func Assistant(p claude.Profile, dir, id string, resume bool) Spec {
 	self, err := executable()
 	if err != nil {
 		self = "claudia"
@@ -244,7 +244,7 @@ func Assistant(p claude.Profile, id string, resume bool) Spec {
 		args = []string{"--resume", id}
 	}
 	args = append(args, "--append-system-prompt", note)
-	return Spec{Dir: c.CodeRoot, Profile: p, Name: "assistant", Args: args, Session: AssistantSession}
+	return Spec{Dir: dir, Profile: p, Name: "assistant", Args: args, Session: AssistantSession}
 }
 
 // NewID makes a session id for a session claudia names up front.

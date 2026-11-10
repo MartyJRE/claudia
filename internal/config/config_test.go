@@ -63,8 +63,8 @@ func TestDefaults(t *testing.T) {
 	if c.GitLabHost != "gitlab.com" || c.VaultProjects != "01 - Projects" || c.WorkProfile != "work" || c.WorkDir != "Work" {
 		t.Errorf("defaults: %+v", c)
 	}
-	if c.CodeRoot != filepath.Join(home, "Documents", "Code") {
-		t.Errorf("code root %s", c.CodeRoot)
+	if c.CodeRoot != filepath.Join(home, "Documents", "Code") || c.AssistantDir != c.CodeRoot {
+		t.Errorf("code root %s, assistant dir %s", c.CodeRoot, c.AssistantDir)
 	}
 	if c.BriefEvery != 2*time.Hour {
 		t.Errorf("brief every %v", c.BriefEvery)
@@ -83,6 +83,7 @@ func TestFile(t *testing.T) {
 		"atlassian_url": "https://acme.atlassian.net/",
 		"jira_project": "PAY",
 		"code_root": "~/src",
+		"assistant_dir": "~/src/Work/mono",
 		"profiles": {"work": "~/.claude-work", "abs": "/opt/claude"},
 		"vault": "~/Notes",
 		"brief_every": "30m",
@@ -98,8 +99,8 @@ func TestFile(t *testing.T) {
 	if len(c.TicketKeys) != 1 || c.TicketKeys[0] != "PAY" {
 		t.Errorf("ticket keys %v", c.TicketKeys)
 	}
-	if c.CodeRoot != filepath.Join(home, "src") || c.Vault != filepath.Join(home, "Notes") {
-		t.Errorf("paths: %s %s", c.CodeRoot, c.Vault)
+	if c.CodeRoot != filepath.Join(home, "src") || c.Vault != filepath.Join(home, "Notes") || c.AssistantDir != filepath.Join(home, "src", "Work", "mono") {
+		t.Errorf("paths: %s %s %s", c.CodeRoot, c.Vault, c.AssistantDir)
 	}
 	if c.Profiles["work"] != filepath.Join(home, ".claude-work") || c.Profiles["abs"] != "/opt/claude" {
 		t.Errorf("profiles %v", c.Profiles)

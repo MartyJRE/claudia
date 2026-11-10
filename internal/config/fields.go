@@ -41,6 +41,8 @@ var Fields = []Field{
 		Default: "~/Documents/Code", Help: "where git repos are discovered"},
 	{Key: "work_dir", Group: "Code", Label: "work dir", Kind: KindString, Env: "CLAUDIA_PREFER",
 		Default: "Work", Help: "the folder under the code root whose repos are listed first and use the work profile"},
+	{Key: "assistant_dir", Group: "Code", Label: "assistant dir", Kind: KindPath,
+		Default: "the code root", Help: "where the @ assistant starts unless you pick another dir"},
 	{Key: "personal_dir", Group: "Code", Label: "personal dir", Kind: KindString,
 		Default: "Personal", Help: "the folder under the code root where new GitHub repos go; new GitLab repos go next to clones under the work dir"},
 
