@@ -58,6 +58,12 @@ type sessionPrefs struct {
 // workersKey is the group of claudia's own headless runs, folded by default.
 const workersKey = "workers"
 
+// autopilotKey is the group of the autopilot's runs, folded by default.
+const autopilotKey = "autopilot"
+
+// foldedByDefault: groups whose fold state is kept as opened, not folded.
+func foldedByDefault(key string) bool { return key == workersKey || key == autopilotKey }
+
 const sessionPrefsFile = "sessions-prefs.json"
 
 func loadSessionPrefs() sessionPrefs {
@@ -197,6 +203,7 @@ const recentClosed = 8
 // puts claudia's own workers above or below it.
 func (m *Model) sessionRows(match func(...string) bool, filtering bool) []srow {
 	out := append(m.buildSessions(m.filterSessions(match), filtering), m.recentClosed(match, filtering)...)
+	out = append(out, m.autopilotRows(match, filtering)...)
 	switch getConfig().Workers() {
 	case "top":
 		return append(m.workerRows(match, filtering), out...)
@@ -212,7 +219,7 @@ func (m *Model) recentClosed(match func(...string) bool, filtering bool) []srow 
 	}
 	var closed []row
 	for _, r := range m.sessions {
-		if !r.live() && r.Dir() != "" && match(r.Name(), project(r.Dir()), branch(r), m.ix.SessionTicket[r.ID], r.Profile.Name) {
+		if !r.live() && r.Dir() != "" && !m.autoSess[r.ID] && match(r.Name(), project(r.Dir()), branch(r), m.ix.SessionTicket[r.ID], r.Profile.Name) {
 			closed = append(closed, r)
 		}
 	}
@@ -226,6 +233,31 @@ func (m *Model) recentClosed(match func(...string) bool, filtering bool) []srow 
 	out := []srow{h}
 	if !h.collapsed {
 		for _, r := range closed {
+			out = append(out, srow{isSess: true, sess: r, depth: 1})
+		}
+	}
+	return out
+}
+
+// autopilotRows groups the sessions of the autopilot's runs, folded by
+// default: they run on their own, and the Board and Inbox say when one needs you.
+func (m *Model) autopilotRows(match func(...string) bool, filtering bool) []srow {
+	var rs []row
+	for _, r := range m.sessions {
+		if m.autoSess[r.ID] && (r.live() || m.allSessions) && match(r.Name(), project(r.Dir()), branch(r), m.ix.SessionTicket[r.ID], r.Profile.Name, "autopilot") {
+			rs = append(rs, r)
+		}
+	}
+	if len(rs) == 0 {
+		return nil
+	}
+	g := &sgroup{sessions: rs}
+	st := g.stats()
+	h := srow{key: autopilotKey, title: fmt.Sprintf("autopilot runs (%d)", len(rs)), n: st.n, live: st.live, waiting: st.waiting, done: st.done}
+	h.collapsed = !filtering && !slices.Contains(m.sessPrefs.Expanded, autopilotKey)
+	out := []srow{h}
+	if !h.collapsed {
+		for _, r := range rs {
 			out = append(out, srow{isSess: true, sess: r, depth: 1})
 		}
 	}
@@ -358,6 +390,9 @@ func (m *Model) sessionHeaderCells(r srow) []string {
 		title = sDim.Render(r.via+" › ") + title
 	}
 	counts := sDim.Render(fmt.Sprintf("  %d session(s)", r.n))
+	if r.key == autopilotKey {
+		counts = ""
+	}
 	if r.live > 0 {
 		counts += sDim.Render(" · ") + sOK.Render(fmt.Sprintf("%d live", r.live))
 	}
@@ -391,7 +426,7 @@ func (m *Model) toggleSessionFold() {
 		return
 	}
 	list := &m.sessPrefs.Collapsed
-	if key == workersKey {
+	if foldedByDefault(key) {
 		list = &m.sessPrefs.Expanded
 	}
 	if i := slices.Index(*list, key); i >= 0 {
@@ -404,11 +439,11 @@ func (m *Model) toggleSessionFold() {
 }
 
 func (m *Model) foldAllSessions(fold bool) {
-	m.sessPrefs.Collapsed, m.sessPrefs.Expanded = nil, []string{workersKey}
+	m.sessPrefs.Collapsed, m.sessPrefs.Expanded = nil, []string{workersKey, autopilotKey}
 	if fold {
 		m.sessPrefs.Expanded = nil
 		for _, r := range m.sessionRows(func(...string) bool { return true }, true) {
-			if !r.isSess && r.key != workersKey {
+			if !r.isSess && !foldedByDefault(r.key) {
 				m.sessPrefs.Collapsed = append(m.sessPrefs.Collapsed, r.key)
 			}
 		}

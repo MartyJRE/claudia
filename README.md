@@ -236,7 +236,9 @@ views, `t` lists an MR's review threads.
 
 In Sessions, the live ones stay in the order they started, so activity never
 reshuffles the list. Below them, **Recently closed** keeps the last few closed
-sessions a keypress from coming back.
+sessions a keypress from coming back. The autopilot's runs sit apart, in a
+folded **autopilot runs** group at the bottom; one that needs you still shows
+in the Inbox and on the Board.
 
 | Key | In Sessions |
 |---|---|

@@ -34,7 +34,7 @@ var sessionCols = []col{
 func (m *Model) filterSessions(match func(...string) bool) []row {
 	var out []row
 	for _, r := range m.sessions {
-		if !m.allSessions && !r.live() {
+		if !m.allSessions && !r.live() || m.autoSess[r.ID] {
 			continue
 		}
 		if match(r.Name(), project(r.Dir()), branch(r), m.ix.SessionTicket[r.ID], r.Profile.Name) {

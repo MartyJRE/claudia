@@ -133,7 +133,8 @@ type Model struct {
 	background bool       // the action being run was C: start claude without switching to it
 
 	sessions      []row
-	workers       []row // claudia's own runs, only ever shown in the Sessions tab
+	workers       []row           // claudia's own runs, only ever shown in the Sessions tab
+	autoSess      map[string]bool // sessions of runs the autopilot started, grouped apart in the Sessions tab
 	usage         []claude.DayModel
 	usageScanner  *claude.UsageScanner
 	usageLoaded   bool
@@ -328,6 +329,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case sessionsMsg:
 		m.sessions, m.workers = splitWorkers(msg)
+		if m.db != nil {
+			m.autoSess = m.db.SessionsStartedBy(runs.ByAutopilot)
+		}
 		m.runCache = nil
 		m.sessLoaded, m.sessLoading = true, false
 		m.restore = notLive(m.restore, m.sessions)

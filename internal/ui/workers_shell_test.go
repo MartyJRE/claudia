@@ -8,6 +8,7 @@ import (
 
 	"github.com/MartyJRE/claudia/internal/claude"
 	"github.com/MartyJRE/claudia/internal/config"
+	"github.com/MartyJRE/claudia/internal/runs"
 	"github.com/MartyJRE/claudia/internal/tmux"
 )
 
@@ -89,6 +90,51 @@ func TestWorkersTopAndBottomShell(t *testing.T) {
 	m.refilter()
 	if got := sessionIDsShell(m); got != "aaaa bbbb cccc #Recently closed+ #claudia's workers+" {
 		t.Errorf("bottom: %s", got)
+	}
+}
+
+func TestAutopilotSessionsGroupShell(t *testing.T) {
+	m := workersModelShell(t, "bottom")
+	db := withRunsShell(t, m)
+	for _, s := range []string{"aaaaaaaa-wait", "dddddddd-closed"} {
+		_ = db.Start(runs.Run{ID: s, Kind: "ticket", Subject: "ABC-1", Step: "plan", Session: s, Started: time.Now(), StartedBy: runs.ByAutopilot})
+	}
+	_ = db.Start(runs.Run{ID: "mine", Subject: "ABC-2", Step: "plan", Session: "bbbbbbbb-busy", Started: time.Now()})
+	m.Update(sessionsMsg(append(sessionsShell(), workerShell("wwwwwwww-sum", "summary", claude.StatusBusy))))
+	if got := sessionIDsShell(m); got != "bbbb cccc #autopilot runs (1)+ #claudia's workers+" {
+		t.Fatalf("folded at the bottom, above the workers: %s", got)
+	}
+	if len(m.sessions) != 4 || len(m.inbox()) == 0 || !slices.ContainsFunc(m.inbox(), func(it inboxItem) bool { return it.sess.ID == "aaaaaaaa-wait" }) {
+		t.Error("an autopilot session that needs you is still in the Inbox")
+	}
+	containsAllShell(t, "header", screenShell(m), "autopilot runs (1) · 1 live · 1 needs you")
+	cursorOnShell(t, m, "bbbbbbbb-busy")
+	m.cur[vSessions].pos = 2
+	pressShell(m, " ")
+	if got := sessionIDsShell(m); got != "bbbb cccc #autopilot runs (1) aaaa #claudia's workers+" {
+		t.Errorf("space opens it: %s", got)
+	}
+	if p := loadSessionPrefs(); !slices.Equal(p.Expanded, []string{autopilotKey}) {
+		t.Errorf("prefs %+v", p)
+	}
+	pressShell(m, "-")
+	if got := sessionIDsShell(m); !strings.Contains(got, "#autopilot runs (1)+") {
+		t.Errorf("- folds it: %s", got)
+	}
+	pressShell(m, "+")
+	if p := m.sessPrefs; !slices.Contains(p.Expanded, autopilotKey) {
+		t.Errorf("+ opens it: %+v", p)
+	}
+	m.allSessions = true
+	m.sessPrefs.Expanded = nil
+	m.refilter()
+	if got := sessionIDsShell(m); !strings.Contains(got, "#autopilot runs (2)+") || strings.Contains(got, "dddd") {
+		t.Errorf("all sessions: %s", got)
+	}
+	pressShell(m, "/")
+	typeShell(m, "autopilot")
+	if got := sessionIDsShell(m); got != "#autopilot runs (2) aaaa dddd" {
+		t.Errorf("a filter opens it: %s", got)
 	}
 }
 
