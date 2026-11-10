@@ -51,8 +51,9 @@ type boardCard struct {
 }
 
 type boardPrefs struct {
-	Team bool `json:"team"`
-	Done bool `json:"done"`
+	Team  bool `json:"team"`
+	Done  bool `json:"done"`
+	Later bool `json:"later"`
 }
 
 const boardPrefsFile = "board-prefs.json"
@@ -106,8 +107,9 @@ func mergeable(mr gitlab.MR) bool {
 	return openMR(mr) && !mr.Draft && mr.ApprovalsLeft == 0 && mr.PipelineStatus() == "success" && mr.OpenThreads() == 0
 }
 
-// cardStage walks the ladder from the furthest stage down; the first that
-// matches wins.
+// cardStage takes the further of what the MRs and sessions show and what the
+// Jira status says: merged MRs drop out of GitLab's list after a few days, so
+// a ticket in testing would otherwise fall back to Up next.
 func cardStage(c boardCard) (stage, string) {
 	is := c.issue
 	if col, ok := getConfig().Board.Statuses[is.Status]; ok {
@@ -118,6 +120,42 @@ func cardStage(c boardCard) (stage, string) {
 	if is.Category == "done" {
 		return stDone, "done in Jira"
 	}
+	st, why := evidenceStage(c)
+	if s, ok := statusStage(is.Status); ok && s > st {
+		return s, fmt.Sprintf("Jira status %q", is.Status)
+	}
+	return st, why
+}
+
+// statusStage guesses a stage from a Jira status name, for workflows that
+// board.statuses doesn't spell out.
+func statusStage(status string) (stage, bool) {
+	s := strings.ToLower(status)
+	switch {
+	case strings.Contains(s, "ready for analysis"):
+		return stUpNext, true
+	case strings.Contains(s, "test"), strings.Contains(s, "qa"), strings.Contains(s, "preprod"):
+		return stQA, true
+	case strings.Contains(s, "review"):
+		return stReview, true
+	case strings.Contains(s, "analysis"), strings.Contains(s, "preparation"), strings.Contains(s, "ready for dev"):
+		return stPlan, true
+	case strings.Contains(s, "progress"):
+		return stBuilding, true
+	}
+	return 0, false
+}
+
+// onHold is a parked status: the ticket waits on something outside your control.
+func onHold(status string) bool {
+	s := strings.ToLower(status)
+	return strings.Contains(s, "hold") || strings.Contains(s, "waiting") || strings.Contains(s, "blocked")
+}
+
+// evidenceStage walks the ladder from the furthest stage down; the first that
+// matches wins.
+func evidenceStage(c boardCard) (stage, string) {
+	is := c.issue
 	var open []gitlab.MR
 	var merged *gitlab.MR
 	for i, mr := range c.mrs {
@@ -206,6 +244,9 @@ func cardTurn(c boardCard, waiting []inboxItem) (turn, string, string) {
 			return turnColleague, fmt.Sprintf("!%d waits on %d approval(s)", mr.IID, mr.ApprovalsLeft), ""
 		}
 	}
+	if onHold(c.issue.Status) {
+		return turnColleague, "on hold: " + c.issue.Status, ""
+	}
 	next := nextStep[c.stage]
 	for _, mr := range c.mrs {
 		if !openMR(mr) {
@@ -235,10 +276,15 @@ func (m *Model) boardColumns() []stage {
 func (m *Model) layoutBoard(cards []boardCard, match func(...string) bool) [][]boardCard {
 	cols := m.boardColumns()
 	out := make([][]boardCard, len(cols))
+	m.boardLater = 0
 	for _, c := range cards {
 		i := slices.Index(cols, c.stage)
 		is := c.issue
 		if i < 0 || !match(is.Key, is.Summary, is.Status, is.Assignee, stageNames[c.stage], c.next) {
+			continue
+		}
+		if later(c) && !m.boardPrefs.Later {
+			m.boardLater++
 			continue
 		}
 		out[i] = append(out[i], c)
@@ -249,6 +295,13 @@ func (m *Model) layoutBoard(cards []boardCard, match func(...string) bool) [][]b
 		})
 	}
 	return out
+}
+
+// later is an untouched ticket planned for a future sprint; Up next folds these
+// so the current sprint's tickets aren't buried.
+func later(c boardCard) bool {
+	is := c.issue
+	return c.stage == stUpNext && is.Category != "indeterminate" && is.Sprint != nil && is.Sprint.State == "future"
 }
 
 func boolRank(b bool) int {

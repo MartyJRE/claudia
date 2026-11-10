@@ -41,7 +41,7 @@ func boardSess(kind string, status claude.Status, edit func(*row)) row {
 
 func TestCardStageShell(t *testing.T) {
 	passed := func(mr *gitlab.MR) { mr.Pipeline = &gitlab.Pipeline{Status: "success"} }
-	issue := atlassian.Issue{Key: "ABC-9", Status: "In Progress", Category: "indeterminate"}
+	issue := atlassian.Issue{Key: "ABC-9", Status: "To Do", Category: "new"}
 	for _, c := range []struct {
 		name string
 		card boardCard
@@ -66,6 +66,13 @@ func TestCardStageShell(t *testing.T) {
 		{"analysis", boardCard{sessions: []row{boardSess("", "", nil), boardSess("analysis", "", nil)}}, stPlan, "analysis session"},
 		{"a plan", boardCard{sessions: []row{boardSess("", "", func(r *row) { r.PlanPath = "/p.md" })}}, stPlan, "has a plan"},
 		{"a plan text", boardCard{sessions: []row{boardSess("", "", func(r *row) { r.Plan = "do it" })}}, stPlan, "has a plan"},
+		{"status says testing", boardCard{issue: atlassian.Issue{Key: "ABC-9", Status: "Test - Preprod", Category: "indeterminate"}}, stQA, `Jira status "Test - Preprod"`},
+		{"status says review", boardCard{issue: atlassian.Issue{Key: "ABC-9", Status: "Code review", Category: "indeterminate"}}, stReview, "Jira status"},
+		{"status says in progress", boardCard{issue: atlassian.Issue{Key: "ABC-9", Status: "Dev in progress", Category: "indeterminate"}}, stBuilding, "Jira status"},
+		{"status says analysis", boardCard{issue: atlassian.Issue{Key: "ABC-9", Status: "Analysis in progress", Category: "indeterminate"}}, stPlan, "Jira status"},
+		{"status not started", boardCard{issue: atlassian.Issue{Key: "ABC-9", Status: "Ready for analysis", Category: "indeterminate"}}, stUpNext, "no plan"},
+		{"evidence beyond the status", boardCard{issue: atlassian.Issue{Key: "ABC-9", Status: "Dev in progress", Category: "indeterminate"}, mrs: []gitlab.MR{boardMR(1, "opened", nil)}}, stReview, "!1 is open"},
+		{"unknown status", boardCard{issue: atlassian.Issue{Key: "ABC-9", Status: "Proposal", Category: "indeterminate"}}, stUpNext, "no plan"},
 		{"no transcript", boardCard{sessions: []row{{Session: claude.Session{ID: "x", Live: &claude.Live{Status: claude.StatusBusy}}}}}, stUpNext, ""},
 	} {
 		t.Run(c.name, func(t *testing.T) {
@@ -120,6 +127,9 @@ func TestCardTurnShell(t *testing.T) {
 		{"pipeline", boardCard{stage: stReview, mrs: []gitlab.MR{boardMR(9, "opened", func(mr *gitlab.MR) { failed(mr); mr.ApprovalsLeft = 1 })}}, nil, turnYou, "fix the pipeline of !9"},
 		{"merge it", boardCard{stage: stMerge, mrs: []gitlab.MR{boardMR(9, "opened", nil)}}, nil, turnYou, "merge"},
 		{"QA", boardCard{stage: stQA}, nil, turnYou, "QA notes"},
+		{"on hold", boardCard{stage: stUpNext, issue: atlassian.Issue{Status: "Dev On Hold"}}, nil, turnColleague, "on hold: Dev On Hold"},
+		{"waiting on a story", boardCard{stage: stQA, issue: atlassian.Issue{Status: "Waiting on another user story"}}, nil, turnColleague, "on hold: Waiting on another user story"},
+		{"blocked", boardCard{issue: atlassian.Issue{Status: "Blocked"}}, nil, turnColleague, "on hold: Blocked"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			got, next, _ := cardTurn(c.card, c.waiting)
@@ -136,6 +146,7 @@ func boardModelShell(t *testing.T) *Model {
 	m.jira.Sprint = append(m.jira.Sprint,
 		atlassian.Issue{Key: "ABC-4", Summary: "Fresh idea", Status: "To Do", Category: "new", Parent: "ABC-100", ParentSummary: "Payments epic", Assignee: "Ann"},
 		atlassian.Issue{Key: "ABC-100", Summary: "Payments epic", Level: 1, Category: "indeterminate"},
+		atlassian.Issue{Key: "ABC-5", Summary: "Next sprint idea", Status: "To Do", Category: "new", Sprint: &atlassian.Sprint{Name: "Sprint 9", State: "future"}},
 	)
 	m.jira.Team = []atlassian.Issue{{Key: "ABC-7", Summary: "Team story", Status: "To Do", Category: "new"}}
 	m.boardCol = 0
@@ -156,8 +167,8 @@ func TestBoardRendersShell(t *testing.T) {
 	out := m.View()
 	s := plainShell(out)
 	containsAllShell(t, "board", s, "2 Board 2", "my tickets by stage", "Up next 1", "Plan 0", "Review 2", "QA 0",
-		"ABC-1  ◆ needs you", "Payments export", "$30.00+? · ✻1 · !11", "ABC-4  ● you", "→ plan it", "h/l columns")
-	lacksShell(t, "board", s, "Done ", "ABC-3", "‹", "›")
+		"ABC-1  ◆ needs you", "Payments export", "$30.00+? · ✻1 · !11", "ABC-4", "→ plan it", "+ 1 in future sprints  f", "h/l columns")
+	lacksShell(t, "board", s, "Done ", "ABC-3", "‹", "›", "ABC-4  ● you", "ABC-5")
 	if h := lipgloss.Height(out); h != m.height {
 		t.Errorf("%d lines", h)
 	}
@@ -429,4 +440,19 @@ func TestLedgerFromUsageShell(t *testing.T) {
 	m.ledger = nil
 	m.Update(usageMsg{})
 	containsAllShell(t, "save error", m.flash, "cost ledger:")
+}
+
+func TestBoardFutureSprintsShell(t *testing.T) {
+	m := boardModelShell(t)
+	pressShell(m, "f")
+	s := plainShell(m.View())
+	containsAllShell(t, "future shown", s, "Up next 2", "ABC-5", "Next sprint idea")
+	lacksShell(t, "future shown", s, "in future sprints")
+	if !loadBoardPrefs().Later {
+		t.Error("the choice isn't saved")
+	}
+	pressShell(m, "f")
+	if s := plainShell(m.View()); !strings.Contains(s, "Up next 1") || strings.Contains(s, "ABC-5") {
+		t.Errorf("future sprints still shown:\n%s", s)
+	}
 }
