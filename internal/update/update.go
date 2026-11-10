@@ -1,18 +1,19 @@
-// Package update notices when a newer claudia is on GitHub and installs it.
-// Only builds from `go install …@latest` are checked: a build from a local
-// checkout carries vcs settings and is its developer's business.
+// Package update notices when a newer claudia release is on GitHub and installs it.
 package update
 
 import (
 	"bufio"
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"os/exec"
+	"regexp"
 	"runtime/debug"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -31,12 +32,23 @@ var (
 	execCommand = exec.Command
 )
 
-// Current is the commit this binary was built from, if it was installed from
-// the module proxy; ok is false for local builds.
-func Current() (sha string, ok bool) {
+// release is the tag goreleaser stamps in with -ldflags -X.
+var release string
+
+// Current is the version this binary was built as: a release tag (v0.4.2), or
+// for an install of an untagged commit, that commit. ok is false for local builds.
+func Current() (v string, ok bool) {
+	if semver(release) != nil {
+		return release, true
+	}
 	bi, found := buildInfo()
 	if !found {
 		return "", false
+	}
+	// Go stamps the tag into a build of a clean tagged checkout as well as into
+	// `go install …@vX`; any other build from a checkout is its developer's business.
+	if semver(bi.Main.Version) != nil {
+		return bi.Main.Version, true
 	}
 	for _, s := range bi.Settings {
 		if s.Key == "vcs.revision" {
@@ -56,14 +68,37 @@ func commitOf(v string) (string, bool) {
 	return v[i+1:], true
 }
 
+var semverRe = regexp.MustCompile(`^v(\d+)\.(\d+)\.(\d+)$`)
+
+// semver splits a plain release version, vMAJOR.MINOR.PATCH; anything else is nil.
+func semver(v string) []int {
+	m := semverRe.FindStringSubmatch(v)
+	if m == nil {
+		return nil
+	}
+	n := make([]int, 3)
+	for i := range n {
+		n[i], _ = strconv.Atoi(m[i+1])
+	}
+	return n
+}
+
+// Newer reports whether release version a comes after b.
+func Newer(a, b string) bool {
+	x, y := semver(a), semver(b)
+	return x != nil && y != nil && slices.Compare(x, y) > 0
+}
+
 type status struct {
 	Latest  string    `json:"latest"`
+	Commit  string    `json:"commit"`
 	Checked time.Time `json:"checked"`
 }
 
-// Check asks GitHub for the newest commit on main and remembers it. The attempt
-// is recorded up front, so a failing or slow check isn't retried until it's due
-// again (the watcher asks every few seconds, and GitHub rate-limits).
+// Check asks GitHub for the latest release and the commit it was tagged on,
+// and remembers both. The attempt is recorded up front, so a failing or slow
+// check isn't retried until it's due again (the watcher asks every few seconds,
+// and GitHub rate-limits).
 func Check() error {
 	var s status
 	state.Load(file, &s)
@@ -71,26 +106,48 @@ func Check() error {
 	if err := state.Save(file, s); err != nil {
 		return err
 	}
-	req, err := http.NewRequest("GET", repoAPI+"/commits/main", nil)
+	var rel struct {
+		Tag string `json:"tag_name"`
+	}
+	if err := getJSON("/releases/latest", &rel); err != nil {
+		return err
+	}
+	sha, err := get("/commits/"+rel.Tag, "application/vnd.github.sha", 100)
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Accept", "application/vnd.github.sha")
+	s.Latest, s.Commit = rel.Tag, strings.TrimSpace(string(sha))
+	return state.Save(file, s)
+}
+
+func get(path, accept string, limit int64) ([]byte, error) {
+	req, err := http.NewRequest("GET", repoAPI+path, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", accept)
 	c := &http.Client{Timeout: 10 * time.Second}
 	resp, err := c.Do(req)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer resp.Body.Close()
-	b, err := io.ReadAll(io.LimitReader(resp.Body, 100))
+	b, err := io.ReadAll(io.LimitReader(resp.Body, limit))
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("github: %s", resp.Status)
+	}
+	return b, nil
+}
+
+func getJSON(path string, v any) error {
+	b, err := get(path, "application/vnd.github+json", 8<<20)
 	if err != nil {
 		return err
 	}
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("github: %s", resp.Status)
-	}
-	s.Latest = strings.TrimSpace(string(b))
-	return state.Save(file, s)
+	return json.Unmarshal(b, v)
 }
 
 // Due reports whether the last check is older than every.
@@ -99,17 +156,38 @@ func Due(every time.Duration) bool {
 	return !state.Load(file, &s) || time.Since(s.Checked) > every
 }
 
-// Available reports whether GitHub has a commit this binary doesn't.
+// Available reports whether GitHub has a release this binary doesn't: a newer
+// tag or, for an install of an untagged commit, any other commit.
 func Available() bool {
 	cur, ok := Current()
 	if !ok {
 		return false
 	}
 	var s status
-	if !state.Load(file, &s) || s.Latest == "" {
+	if !state.Load(file, &s) {
 		return false
 	}
-	return !strings.HasPrefix(s.Latest, cur)
+	if semver(cur) != nil {
+		return Newer(s.Latest, cur)
+	}
+	return s.Commit != "" && !strings.HasPrefix(s.Commit, cur)
+}
+
+type Release struct {
+	Tag       string    `json:"tag_name"`
+	Name      string    `json:"name"`
+	Body      string    `json:"body"`
+	Published time.Time `json:"published_at"`
+}
+
+// PerPage is how many releases a page of Releases holds; a shorter page is the last.
+const PerPage = 100
+
+// Releases lists the published releases, newest first, from page 1 on.
+func Releases(page int) ([]Release, error) {
+	var list []Release
+	err := getJSON(fmt.Sprintf("/releases?per_page=%d&page=%d", PerPage, page), &list)
+	return list, err
 }
 
 type Commit struct {
@@ -117,70 +195,68 @@ type Commit struct {
 	Subject string
 }
 
-// Plan says what an update brings: the latest commit and the commits between
-// this build and it. For a local build (no known commit) it lists the latest few.
+// Plan says what an update brings: the releases newer than this build, newest
+// first. An install of an untagged commit can't be placed among the releases,
+// so it gets the commits between it and the latest release (or main, before
+// the first one). A local build only sees the latest release.
 type Plan struct {
-	Current string
-	Latest  string
-	Commits []Commit
+	Current  string
+	Latest   string
+	Releases []Release
+	Commits  []Commit
 }
 
 func Fetch() (Plan, error) {
 	var p Plan
 	cur, known := Current()
 	p.Current = cur
-	url := repoAPI + "/commits?per_page=5"
-	if known {
-		url = repoAPI + "/compare/" + cur + "...main"
-	}
-	c := &http.Client{Timeout: 10 * time.Second}
-	resp, err := c.Get(url)
+	list, err := Releases(1)
 	if err != nil {
 		return p, err
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return p, fmt.Errorf("GitHub answered %s", resp.Status)
+	if len(list) > 0 {
+		p.Latest = list[0].Tag
 	}
-	type gc struct {
-		SHA    string `json:"sha"`
-		Commit struct {
-			Message string `json:"message"`
-		} `json:"commit"`
-	}
-	var list []gc
-	if known {
-		var cmp struct {
-			Commits []gc `json:"commits"`
+	switch {
+	case !known:
+		p.Releases = list[:min(1, len(list))]
+	case semver(cur) != nil:
+		for _, r := range list {
+			if Newer(r.Tag, cur) {
+				p.Releases = append(p.Releases, r)
+			}
 		}
-		err = json.NewDecoder(resp.Body).Decode(&cmp)
-		list = cmp.Commits
-	} else {
-		err = json.NewDecoder(resp.Body).Decode(&list)
-	}
-	if err != nil {
-		return p, err
-	}
-	for _, g := range list {
-		subject, _, _ := strings.Cut(g.Commit.Message, "\n")
-		p.Commits = append(p.Commits, Commit{SHA: g.SHA[:min(7, len(g.SHA))], Subject: subject})
-	}
-	if known {
-		if n := len(p.Commits); n > 0 {
-			p.Latest = p.Commits[n-1].SHA
-		} else {
-			p.Latest = cur[:7]
+		p.Latest = cmp.Or(p.Latest, cur)
+	default:
+		var c struct {
+			Commits []struct {
+				SHA    string `json:"sha"`
+				Commit struct {
+					Message string `json:"message"`
+				} `json:"commit"`
+			} `json:"commits"`
+		}
+		if err := getJSON("/compare/"+cur+"..."+cmp.Or(p.Latest, "main"), &c); err != nil {
+			return p, err
+		}
+		for _, g := range c.Commits {
+			subject, _, _ := strings.Cut(g.Commit.Message, "\n")
+			p.Commits = append(p.Commits, Commit{SHA: g.SHA[:min(7, len(g.SHA))], Subject: subject})
 		}
 		// The compare API lists oldest first; newest first reads better.
 		slices.Reverse(p.Commits)
-	} else if len(p.Commits) > 0 {
-		p.Latest = p.Commits[0].SHA
+		if p.Latest == "" {
+			p.Latest = cur[:min(7, len(cur))]
+			if len(p.Commits) > 0 {
+				p.Latest = p.Commits[0].SHA
+			}
+		}
 	}
 	return p, nil
 }
 
 // Install fetches and builds the latest claudia straight from GitHub, so a
-// just-pushed commit doesn't wait for the module proxy. Each line of go's
+// just-pushed tag doesn't wait for the module proxy. Each line of go's
 // output goes to line as it happens.
 func Install(line func(string)) error {
 	cmd := execCommand("go", "install", "-v", module+"@latest")

@@ -1,7 +1,6 @@
 package update
 
 import (
-	"io"
 	"net"
 	"net/http"
 	"os"
@@ -32,9 +31,23 @@ func TestCurrent(t *testing.T) {
 	if _, ok := Current(); ok {
 		t.Error("a local checkout build has a commit to compare")
 	}
+	built(t, "v0.4.2", debug.BuildSetting{Key: "vcs.revision", Value: "1133a71d4dc3ffff"})
+	if v, ok := Current(); !ok || v != "v0.4.2" {
+		t.Errorf("a build of a clean tagged checkout is that release: %q %v", v, ok)
+	}
+	built(t, "v0.4.2+dirty", debug.BuildSetting{Key: "vcs.revision", Value: "1133a71d4dc3ffff"})
+	if _, ok := Current(); ok {
+		t.Error("a dirty checkout isn't the release")
+	}
 	buildInfo = func() (*debug.BuildInfo, bool) { return nil, false }
 	if _, ok := Current(); ok {
 		t.Error("no build info")
+	}
+	old := release
+	t.Cleanup(func() { release = old })
+	release = "v0.5.0"
+	if v, ok := Current(); !ok || v != "v0.5.0" {
+		t.Errorf("goreleaser's stamp: %q %v", v, ok)
 	}
 }
 
@@ -44,13 +57,31 @@ func TestAvailable(t *testing.T) {
 	if Available() {
 		t.Error("available without a check")
 	}
-	state.Save(file, status{Latest: "1133a71d4dc3ffff"})
+	state.Save(file, status{Latest: "v0.2.0", Commit: "1133a71d4dc3ffff"})
 	if Available() {
-		t.Error("available when GitHub has this commit")
+		t.Error("available when the latest release is this commit")
+	}
+	state.Save(file, status{Latest: "v0.2.0", Commit: "2222222222220000"})
+	if !Available() {
+		t.Error("a release on another commit not available")
 	}
 	state.Save(file, status{Latest: "2222222222220000"})
+	if Available() {
+		t.Error("a check from before releases knows no tagged commit")
+	}
+
+	built(t, "v0.2.0")
+	state.Save(file, status{Latest: "v0.2.0", Commit: "2222222222220000"})
+	if Available() {
+		t.Error("available when this is the latest release")
+	}
+	state.Save(file, status{Latest: "v0.10.0"})
 	if !Available() {
-		t.Error("newer commit not available")
+		t.Error("newer release not available")
+	}
+	state.Save(file, status{Latest: "v0.1.9"})
+	if Available() {
+		t.Error("an older release is no update")
 	}
 }
 
@@ -89,24 +120,30 @@ func TestCheckCutOffBody(t *testing.T) {
 
 func TestFetchSinceThisBuild(t *testing.T) {
 	built(t, "v0.0.0-20261030145546-1133a71d4dc3")
-	fakeGitHub(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/repos/MartyJRE/claudia/compare/1133a71d4dc3...main" {
-			http.Error(w, "unexpected "+r.URL.String(), 400)
-			return
-		}
-		io.WriteString(w, `{"commits":[{"sha":"aaaaaaa1111","commit":{"message":"old"}},{"sha":"bbbbbbb2222","commit":{"message":"new\n\nbody"}}]}`)
-	})
+	const page1 = "/repos/MartyJRE/claudia/releases?per_page=100&page=1"
+	commits := `{"commits":[{"sha":"aaaaaaa1111","commit":{"message":"old"}},{"sha":"bbbbbbb2222","commit":{"message":"new\n\nbody"}}]}`
+	routes(t, map[string]string{page1: `[]`, "/repos/MartyJRE/claudia/compare/1133a71d4dc3...main": commits})
 	p, err := Fetch()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p.Current != "1133a71d4dc3" || p.Latest != "bbbbbbb" || len(p.Commits) != 2 || p.Commits[0] != (Commit{"bbbbbbb", "new"}) {
-		t.Errorf("got %+v", p)
+	if p.Current != "1133a71d4dc3" || p.Latest != "bbbbbbb" || len(p.Commits) != 2 || p.Commits[0] != (Commit{"bbbbbbb", "new"}) || p.Releases != nil {
+		t.Errorf("before the first release: %+v", p)
 	}
 
-	fakeGitHub(t, func(w http.ResponseWriter, _ *http.Request) { io.WriteString(w, `{"commits":[]}`) })
+	routes(t, map[string]string{page1: twoReleases, "/repos/MartyJRE/claudia/compare/1133a71d4dc3...v0.2.0": commits})
+	if p, err := Fetch(); err != nil || p.Latest != "v0.2.0" || len(p.Commits) != 2 || p.Releases != nil {
+		t.Errorf("up to the latest release: %+v %v", p, err)
+	}
+
+	routes(t, map[string]string{page1: `[]`, "/repos/MartyJRE/claudia/compare/1133a71d4dc3...main": `{"commits":[]}`})
 	if p, err := Fetch(); err != nil || p.Latest != "1133a71" || p.Commits != nil {
 		t.Errorf("up to date: %+v %v", p, err)
+	}
+
+	routes(t, map[string]string{page1: `[]`})
+	if _, err := Fetch(); err == nil {
+		t.Error("compare failed")
 	}
 
 	ln, _ := net.Listen("tcp", "127.0.0.1:0")

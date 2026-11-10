@@ -352,6 +352,12 @@ func TestUpdate(t *testing.T) {
 		t.Errorf("watcher not stopped: %v", err)
 	}
 
+	fetchUpdate = func() (update.Plan, error) {
+		return update.Plan{Latest: "v0.2.0", Releases: []update.Release{{Tag: "v0.2.0", Body: "## ui\r\n- pills\n", Published: time.Date(2026, 11, 10, 9, 0, 0, 0, time.UTC)}}}, nil
+	}
+	if r := claudia(t, "update"); !strings.HasPrefix(r.out, "updating to v0.2.0, what's new:\n  v0.2.0  2026-11-10\n    ## ui\n    - pills\ndownloading") {
+		t.Errorf("release notes %+v", r)
+	}
 	fetchUpdate = func() (update.Plan, error) { return update.Plan{Latest: "1133a71"}, nil }
 	if r := claudia(t, "update"); !strings.HasPrefix(r.out, "already up to date; reinstalling 1133a71\ndownloading") {
 		t.Errorf("up to date %+v", r)
