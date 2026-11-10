@@ -92,3 +92,14 @@ func TestCheckAutopilot(t *testing.T) {
 		t.Errorf("Check reads the autopilot: %v", err)
 	}
 }
+
+func TestReviewStaleAfter(t *testing.T) {
+	for raw, want := range map[string]time.Duration{"": 30 * 24 * time.Hour, "336h": 336 * time.Hour, "off": 0, "nonsense": 30 * 24 * time.Hour} {
+		if got := (Autopilot{ReviewStaleAfterRaw: raw}).ReviewStaleAfter(); got != want {
+			t.Errorf("%q: %v, want %v", raw, got, want)
+		}
+	}
+	if err := CheckAutopilot(Autopilot{ReviewStaleAfterRaw: "a month"}); err == nil || !strings.Contains(err.Error(), "review_stale_after") {
+		t.Errorf("a bad duration: %v", err)
+	}
+}
