@@ -38,6 +38,7 @@ func newModelViews(t *testing.T) *Model {
 		atl:       &atlassian.Client{Base: atlBaseViews},
 		dismissed: dismissed{},
 		seen:      seenStore{},
+		animating: true,
 		width:     160,
 		height:    40,
 	}

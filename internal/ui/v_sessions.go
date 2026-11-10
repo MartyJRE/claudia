@@ -46,7 +46,7 @@ func (m *Model) filterSessions(match func(...string) bool) []row {
 
 func (m *Model) listSessions(h int) string {
 	if !m.sessLoaded {
-		return lipgloss.Place(m.width, h, lipgloss.Center, lipgloss.Center, sDim.Render(spinner[m.frame%len(spinner)]+" reading sessions…"))
+		return lipgloss.Place(m.width, h, lipgloss.Center, lipgloss.Center, sDim.Render(m.spin()+" reading sessions…"))
 	}
 	if len(m.restore) > 0 {
 		banner := pill(black, yellow, fmt.Sprintf("%d sessions were running before the restart", len(m.restore))) +
@@ -74,6 +74,9 @@ func (m *Model) listSessionsTable(h int) string {
 		if g := rows[i].group; g != "" && (g != project(r.Dir()) || m.width < sessionCols[2].min) {
 			name += sDim.Render("  " + g)
 		}
+		if d := workingOn(r); d != "" {
+			name += sDim.Render("  " + d)
+		}
 		return []string{
 			m.status(r),
 			name,
@@ -97,7 +100,8 @@ func (m *Model) workerCells(r srow) []string {
 	w := r.sess
 	st := sDim.Render("· " + string(w.Live.Status))
 	if w.Live.Status.Working() {
-		st = sDim.Render(spinner[m.frame%len(spinner)] + " working")
+		verb, _ := activity(w)
+		st = sDim.Render(m.activityGlyph(verb))
 	}
 	return []string{st, sessionIndent(r) + sDim.Render("claudia "+w.Live.Worker), "", "", "", "", sDim.Render(age(w.Started())), sDim.Render(w.Profile.Name)}
 }
@@ -144,12 +148,22 @@ func (m *Model) status(r row) string {
 	case r.needsYou():
 		return lipgloss.NewStyle().Foreground(yellow).Bold(true).Render("◆ needs you")
 	case s.Working():
-		return sOK.Render(spinner[m.frame%len(spinner)] + " working")
+		verb, _ := activity(r)
+		return sOK.Render(m.activityGlyph(verb))
 	case r.done():
 		return sOK.Render("✓ done")
 	default:
 		return lipgloss.NewStyle().Foreground(blue).Render("● your turn")
 	}
+}
+
+// workingOn is what a working session's tool call acts on, e.g. the file it edits.
+func workingOn(r row) string {
+	if !r.live() || !r.Live.Status.Working() {
+		return ""
+	}
+	_, d := activity(r)
+	return oneLine(d)
 }
 
 func sessionTitle(r row, selected bool) string {
@@ -260,6 +274,10 @@ func (m *Model) detailSession() string {
 	meta = append(meta, sDim.Render(r.Profile.Name), sDim.Render(r.ShortID()))
 	lines = append(lines, strings.Join(meta, sDim.Render("  ·  ")))
 
+	if r.live() && r.Live.Status.Working() {
+		verb, _ := activity(r)
+		lines = append(lines, sOK.Render(m.activityGlyph(verb))+sText.Render("  "+workingOn(r)))
+	}
 	if r.summary != "" {
 		lines = append(lines, summaryText(r, false))
 	}

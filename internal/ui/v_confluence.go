@@ -28,7 +28,7 @@ func (m *Model) listConfluence(h int) string {
 	if m.atl == nil && m.atlErr != nil {
 		empty = m.atlErr.Error()
 	} else if m.conf.FetchedAt.IsZero() {
-		empty = spinner[m.frame%len(spinner)] + " asking Confluence…"
+		empty = m.spin() + " asking Confluence…"
 	}
 	return m.table(pageCols, len(rows), &m.cur[vConfluence], h, func(i int, sel bool) []string {
 		r := rows[i]

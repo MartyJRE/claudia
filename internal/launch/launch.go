@@ -151,14 +151,20 @@ func rememberKind(sp Spec) string {
 	if sp.ID == "" {
 		return sp.Kind
 	}
-	kinds := map[string]string{}
-	state.Load(kindsFile, &kinds)
+	kinds := Kinds()
 	if sp.Kind == "" {
 		return kinds[sp.ID]
 	}
 	kinds[sp.ID] = sp.Kind
 	_ = state.Save(kindsFile, kinds)
 	return sp.Kind
+}
+
+// Kinds maps session ids to what claudia started them for: review, fix, ….
+func Kinds() map[string]string {
+	kinds := map[string]string{}
+	state.Load(kindsFile, &kinds)
+	return kinds
 }
 
 func SessionName(dir string) string {

@@ -141,7 +141,7 @@ func (m *Model) updateKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m *Model) viewUpdate() string {
 	u := m.upd
-	spin := lipgloss.NewStyle().Foreground(blue).Render(spinner[m.frame%len(spinner)])
+	spin := lipgloss.NewStyle().Foreground(blue).Render(m.spin())
 	ok := sOK.Render("✓")
 	todo := sDim.Render("○")
 	bad := sErr.Render("✗")

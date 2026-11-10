@@ -457,7 +457,7 @@ func (m *Model) listNotes(h int) string {
 	if m.vault == nil {
 		empty = "set \"vault\" in " + config.Path() + " to browse your notes"
 	} else if m.vaultNotes == nil {
-		empty = spinner[m.frame%len(spinner)] + " reading the vault…"
+		empty = m.spin() + " reading the vault…"
 	}
 	return m.table(noteCols, len(rows), &m.cur[vNotes], h, func(i int, sel bool) []string {
 		r := rows[i]

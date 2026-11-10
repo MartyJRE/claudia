@@ -207,7 +207,7 @@ func (m *Model) listJira(h int) string {
 	if m.atl == nil && m.atlErr != nil {
 		empty = m.atlErr.Error()
 	} else if m.jira.FetchedAt.IsZero() {
-		empty = spinner[m.frame%len(spinner)] + " asking Jira…"
+		empty = m.spin() + " asking Jira…"
 	}
 	return m.table(jiraCols, len(rows), &m.cur[vJira], h, func(i int, sel bool) []string {
 		r := rows[i]

@@ -76,7 +76,7 @@ func (m *Model) listUsage(h int) string {
 	for _, r := range rows {
 		peak = max(peak, r.cost)
 	}
-	empty := spinner[m.frame%len(spinner)] + " reading transcripts…"
+	empty := m.spin() + " reading transcripts…"
 	if m.usageLoaded {
 		empty = "no usage in the last 31 days"
 	}
