@@ -1,10 +1,10 @@
 package ui
 
 import (
-	"fmt"
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
@@ -12,7 +12,7 @@ import (
 	"github.com/MartyJRE/claudia/internal/update"
 )
 
-// The update screen: what's new, then the build as it happens, then a restart.
+// The update screen: what's new, then the build as it happens, then enter restarts.
 
 const (
 	upChecking = iota
@@ -22,13 +22,13 @@ const (
 )
 
 type updateView struct {
-	stage    int
-	plan     update.Plan
-	planErr  error
-	log      []string
-	err      error
-	stream   chan tea.Msg
-	restarts time.Time
+	stage   int
+	plan    update.Plan
+	planErr error
+	log     []string
+	err     error
+	stream  chan tea.Msg
+	notes   viewport.Model
 }
 
 type upPlanMsg struct {
@@ -37,7 +37,6 @@ type upPlanMsg struct {
 }
 type upLogMsg string
 type upDoneMsg struct{ err error }
-type upRestartMsg struct{}
 
 func (m *Model) startUpdate() tea.Cmd {
 	if m.upd != nil {
@@ -60,6 +59,7 @@ func (m *Model) updateMsg(msg tea.Msg) tea.Cmd {
 	case upPlanMsg:
 		u.plan, u.planErr = msg.plan, msg.err
 		u.stage = upBuilding
+		m.renderUpdateNotes()
 		u.stream = make(chan tea.Msg, 64)
 		ch := u.stream
 		go func() {
@@ -83,18 +83,40 @@ func (m *Model) updateMsg(msg tea.Msg) tea.Cmd {
 			return nil
 		}
 		u.stage = upDone
-		u.restarts = time.Now().Add(3 * time.Second)
-		return tickAfter(3*time.Second, func(time.Time) tea.Msg { return upRestartMsg{} })
-	case upRestartMsg:
-		m.Result.Restart = true
-		return tea.Quit
 	}
 	return nil
 }
 
+// planMarkdown is what's new in the plan: each release's notes, or the commits
+// for a build that predates releases.
+func planMarkdown(p update.Plan) string {
+	var b strings.Builder
+	for _, r := range p.Releases {
+		b.WriteString("## " + r.Tag + "\n\n")
+		if !r.Published.IsZero() {
+			b.WriteString("_" + r.Published.Format(time.DateOnly) + "_\n\n")
+		}
+		b.WriteString(strings.TrimSpace(r.Body) + "\n\n")
+	}
+	for _, c := range p.Commits {
+		b.WriteString("- `" + c.SHA + "` " + c.Subject + "\n")
+	}
+	return b.String()
+}
+
+func (m *Model) renderUpdateNotes() {
+	u := m.upd
+	u.notes = viewport.New(m.width, 1)
+	u.notes.SetContent(strings.TrimRight(renderMarkdown(planMarkdown(u.plan), min(m.width-4, 110)), "\n"))
+}
+
 func (m *Model) updateKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	u := m.upd
-	switch msg.String() {
+	k := msg.String()
+	if m.km.byScope["global"][k] == "global.releases" {
+		return m, m.openReleases()
+	}
+	switch k {
 	case "enter":
 		if u.stage == upDone {
 			m.Result.Restart = true
@@ -105,6 +127,14 @@ func (m *Model) updateKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if u.err != nil || u.stage == upDone {
 			m.upd = nil
 		}
+	case "g", "home":
+		u.notes.GotoTop()
+	case "G", "end":
+		u.notes.GotoBottom()
+	default:
+		var cmd tea.Cmd
+		u.notes, cmd = u.notes.Update(msg)
+		return m, cmd
 	}
 	return m, nil
 }
@@ -132,10 +162,10 @@ func (m *Model) viewUpdate() string {
 		return "   " + mark + " " + st.Render(text)
 	}
 
-	var b []string
-	b = append(b, "", sAccent.Render(" ✻ updating claudia"), "")
+	var top []string
+	top = append(top, "", sAccent.Render(" ✻ updating claudia"), "")
 	from, to := u.plan.Current, u.plan.Latest
-	if len(from) > 7 {
+	if len(from) > 7 && !strings.HasPrefix(from, "v") {
 		from = from[:7]
 	}
 	ver := ""
@@ -145,44 +175,47 @@ func (m *Model) viewUpdate() string {
 	case to != "":
 		ver = sDim.Render(" → " + to)
 	}
-	b = append(b, step(upChecking, "checking GitHub for the latest version")+ver)
-	b = append(b, step(upBuilding, "downloading and building"))
-	b = append(b, step(upWatcher, "restarting the background watcher"))
-	restart := "restarting claudia"
-	if u.stage == upDone {
-		left := max(0, int(time.Until(u.restarts).Seconds()+0.99))
-		restart += sDim.Render(fmt.Sprintf(" in %d…  ", left)) + sKey.Render("enter") + sDim.Render(" now")
-	}
-	b = append(b, step(upDone, restart))
+	top = append(top, step(upChecking, "checking GitHub for the latest version")+ver)
+	top = append(top, step(upBuilding, "downloading and building"))
+	top = append(top, step(upWatcher, "restarting the background watcher"))
+	top = append(top, step(upDone, "restart claudia"))
+	top = append(top, "", sBold.Render(" what's new"))
 
-	b = append(b, "", sBold.Render(" what's new"))
-	switch {
-	case u.planErr != nil:
-		b = append(b, "   "+sDim.Render("couldn't ask GitHub ("+u.planErr.Error()+"); updating anyway"))
-	case u.stage == upChecking:
-		b = append(b, "   "+sDim.Render("…"))
-	case len(u.plan.Commits) == 0:
-		b = append(b, "   "+sDim.Render("nothing new — you already have the latest, reinstalling it"))
-	default:
-		for i, c := range u.plan.Commits {
-			if i == 12 {
-				b = append(b, "   "+sDim.Render(fmt.Sprintf("… and %d more", len(u.plan.Commits)-12)))
-				break
-			}
-			b = append(b, "   "+sDim.Render(c.SHA+"  ")+sText.Render(c.Subject))
-		}
-	}
-
+	var bottom []string
 	if len(u.log) > 0 || u.stage == upBuilding {
-		b = append(b, "", sBold.Render(" build output"))
+		bottom = append(bottom, "", sBold.Render(" build output"))
 		start := max(0, len(u.log)-8)
 		for _, l := range u.log[start:] {
-			b = append(b, "   "+sDim.Render(l))
+			bottom = append(bottom, "   "+sDim.Render(l))
 		}
 	}
 	if u.err != nil {
-		b = append(b, "", "   "+sErr.Render("update failed: "+u.err.Error()), "   "+sKey.Render("esc")+sDim.Render(" back to claudia"))
+		bottom = append(bottom, "", "   "+sErr.Render("update failed: "+u.err.Error()), "   "+sKey.Render("esc")+sDim.Render(" back to claudia"))
 	}
+	keys := [][2]string{{"j/k", "scroll"}, {m.key("global.releases"), "release notes"}}
+	if u.stage == upDone {
+		keys = append([][2]string{{"enter", "restart now"}, {"esc", "later"}}, keys...)
+	}
+	var parts []string
+	for _, k := range keys {
+		parts = append(parts, sKey.Render(k[0])+" "+sDim.Render(k[1]))
+	}
+	bottom = append(bottom, "", " "+strings.Join(parts, sRule.Render("  │  ")))
+
+	var middle []string
+	switch {
+	case u.planErr != nil:
+		middle = append(middle, "   "+sDim.Render("couldn't ask GitHub ("+u.planErr.Error()+"); updating anyway"))
+	case u.stage == upChecking:
+		middle = append(middle, "   "+sDim.Render("…"))
+	case len(u.plan.Commits) == 0 && len(u.plan.Releases) == 0:
+		middle = append(middle, "   "+sDim.Render("nothing new — you already have the latest, reinstalling it"))
+	default:
+		u.notes.Height = max(3, m.height-len(top)-len(bottom))
+		middle = strings.Split(u.notes.View(), "\n")
+	}
+
+	b := append(append(top, middle...), bottom...)
 	for i := range b {
 		b[i] = ansi.Truncate(b[i], m.width, "…")
 	}

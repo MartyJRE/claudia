@@ -46,6 +46,8 @@ func stubOS() {
 
 	fetchUpdate = func() (update.Plan, error) { panic("update.Fetch not faked") }
 	installUpdate = func(func(string)) error { panic("update.Install not faked") }
+	fetchReleases = func(int) ([]update.Release, error) { panic("update.Releases not faked") }
+	currentVersion = func() (string, bool) { return "", false }
 	stopWatcher = func() { panic("watch.Stop not faked") }
 	spawnWatcher = func() { panic("watch.Spawn not faked") }
 }

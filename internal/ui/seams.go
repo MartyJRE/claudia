@@ -63,6 +63,8 @@ var (
 	updateAvailable = update.Available
 	fetchUpdate     = update.Fetch
 	installUpdate   = update.Install
+	fetchReleases   = update.Releases
+	currentVersion  = update.Current
 	stopWatcher     = watch.Stop
 	spawnWatcher    = watch.Spawn
 )

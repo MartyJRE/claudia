@@ -260,6 +260,27 @@ func obsidianToMarkdown(src string) string {
 	return meta + src
 }
 
+// renderMarkdown draws md with glamour wrapped at wrap, or returns it as it is
+// if glamour can't.
+func renderMarkdown(md string, wrap int) string {
+	g := renderers[wrap]
+	var err error
+	if g == nil {
+		g, err = glamour.NewTermRenderer(glamour.WithStylesFromJSONBytes(onedarkStyle), glamour.WithWordWrap(wrap))
+		if err == nil {
+			renderers[wrap] = g
+		}
+	}
+	text := ""
+	if err == nil {
+		text, err = g.Render(md)
+	}
+	if err != nil {
+		return md
+	}
+	return text
+}
+
 func (m *Model) renderReader() {
 	r := m.reader
 	w, h := m.readerSize()
@@ -268,20 +289,7 @@ func (m *Model) renderReader() {
 	if err != nil {
 		text = sErr.Render(err.Error())
 	} else {
-		wrap := min(w-4, 110)
-		g := renderers[wrap]
-		if g == nil {
-			g, err = glamour.NewTermRenderer(glamour.WithStylesFromJSONBytes(onedarkStyle), glamour.WithWordWrap(wrap))
-			if err == nil {
-				renderers[wrap] = g
-			}
-		}
-		if g != nil {
-			text, err = g.Render(obsidianToMarkdown(string(body)))
-		}
-		if err != nil || g == nil {
-			text = string(body)
-		}
+		text = renderMarkdown(obsidianToMarkdown(string(body)), min(w-4, 110))
 	}
 	off := 0
 	if r.width == w {
