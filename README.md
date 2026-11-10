@@ -144,7 +144,12 @@ head it read is approved, and the MR's Teams post gets ✅
 (`autopilot.review_approve`, `autopilot.review_react`); findings ping you. Runs
 the autopilot starts get `--permission-mode` from `autopilot.permission_mode`
 (`auto` by default; `bypassPermissions` has no sandbox behind it), and it stays
-off a card while someone works it in a session of their own.
+off a card while someone works it in a session of their own. A run it started
+that ended ok or waits on someone closes its window after two idle minutes
+(never one sharing its window, and never one that needs you or failed); the
+transcript stays, so `enter` on the card resumes it. When a ticket changes after
+readiness asked its questions, the autopilot resumes that same session to read
+the answers and check again.
 
 Runs, the cost ledger and the autopilot's state are kept in `state.db` in the
 state dir, which the watcher keeps current with claudia closed, and a review run remembers the

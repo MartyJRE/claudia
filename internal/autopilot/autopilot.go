@@ -107,6 +107,23 @@ type candidate struct {
 	step string
 	dir  string
 	rank int
+	wake *board.Session // the dormant session to resume instead of a fresh one
+}
+
+// wakePrompt is what a resumed readiness run is told.
+const wakePrompt = "The ticket changed since you asked your questions; read the new comments and check again if it's ready."
+
+// answered: the card holds on a readiness run that asked questions, the
+// ticket changed since, and its session is closed, so it can be resumed.
+func answered(c board.Card, hold *runs.Run, ss []board.Session) (*board.Session, bool) {
+	if hold == nil || hold.Step != "readiness" || !board.WaitingForAnswers(c) || !c.Issue.Updated.After(hold.Finished.Add(time.Minute)) {
+		return nil, false
+	}
+	i := slices.IndexFunc(ss, func(s board.Session) bool { return s.ID == hold.Session })
+	if i < 0 || ss[i].IsLive() || ss[i].Dir() == "" {
+		return nil, false
+	}
+	return &ss[i], true
 }
 
 // busy is how long after its last turn a live session still counts as
@@ -138,7 +155,8 @@ func (p *Pilot) Tick(now time.Time, cfg config.Config, in Inputs) Status {
 	var queue []candidate
 	for rank, c := range cards {
 		next, hold := board.NextStep(c)
-		if hold != nil || next == "" || !c.IsReview() && board.OnHold(c.Issue.Status) || handsOn(c, now) {
+		wake, ok := answered(c, hold, in.Sessions)
+		if hold != nil && !ok || next == "" || !c.IsReview() && board.OnHold(c.Issue.Status) || handsOn(c, now) {
 			continue
 		}
 		if GateOf(a, over[c.ID()], c, next, planOK[c.Issue.Key] != "") != Queued {
@@ -159,7 +177,7 @@ func (p *Pilot) Tick(now time.Time, cfg config.Config, in Inputs) Status {
 			blocked[c.ID()] = why
 			continue
 		}
-		queue = append(queue, candidate{c, next, dir, rank})
+		queue = append(queue, candidate{c, next, dir, rank, wake})
 	}
 	p.block(blocked)
 	slices.SortStableFunc(queue, func(x, y candidate) int {
@@ -309,8 +327,11 @@ func (p *Pilot) start(now time.Time, cfg config.Config, in Inputs, ix board.Inde
 	var sp launch.Spec
 	var urls []string
 	ticket := c.Issue.Key
-	switch q.step {
-	case "review":
+	switch {
+	case q.wake != nil:
+		sp = launch.Resume(q.wake.Session)
+		sp.Args = append(sp.Args, wakePrompt)
+	case q.step == "review":
 		mr := *c.MR
 		for _, o := range board.Related(mr, in.GL) {
 			urls = append(urls, o.WebURL)
@@ -318,7 +339,7 @@ func (p *Pilot) start(now time.Time, cfg config.Config, in Inputs, ix board.Inde
 		ticket = board.MRTicket(mr)
 		sp, _ = launch.New(q.dir, profile, steps.Title(cfg, ix.Issues, "review", "review", ticket, mr.Title), steps.ReviewPrompt(cfg, urls))
 		sp.Kind, run.SHA = "review", mr.SHA
-	case "feedback":
+	case q.step == "feedback":
 		mr, _ := board.ThreadsMR(c)
 		urls = []string{mr.WebURL}
 		sp, _ = launch.New(q.dir, profile, steps.Title(cfg, ix.Issues, "fix", "fix threads", ticket, mr.Title), steps.ThreadsPrompt(mr))
@@ -333,7 +354,9 @@ func (p *Pilot) start(now time.Time, cfg config.Config, in Inputs, ix board.Inde
 		sp.Kind = s.Intent
 	}
 	run.Session = sp.ID
-	sp.Color = steps.Color(colours(in.Sessions))
+	if q.wake == nil {
+		sp.Color = steps.Color(colours(in.Sessions))
+	}
 	// NOTE: auto mode is a first try for unattended runs; if it blocks too much or stalls runs,
 	// we might switch to bypassPermissions plus a guard hook, or another mode.
 	sp = sp.WithPermissionMode(cfg.Autopilot.PermissionMode()).AsRun(run.ID, run.Step, run.Subject, cfg.Autopilot.CommentNote())
