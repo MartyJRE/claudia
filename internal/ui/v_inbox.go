@@ -365,7 +365,7 @@ func (m *Model) viewBrief() string {
 	b := m.brief
 	switch {
 	case !m.briefPending.IsZero():
-		head += sDim.Render("  " + spinner[m.frame%len(spinner)] + " writing a fresh one…")
+		head += sDim.Render("  " + m.spin() + " writing a fresh one…")
 	case !b.At.IsZero():
 		when := "written " + age(b.At) + " ago"
 		if age(b.At) == "now" {

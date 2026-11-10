@@ -144,7 +144,7 @@ func TestInitFull(t *testing.T) {
 	ticks := instantTicks(t)
 	fake(t, &findRepos, func(root string) []repos.Repo { return []repos.Repo{{Dir: "/code/x"}} })
 	fake(t, &scanUsage, func(*claude.UsageScanner) []claude.DayModel { return []claude.DayModel{{Day: "2026-11-01"}} })
-	m.sessLoading = false
+	m.sessLoading, m.sessLoaded, m.animating, m.view = false, false, false, vSessions
 	msgs := drainFull(m.Init())
 	if !m.sessLoading || !m.usageLoading || !m.busy[srcRepos] || !m.busy[srcConfluence] || m.busy[srcGitlab] {
 		t.Errorf("init marks loads in flight: sess %v usage %v busy %v", m.sessLoading, m.usageLoading, m.busy)
@@ -155,6 +155,13 @@ func TestInitFull(t *testing.T) {
 	}
 	if want := []time.Duration{1500 * time.Millisecond, 120 * time.Millisecond}; len(*ticks) != 2 || (*ticks)[0] != want[0] || (*ticks)[1] != want[1] {
 		t.Errorf("timers: %v", *ticks)
+	}
+
+	*ticks = nil
+	m.animating, m.view = false, vInbox
+	drainFull(m.Init())
+	if len(*ticks) != 1 || m.animating {
+		t.Errorf("with nothing moving on screen only the slow timer starts: %v", *ticks)
 	}
 }
 
@@ -217,9 +224,14 @@ func TestTickFull(t *testing.T) {
 func TestFrameAndOtherMsgsFull(t *testing.T) {
 	m := newModelShell(t)
 	instantTicks(t)
+	m.briefPending = time.Now()
 	_, cmd := m.Update(frameMsg{})
 	if m.frame != 1 || countFull[frameMsg](drainFull(cmd)) != 1 {
 		t.Errorf("frame advances the spinner and re-arms: %d", m.frame)
+	}
+	m.briefPending = time.Time{}
+	if _, cmd := m.Update(frameMsg{}); m.frame != 1 || cmd != nil || m.animating {
+		t.Errorf("with nothing left to move the frames stop: %d", m.frame)
 	}
 	if _, cmd := m.Update(struct{}{}); cmd != nil {
 		t.Error("unknown messages are ignored")

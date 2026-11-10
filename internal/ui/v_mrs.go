@@ -100,7 +100,7 @@ func (m *Model) listMRs(h int) string {
 		empty = "no open or recently merged MRs"
 	}
 	if m.gl.FetchedAt.IsZero() {
-		empty = spinner[m.frame%len(spinner)] + " asking GitLab…"
+		empty = m.spin() + " asking GitLab…"
 		if m.errs[srcGitlab] != nil {
 			empty = m.errs[srcGitlab].Error()
 		}

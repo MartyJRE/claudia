@@ -294,6 +294,7 @@ func TestMessagesShell(t *testing.T) {
 	}
 
 	before := m.frame
+	m.briefPending = time.Now()
 	if _, cmd := m.Update(frameMsg{}); m.frame != before+1 || cmd == nil {
 		t.Errorf("frame advances and schedules the next one")
 	}

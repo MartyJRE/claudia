@@ -114,13 +114,16 @@ func TestLoadSessionsShell(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(proj, "jjjjjjjj-1.jsonl"), []byte(line), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	if err := state.Save("session-kinds.json", map[string]string{"jjjjjjjj-1": "review"}); err != nil {
+		t.Fatal(err)
+	}
 	m := &Model{store: claude.NewStore([]claude.Profile{{Name: "test", Dir: dir}}, time.Hour)}
 	rows, ok := m.loadSessions()().(sessionsMsg)
 	if !ok || len(rows) != 1 {
 		t.Fatalf("got %v", rows)
 	}
 	r := rows[0]
-	if r.ID != "jjjjjjjj-1" || r.live() || r.pane != nil || r.host != "" || r.Profile.Name != "test" {
+	if r.ID != "jjjjjjjj-1" || r.live() || r.pane != nil || r.host != "" || r.Profile.Name != "test" || r.kind != "review" {
 		t.Errorf("closed session from its transcript: %+v", r)
 	}
 }

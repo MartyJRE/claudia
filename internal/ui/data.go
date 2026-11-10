@@ -8,6 +8,7 @@ import (
 
 	"github.com/MartyJRE/claudia/internal/atlassian"
 	"github.com/MartyJRE/claudia/internal/gitlab"
+	"github.com/MartyJRE/claudia/internal/launch"
 	"github.com/MartyJRE/claudia/internal/repos"
 	"github.com/MartyJRE/claudia/internal/state"
 	"github.com/MartyJRE/claudia/internal/summary"
@@ -53,9 +54,10 @@ func (m *Model) loadSessions() tea.Cmd {
 	return func() tea.Msg {
 		loc := newLocator()
 		sums := summary.Load()
+		kinds := launch.Kinds()
 		var rows []row
 		for _, s := range listSessions(store) {
-			r := row{Session: s, summary: sums[s.ID].Text, summaryFor: sums[s.ID].For}
+			r := row{Session: s, summary: sums[s.ID].Text, summaryFor: sums[s.ID].For, kind: kinds[s.ID]}
 			if s.Live != nil {
 				if p, ok := locatePane(loc, s.Live.PID); ok {
 					r.pane = &p

@@ -53,7 +53,7 @@ func TestWorkersTopAndBottomShell(t *testing.T) {
 		t.Errorf("opening is saved apart from folding: %+v", p)
 	}
 	s := screenShell(m)
-	containsAllShell(t, "open", s, "claudia's workers  2 running in the background", "⠋ working        claudia summary", "· idle           claudia brief", "1 working", "2 Sessions 3")
+	containsAllShell(t, "open", s, "claudia's workers  2 running in the background", "✶ thinking       claudia summary", "· idle           claudia brief", "1 working", "2 Sessions 3")
 
 	cursorOnShell(t, m, "wwwwwwww-sum")
 	containsAllShell(t, "detail", plainShell(m.detailSession()), "claudia summary", "to write a session's one-line summary", "work  ·  wwwwwwww")

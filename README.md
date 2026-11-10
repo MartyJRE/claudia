@@ -51,6 +51,10 @@ last few turns, in a separate headless run that leaves the session itself
 alone. When it says Claude is asking you something, the session shows
 `◆ needs you` and joins the Inbox, as if it were waiting on a prompt; when it
 says the work is done, `✓ done`, so finished sessions stand out to close.
+While Claude works, the status says what at, from its newest tool call:
+`running` a command, `editing` or `reading` a file, `delegating` to agents,
+`thinking` between calls (`reviewing` in a review session), each with its own
+small looping glyph, and the command or file follows the session's name.
 A group holding a single session is just that session's row, with the group
 named on it, so there's no header to scroll past:
 
@@ -299,6 +303,9 @@ by an environment variable are shown but can't be changed there.
   and `{verb}` are filled in. Without it, sessions are named `<verb>: <summary>`.
 - `rounded_pills: false` draws pills and tabs square, for fonts without the Nerd
   Font half circles. Ghostty ships those, so the default is rounded.
+- `animations: false` keeps the status glyphs and loading spinners still. While
+  they're on, claudia redraws about eight times a second, and only while
+  something on screen moves.
 - `workers`: claudia's own headless `claude -p` runs (the brief and session
   summaries) still register with Claude Code while they run. By default
   (`hidden`) claudia leaves them out everywhere; `top` or `bottom` lists them

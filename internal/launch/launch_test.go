@@ -84,6 +84,9 @@ func TestRememberKind(t *testing.T) {
 	if got := rememberKind(Spec{ID: "s2"}); got != "" {
 		t.Errorf("unknown session: %q", got)
 	}
+	if k := Kinds(); len(k) != 1 || k["s1"] != "review" {
+		t.Errorf("kinds: %v", k)
+	}
 }
 
 func gitRepo(t *testing.T, name string) string {

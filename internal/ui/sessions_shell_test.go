@@ -313,8 +313,8 @@ func TestSessionStatusAndWhereShell(t *testing.T) {
 		want string
 	}{
 		{live(claude.StatusWaiting), "◆ needs you"},
-		{live(claude.StatusBusy), "⠋ working"},
-		{live(claude.StatusShell), "⠋ working"},
+		{live(claude.StatusBusy), "✶ thinking"},
+		{live(claude.StatusShell), "⣾ running"},
 		{live(claude.StatusIdle), "● your turn"},
 		{row{Session: claude.Session{ID: "hhhhhhhh"}}, "○ closed"},
 	} {

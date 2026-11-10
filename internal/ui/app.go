@@ -55,8 +55,6 @@ const (
 
 var viewNames = [nViews]string{"Inbox", "Sessions", "Review", "My MRs", "Jira", "Mentions", "Confluence", "Notes", "Usage"}
 
-var spinner = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
-
 const detailHeight = 8
 
 type row struct {
@@ -64,6 +62,7 @@ type row struct {
 	pane    *tmux.Pane
 	host    string
 	summary string // where the session stands, written by the watcher
+	kind    string // what claudia started it for, e.g. review
 	// summaryFor is the transcript update the summary was written from.
 	summaryFor time.Time
 }
@@ -187,6 +186,7 @@ type Model struct {
 	confirmAt  time.Time
 
 	frame         int
+	animating     bool
 	width, height int
 	plan          *planReview
 	settings      *settingsPage
@@ -235,7 +235,6 @@ func New(opts Options) *Model {
 }
 
 type tickMsg time.Time
-type frameMsg time.Time
 type flashMsg struct {
 	text string
 	err  bool
@@ -244,15 +243,11 @@ type refreshMsg source
 
 func (m *Model) Init() tea.Cmd {
 	m.sessLoading = true
-	return tea.Batch(m.loadSessions(), m.refreshStale(), m.maybeUsage(), m.refreshVault(), tick(), frame())
+	return tea.Batch(m.loadSessions(), m.refreshStale(), m.maybeUsage(), m.refreshVault(), tick(), m.animate())
 }
 
 func tick() tea.Cmd {
 	return tickAfter(1500*time.Millisecond, func(t time.Time) tea.Msg { return tickMsg(t) })
-}
-
-func frame() tea.Cmd {
-	return tickAfter(120*time.Millisecond, func(t time.Time) tea.Msg { return frameMsg(t) })
 }
 
 func (m *Model) refreshStale() tea.Cmd {
@@ -281,6 +276,14 @@ func (m *Model) reindex() {
 }
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	model, cmd := m.update(msg)
+	if a := m.animate(); a != nil {
+		cmd = tea.Batch(cmd, a)
+	}
+	return model, cmd
+}
+
+func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
@@ -346,6 +349,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, tea.Batch(cmds...)
 	case frameMsg:
+		if !m.animates() {
+			m.animating = false
+			return m, nil
+		}
 		m.frame++
 		return m, frame()
 	case flashMsg:
@@ -755,7 +762,7 @@ func (m *Model) sourceStatus() string {
 	}
 	switch {
 	case m.busy[src]:
-		return sDim.Render(spinner[m.frame%len(spinner)] + " fetching " + viewSource(src))
+		return sDim.Render(m.spin() + " fetching " + viewSource(src))
 	case m.errs[src] != nil:
 		return sErr.Render("✗ " + viewSource(src) + " failed")
 	case m.fetchedAt[src].IsZero():

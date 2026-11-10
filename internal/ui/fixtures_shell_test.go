@@ -165,6 +165,8 @@ func newModelShell(t *testing.T) *Model {
 		gl:          glSnapshotShell(),
 		jira:        jiraSnapshotShell(),
 		sessions:    sessionsShell(),
+		// As if the frame ticks already run, so the commands under test come back as they are.
+		animating: true,
 	}
 	m.fetchedAt[srcGitlab] = m.gl.FetchedAt
 	m.fetchedAt[srcJira] = m.jira.FetchedAt
