@@ -36,7 +36,7 @@ type intent struct {
 // claudeForTicket offers the sessions that fit the ticket, with the cursor on
 // the one its state calls for, so enter does what fits.
 func (m *Model) claudeForTicket(key, summary string) (tea.Model, tea.Cmd) {
-	is, known := m.ix.issues[key]
+	is, known := m.ix.Issues[key]
 	status := strings.ToLower(is.Status)
 	var review, threads *gitlab.MR
 	for _, mr := range m.gl.Review {
@@ -134,7 +134,7 @@ func (m *Model) briefSession(key, summary string) (tea.Model, tea.Cmd) {
 
 func (m *Model) mrList(key string) string {
 	var urls []string
-	for _, mr := range m.ix.ticketMRs[key] {
+	for _, mr := range m.ix.TicketMRs[key] {
 		urls = append(urls, mr.WebURL)
 	}
 	if len(urls) == 0 {
@@ -170,7 +170,7 @@ func (m *Model) ticketSession(key, summary, intent, verb, title string, prompt f
 	onBranch := slices.ContainsFunc(m.repos, func(r repos.Repo) bool { return strings.Contains(strings.ToLower(r.Branch), lower) })
 	mrRepo := map[string]string{}
 	var names []string
-	for _, mr := range m.ix.ticketMRs[key] {
+	for _, mr := range m.ix.TicketMRs[key] {
 		if _, ok := mrRepo[mr.Project()]; !ok {
 			mrRepo[mr.Project()] = fmt.Sprintf("!%d", mr.IID)
 			names = append(names, mr.Repo())
@@ -302,7 +302,7 @@ var commitPrefix = regexp.MustCompile(`^(?i)(draft:\s*)?([a-z]+(\([^)]*\))?!?:\s
 // overrides the shape per intent.
 func (m *Model) sessionTitle(intent, verb, key, fallback string) string {
 	about := commitPrefix.ReplaceAllString(strings.TrimSpace(fallback), "")
-	if is, ok := m.ix.issues[key]; ok && is.Summary != "" {
+	if is, ok := m.ix.Issues[key]; ok && is.Summary != "" {
 		about = is.Summary
 	}
 	if about == "" {

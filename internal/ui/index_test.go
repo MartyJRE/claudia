@@ -22,7 +22,7 @@ func TestResolveTicket(t *testing.T) {
 	}
 	ix := buildIndex(rows, gl, atlassian.JiraSnapshot{}, l)
 	for id, want := range map[string]string{"review": "ABC-7", "branch": "ABC-5", "manual": "ABC-9", "none": ""} {
-		if got := ix.sessionTicket[id]; got != want {
+		if got := ix.SessionTicket[id]; got != want {
 			t.Errorf("%s: got %q want %q", id, got, want)
 		}
 	}

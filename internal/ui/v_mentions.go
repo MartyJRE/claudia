@@ -157,7 +157,7 @@ func (m *Model) detailMention() string {
 		return m.panel(nil)
 	}
 	head := sTicket.Render(x.where) + " " + sBold.Render(x.title)
-	if is, ok := m.ix.issues[x.where]; ok {
+	if is, ok := m.ix.Issues[x.where]; ok {
 		head += sDim.Render("  ·  ") + statusText(is)
 	}
 	lines := []string{head}

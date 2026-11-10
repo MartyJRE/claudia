@@ -298,7 +298,7 @@ func (m *Model) detailMR() string {
 
 	if t := mrTicket(r.MR); t != "" {
 		l := sTicket.Render(t)
-		if is, ok := m.ix.issues[t]; ok {
+		if is, ok := m.ix.Issues[t]; ok {
 			l += " " + sText.Render(is.Summary) + sDim.Render(" · ") + statusText(is)
 		}
 		lines = append(lines, l)
@@ -310,7 +310,7 @@ func (m *Model) detailMR() string {
 		}
 		lines = append(lines, sDim.Render("same change: ")+strings.Join(refs, "   "))
 	}
-	if ids := m.ix.mrSessions[r.WebURL]; len(ids) > 0 {
+	if ids := m.ix.MRSessions[r.WebURL]; len(ids) > 0 {
 		lines = append(lines, sDim.Render("sessions: ")+m.sessionRefs(ids))
 	}
 	if f := failedLine(r); f != "" {
@@ -455,7 +455,7 @@ func (m *Model) keyMRs(k string) (tea.Model, tea.Cmd) {
 		}
 	case "mrs.sessions":
 		if ok {
-			m.chooseSessions(m.ix.mrSessions[r.WebURL], "sessions for !"+fmt.Sprint(r.IID))
+			m.chooseSessions(m.ix.MRSessions[r.WebURL], "sessions for !"+fmt.Sprint(r.IID))
 		}
 	case "mrs.threads":
 		if ok {
@@ -486,7 +486,7 @@ func (m *Model) keyMRs(k string) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if m.view == vMine {
-			if ids := m.ix.mrSessions[r.WebURL]; len(ids) > 0 {
+			if ids := m.ix.MRSessions[r.WebURL]; len(ids) > 0 {
 				m.chooseSessions(ids, "sessions for !"+fmt.Sprint(r.IID))
 				return m, nil
 			}

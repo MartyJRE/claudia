@@ -86,13 +86,13 @@ func (m *Model) linked(it inboxItem, sid string) bool {
 	case it.kind == kClaude:
 		return it.sess.ID == sid
 	case it.mr.WebURL != "":
-		for _, u := range m.ix.sessionMRs[sid] {
+		for _, u := range m.ix.SessionMRs[sid] {
 			if u == it.mr.WebURL {
 				return true
 			}
 		}
 	}
-	return it.ticket != "" && it.ticket == m.ix.sessionTicket[sid]
+	return it.ticket != "" && it.ticket == m.ix.SessionTicket[sid]
 }
 
 func (m *Model) CtlInbox(sid string) []CtlItem {
@@ -109,16 +109,16 @@ func (m *Model) CtlInbox(sid string) []CtlItem {
 
 func (m *Model) CtlHere(r row) CtlHere {
 	h := CtlHere{Session: r.ID, Name: r.Name(), Dir: r.Dir()}
-	if k := m.ix.sessionTicket[r.ID]; k != "" {
+	if k := m.ix.SessionTicket[r.ID]; k != "" {
 		t := &CtlTicket{Key: k}
-		if is, ok := m.ix.issues[k]; ok {
+		if is, ok := m.ix.Issues[k]; ok {
 			t.Title, t.Status, t.Done = is.Summary, is.Status, is.Category == "done"
 		}
 		h.Ticket = t
 	}
-	for _, u := range m.ix.sessionMRs[r.ID] {
+	for _, u := range m.ix.SessionMRs[r.ID] {
 		mr := CtlMR{URL: u}
-		if g, ok := m.ix.mrs[u]; ok {
+		if g, ok := m.ix.MRs[u]; ok {
 			mr.Title, mr.State, mr.Pipeline, mr.Approved = g.Title, g.State, g.PipelineStatus(), g.Approved
 		}
 		for _, p := range m.teams.ForMR(u) {
@@ -126,7 +126,7 @@ func (m *Model) CtlHere(r row) CtlHere {
 		}
 		h.MRs = append(h.MRs, mr)
 	}
-	for _, n := range m.notesFor(m.ix.sessionTicket[r.ID]) {
+	for _, n := range m.notesFor(m.ix.SessionTicket[r.ID]) {
 		h.Notes = append(h.Notes, n.Path)
 	}
 	for _, it := range m.CtlInbox(r.ID) {
@@ -222,7 +222,7 @@ func (m *Model) BriefData() any {
 	}
 	for _, r := range m.sessions {
 		if r.live() {
-			out.Sessions = append(out.Sessions, sess{r.Name(), string(r.Live.Status), m.ix.sessionTicket[r.ID]})
+			out.Sessions = append(out.Sessions, sess{r.Name(), string(r.Live.Status), m.ix.SessionTicket[r.ID]})
 		}
 	}
 	y, mo, d := clockNow().Date()

@@ -69,8 +69,8 @@ func TestSessionTree(t *testing.T) {
 	}
 	rows := []row{sess("a", "/c/pay", "", 0), sess("b", "/c/bill", "waiting", 1), sess("c", "/c/pay/sub", "busy", 2)}
 	m := &Model{repos: []repos.Repo{{Dir: "/c/pay"}, {Dir: "/c/bill"}}}
-	m.ix.sessionTicket = map[string]string{"a": "ABC-2", "c": "ABC-2"}
-	m.ix.issues = map[string]atlassian.Issue{"ABC-2": {Key: "ABC-2", Summary: "story", Parent: "ABC-1"}, "ABC-1": {Key: "ABC-1", Summary: "epic", Level: 1}}
+	m.ix.SessionTicket = map[string]string{"a": "ABC-2", "c": "ABC-2"}
+	m.ix.Issues = map[string]atlassian.Issue{"ABC-2": {Key: "ABC-2", Summary: "story", Parent: "ABC-1"}, "ABC-1": {Key: "ABC-1", Summary: "epic", Level: 1}}
 	render := func(rs []srow) string {
 		var b []string
 		for _, r := range rs {
@@ -100,12 +100,12 @@ func TestSessionTree(t *testing.T) {
 	if got, want := render(m.buildSessions(rows, false)), "#epic›story| a| c|b()"; got != want {
 		t.Errorf("by ticket, an epic of one ticket names itself on the ticket's header: got %s want %s", got, want)
 	}
-	m.ix.sessionTicket["c"] = "ABC-3"
-	m.ix.issues["ABC-3"] = atlassian.Issue{Key: "ABC-3", Summary: "other", Parent: "ABC-1"}
+	m.ix.SessionTicket["c"] = "ABC-3"
+	m.ix.Issues["ABC-3"] = atlassian.Issue{Key: "ABC-3", Summary: "other", Parent: "ABC-1"}
 	if got, want := render(m.buildSessions(rows, false)), "#epic| c(other)| a(story)|b()"; got != want {
 		t.Errorf("by ticket, two tickets of one session each: got %s want %s", got, want)
 	}
-	delete(m.ix.sessionTicket, "c")
+	delete(m.ix.SessionTicket, "c")
 	m.sessPrefs.Collapsed = []string{"ticket:ABC-1", "ticket:ABC-2"}
 	if got, want := render(m.buildSessions(rows[:2], false)), "b()|a(epic › story)"; got != want {
 		t.Errorf("an epic holding one session is that session, folded or not: got %s want %s", got, want)

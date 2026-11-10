@@ -115,7 +115,7 @@ func (m *Model) currentTicket() string {
 		}
 	case vSessions:
 		if r, ok := m.currentSession(); ok {
-			return m.ix.sessionTicket[r.ID]
+			return m.ix.SessionTicket[r.ID]
 		}
 	case vBoard:
 		if c, ok := m.currentCard(); ok && c.review() {
@@ -177,7 +177,7 @@ func (m *Model) writeNote() tea.Cmd {
 		return nil
 	}
 	in := newInput("title › ", "what is this note about")
-	if is, ok := m.ix.issues[key]; ok {
+	if is, ok := m.ix.Issues[key]; ok {
 		in.SetValue(is.Summary)
 		in.CursorEnd()
 	}
@@ -513,7 +513,7 @@ func (m *Model) detailNote() string {
 		var ks []string
 		for _, k := range r.note.Keys {
 			s := sTicket.Render(k)
-			if is, ok := m.ix.issues[k]; ok {
+			if is, ok := m.ix.Issues[k]; ok {
 				s += sDim.Render(" "+is.Summary+" · ") + statusText(is)
 			}
 			ks = append(ks, s)

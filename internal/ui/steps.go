@@ -10,31 +10,21 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/MartyJRE/claudia/internal/board"
 	"github.com/MartyJRE/claudia/internal/config"
 	"github.com/MartyJRE/claudia/internal/gitlab"
 	"github.com/MartyJRE/claudia/internal/launch"
 	"github.com/MartyJRE/claudia/internal/runs"
 )
 
-// A step is what x starts on a card. Each runs as a session, but merge, which
-// is a GitLab call.
-type step struct{ id, label string }
+type step = board.Step
 
 var (
-	ticketSteps = []step{{"readiness", "readiness"}, {"plan", "plan"}, {"implement", "implement"}, {"mr", "open MR"},
-		{"feedback", "feedback"}, {"merge", "merge"}, {"qa", "QA notes"}}
-	// findings isn't run: it's me reading what the review found.
-	reviewSteps = []step{{"review", "review"}, {"findings", "findings"}}
+	ticketSteps = board.TicketSteps
+	reviewSteps = board.ReviewSteps
+	stepLabel   = board.StepLabel
+	stageStep   = board.StageStep
 )
-
-func stepLabel(id string) string {
-	for _, s := range append(slices.Clip(ticketSteps), reviewSteps...) {
-		if s.id == id {
-			return s.label
-		}
-	}
-	return id
-}
 
 // sessionStep is how a ticket step starts its session: the intent, the verb
 // in its title and the configured prompt.
@@ -66,98 +56,22 @@ func (m *Model) runsFor(subject string) []runs.Run {
 	return m.runCache[subject]
 }
 
-// latest is the card's newest run of a step.
-func (c boardCard) latest(id string) *runs.Run {
-	if i := slices.IndexFunc(c.runs, func(r runs.Run) bool { return r.Step == id }); i >= 0 {
-		return &c.runs[i]
-	}
-	return nil
-}
+func (c boardCard) latest(id string) *runs.Run { return c.card().Latest(id) }
 
-// stale: a review or feedback run looked at a head the MR has moved on from.
-func (c boardCard) stale(r *runs.Run) bool {
-	switch r.Step {
-	case "review":
-		return c.review() && r.SHA != c.mr.SHA
-	case "feedback":
-		mr, ok := threadsMR(c)
-		return ok && r.SHA != mr.SHA
-	}
-	return false
-}
+func (c boardCard) stale(r *runs.Run) bool { return c.card().Stale(r) }
 
-// threadsMR is my open MR with review threads to address.
-func threadsMR(c boardCard) (gitlab.MR, bool) {
-	if i := slices.IndexFunc(c.mrs, func(mr gitlab.MR) bool { return openMR(mr) && mr.OpenThreads() > 0 }); i >= 0 {
-		return c.mrs[i], true
-	}
-	return gitlab.MR{}, false
-}
+func threadsMR(c boardCard) (gitlab.MR, bool) { return board.ThreadsMR(c.card()) }
 
-// nextStep walks the card's pipeline from its stage: it skips a step whose
-// latest run is ok and holds on one that's running or needs you, returning
-// that run. Anything running holds the card: one thing at a time.
-func nextStep(c boardCard) (string, *runs.Run) {
-	if i := slices.IndexFunc(c.runs, func(r runs.Run) bool { return r.Outcome == runs.Running }); i >= 0 {
-		return c.runs[i].Step, &c.runs[i]
-	}
-	var walk []string
-	switch {
-	case c.review():
-		if c.rstage == rsRequested {
-			walk = []string{"review"}
-		}
-	case c.stage == stUpNext:
-		walk = []string{"readiness", "plan"}
-	case c.stage == stPlan:
-		walk = []string{"implement"}
-	case c.stage == stBuilding:
-		if !slices.ContainsFunc(c.mrs, openMR) {
-			walk = []string{"mr"}
-		}
-	case c.stage == stReview:
-		if _, ok := threadsMR(c); ok {
-			walk = []string{"feedback"}
-		}
-	case c.stage == stMerge:
-		walk = []string{"merge"}
-	case c.stage == stQA:
-		walk = []string{"qa"}
-	}
-	for _, id := range walk {
-		r := c.latest(id)
-		switch {
-		case r == nil || r.Outcome == runs.Failed || c.stale(r):
-			return id, nil
-		case r.Outcome == runs.NeedsYou:
-			return id, r
-		}
-	}
-	return "", nil
-}
+func nextStep(c boardCard) (string, *runs.Run) { return board.NextStep(c.card()) }
 
-// waitingForAnswers: the readiness run asked questions on the ticket.
-func waitingForAnswers(c boardCard) bool {
-	r := c.latest("readiness")
-	return c.stage == stUpNext && r != nil && r.Outcome == runs.NeedsYou
-}
+func waitingForAnswers(c boardCard) bool { return board.WaitingForAnswers(c.card()) }
 
 var runFrames = frames{[]string{"━", "╸", " ", "╺"}, 2}
 
 // sPassed is a step the card's stage shows it got past, though claudia didn't run it.
 var sPassed = lipgloss.NewStyle().Foreground(lipgloss.Color("#5a7348"))
 
-// stageStep is the first ticket step a stage still has ahead of it.
-var stageStep = [nStages]int{stUpNext: 0, stPlan: 2, stBuilding: 3, stReview: 4, stMerge: 5, stQA: 6, stDone: len(ticketSteps)}
-
-// passed: the card is beyond this step whether or not it ran here.
-func (c boardCard) passed(id string) bool {
-	if c.review() {
-		return id == "review" && c.rstage != rsRequested && c.rstage != rsReviewing
-	}
-	i := slices.IndexFunc(ticketSteps, func(s step) bool { return s.id == id })
-	return i < stageStep[c.stage]
-}
+func (c boardCard) passed(id string) bool { return c.card().Passed(id) }
 
 // turnStyle colours the step a card is on by whose move it is: yellow when it
 // waits on me, blue while Claude carries on, grey (⧗) on someone else, and the
@@ -180,7 +94,7 @@ func currentStep(c boardCard, next string) string {
 	if next != "" || c.review() || stageStep[c.stage] >= len(ticketSteps) {
 		return next
 	}
-	return ticketSteps[stageStep[c.stage]].id
+	return ticketSteps[stageStep[c.stage]].ID
 }
 
 // segment is one step on the strip, coloured by how its latest run went.
@@ -234,7 +148,7 @@ func (m *Model) stepStrip(c boardCard) string {
 	cur := currentStep(c, next)
 	segs := make([]string, len(steps))
 	for i, s := range steps {
-		segs[i] = m.segment(c, s.id, cur)
+		segs[i] = m.segment(c, s.ID, cur)
 	}
 	strip := strings.Join(segs, " ")
 	switch {

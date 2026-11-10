@@ -212,7 +212,7 @@ func (m *Model) recentClosed(match func(...string) bool, filtering bool) []srow 
 	}
 	var closed []row
 	for _, r := range m.sessions {
-		if !r.live() && r.Dir() != "" && match(r.Name(), project(r.Dir()), branch(r), m.ix.sessionTicket[r.ID], r.Profile.Name) {
+		if !r.live() && r.Dir() != "" && match(r.Name(), project(r.Dir()), branch(r), m.ix.SessionTicket[r.ID], r.Profile.Name) {
 			closed = append(closed, r)
 		}
 	}
@@ -279,13 +279,13 @@ func (m *Model) buildSessions(sessions []row, filtering bool) []srow {
 			g.sessions = append(g.sessions, r)
 			continue
 		}
-		key := m.ix.sessionTicket[r.ID]
+		key := m.ix.SessionTicket[r.ID]
 		if key == "" {
 			g := group(&roots, "ticket:-", "No ticket", "")
 			g.sessions = append(g.sessions, r)
 			continue
 		}
-		is := m.ix.issues[key]
+		is := m.ix.Issues[key]
 		// An epic's own sessions sit directly under the epic.
 		if is.Level >= 1 {
 			g := group(&roots, "ticket:"+key, is.Summary, key)
@@ -294,7 +294,7 @@ func (m *Model) buildSessions(sessions []row, filtering bool) []srow {
 		}
 		parent := &roots
 		if is.Parent != "" {
-			epic := m.ix.issues[is.Parent]
+			epic := m.ix.Issues[is.Parent]
 			title := epic.Summary
 			if title == "" {
 				title = is.ParentSummary

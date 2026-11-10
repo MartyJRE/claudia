@@ -1,13 +1,12 @@
 package ui
 
 import (
-	"cmp"
 	"slices"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/MartyJRE/claudia/internal/claude"
+	"github.com/MartyJRE/claudia/internal/board"
 	"github.com/MartyJRE/claudia/internal/runs"
 )
 
@@ -47,20 +46,7 @@ func (m *Model) glyph(f frames) string {
 func (m *Model) spin() string { return m.glyph(spinner) }
 
 // activity is what a working session is doing, as a verb and what it acts on.
-func activity(r row) (string, string) {
-	if r.Live.Status == claude.StatusShell {
-		return "running", ""
-	}
-	var a claude.Activity
-	if r.Transcript != nil {
-		a = r.Activity
-	}
-	verb := cmp.Or(a.Verb, "thinking")
-	if r.kind == "review" && (verb == "reading" || verb == "thinking") {
-		verb = "reviewing"
-	}
-	return verb, a.Detail
-}
+func activity(r row) (string, string) { return board.Activity(r.sess()) }
 
 func (m *Model) activityGlyph(verb string) string {
 	return m.glyph(activityFrames[verb]) + " " + verb

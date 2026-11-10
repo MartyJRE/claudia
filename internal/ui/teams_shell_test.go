@@ -291,7 +291,7 @@ func TestMentionsCoveredByMRsShell(t *testing.T) {
 	m.gl.Me.Username = "martin"
 	rev := m.gl.Review[0]
 	tracked := "https://gitlab.example.com/g/x/-/merge_requests/1"
-	m.ix.mrs[tracked] = gitlab.MR{WebURL: tracked, State: "merged"}
+	m.ix.MRs[tracked] = gitlab.MR{WebURL: tracked, State: "merged"}
 	unknown := "https://gitlab.example.com/g/payments/-/merge_requests/77"
 	m.teams.Waiting = []teams.Waiting{
 		{Ref: "T/C/review", Kind: "mention", MRURLs: []string{rev.WebURL}},

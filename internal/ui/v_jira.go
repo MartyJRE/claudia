@@ -234,7 +234,7 @@ func (m *Model) jiraCells(i int, sel bool) []string {
 
 func (m *Model) issueMRs(key string) string {
 	var parts []string
-	for _, mr := range m.ix.ticketMRs[key] {
+	for _, mr := range m.ix.TicketMRs[key] {
 		st := sKey
 		if mr.State == "merged" {
 			st = lipgloss.NewStyle().Foreground(purple)
@@ -246,7 +246,7 @@ func (m *Model) issueMRs(key string) string {
 
 // issueSessions shows a robot per paired session, lit when one is running.
 func (m *Model) issueSessions(key string) string {
-	ids := m.ix.ticketSess[key]
+	ids := m.ix.TicketSess[key]
 	if len(ids) == 0 {
 		return ""
 	}
@@ -289,20 +289,20 @@ func (m *Model) detailJira() string {
 	meta := []string{statusText(is), sDim.Render(typeName(is.Type)), sDim.Render(is.Assignee)}
 	if is.Parent != "" {
 		p := sTicket.Render(is.Parent)
-		if pi, ok := m.ix.issues[is.Parent]; ok {
+		if pi, ok := m.ix.Issues[is.Parent]; ok {
 			p += sDim.Render(" " + pi.Summary)
 		}
 		meta = append(meta, p)
 	}
 	lines = append(lines, strings.Join(meta, sDim.Render("  ·  ")))
-	if mrs := m.ix.ticketMRs[is.Key]; len(mrs) > 0 {
+	if mrs := m.ix.TicketMRs[is.Key]; len(mrs) > 0 {
 		var refs []string
 		for _, mr := range mrs {
 			refs = append(refs, m.mrRef(mr.WebURL))
 		}
 		lines = append(lines, strings.Join(refs, "   "))
 	}
-	if ids := m.ix.ticketSess[is.Key]; len(ids) > 0 {
+	if ids := m.ix.TicketSess[is.Key]; len(ids) > 0 {
 		lines = append(lines, sDim.Render("sessions: ")+m.sessionRefs(ids))
 	}
 	if n := m.unansweredFor(is.Key); n > 0 {
@@ -358,8 +358,8 @@ func (m *Model) keyJira(k string) (tea.Model, tea.Cmd) {
 	case "jira.copy":
 		return m, copyText(is.Key, is.Key)
 	case "jira.sessions":
-		if len(m.ix.ticketSess[is.Key]) > 0 {
-			m.chooseSessions(m.ix.ticketSess[is.Key], "sessions for "+is.Key)
+		if len(m.ix.TicketSess[is.Key]) > 0 {
+			m.chooseSessions(m.ix.TicketSess[is.Key], "sessions for "+is.Key)
 			return m, nil
 		}
 		return m.claudeForTicket(is.Key, is.Summary)

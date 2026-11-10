@@ -432,8 +432,9 @@ func TestMergeStepShell(t *testing.T) {
 	m.runNext(c)
 	_, cmd = m.runNext(c)
 	msg = cmd().(mergedMsg)
-	if r := db.For("ABC-9"); r[0].Outcome != runs.Failed || r[0].Reason != "405 not mergeable" {
-		t.Errorf("failed merge run %+v", r[0])
+	// Both runs may start within the same millisecond.
+	if r := db.For("ABC-9"); !slices.ContainsFunc(r, func(r runs.Run) bool { return r.Outcome == runs.Failed && r.Reason == "405 not mergeable" }) {
+		t.Errorf("failed merge run %+v", r)
 	}
 	m.Update(msg)
 	if m.flash != "merge !30 payments: 405 not mergeable" {

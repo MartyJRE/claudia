@@ -216,14 +216,14 @@ func TestIndexLinksTicketsAndMRs(t *testing.T) {
 	gl := gitlab.Snapshot{Review: []gitlab.MR{a, d}, Mine: []gitlab.MR{b, a}, Merged: []gitlab.MR{c}}
 	ix := buildIndex(nil, gl, atlassian.JiraSnapshot{Sprint: []atlassian.Issue{{Key: "ABC-1"}}, Team: []atlassian.Issue{{Key: "ABC-2"}}}, &links.Links{})
 	var urls []string
-	for _, m := range ix.ticketMRs["ABC-1"] {
+	for _, m := range ix.TicketMRs["ABC-1"] {
 		urls = append(urls, m.WebURL)
 	}
 	if strings.Join(urls, ",") != "a,b,c" {
 		t.Errorf("MRs by branch or title, once each: %v", urls)
 	}
-	if len(ix.issues) != 2 || len(ix.mrs) != 4 {
-		t.Errorf("issues %d mrs %d", len(ix.issues), len(ix.mrs))
+	if len(ix.Issues) != 2 || len(ix.MRs) != 4 {
+		t.Errorf("issues %d mrs %d", len(ix.Issues), len(ix.MRs))
 	}
 	if mrTicket(d) != "" || mrTicket(b) != "ABC-1" {
 		t.Error("mrTicket")
