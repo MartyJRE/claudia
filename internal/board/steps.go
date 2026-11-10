@@ -2,6 +2,7 @@ package board
 
 import (
 	"slices"
+	"strings"
 
 	"github.com/MartyJRE/claudia/internal/gitlab"
 	"github.com/MartyJRE/claudia/internal/runs"
@@ -90,17 +91,21 @@ func NextStep(c Card) (string, *runs.Run) {
 		switch {
 		case r == nil || r.Outcome == runs.Failed || c.Stale(r):
 			return id, nil
-		case r.Outcome == runs.NeedsYou:
+		case r.Outcome == runs.NeedsYou || r.Outcome == runs.Waiting:
 			return id, r
 		}
 	}
 	return "", nil
 }
 
-// WaitingForAnswers: the readiness run asked questions on the ticket.
+// WaitingForAnswers: the readiness run asked questions on the ticket. Runs
+// from before the waiting outcome said so as needs-you, "asked …".
 func WaitingForAnswers(c Card) bool {
 	r := c.Latest("readiness")
-	return c.Stage == UpNext && r != nil && r.Outcome == runs.NeedsYou
+	if c.Stage != UpNext || r == nil {
+		return false
+	}
+	return r.Outcome == runs.Waiting || r.Outcome == runs.NeedsYou && strings.HasPrefix(r.Reason, "asked")
 }
 
 // StageStep is the first ticket step a stage still has ahead of it.

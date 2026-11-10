@@ -129,6 +129,8 @@ func outcomeStyle(outcome string) lipgloss.Style {
 		return lipgloss.NewStyle().Foreground(yellow)
 	case runs.Failed:
 		return sErr
+	case runs.Waiting:
+		return sDim
 	}
 	return lipgloss.NewStyle().Foreground(blue)
 }

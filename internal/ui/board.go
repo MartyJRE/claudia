@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"cmp"
 	"fmt"
 	"slices"
 	"strings"
@@ -163,10 +164,14 @@ func cardStage(c boardCard) (stage, string) {
 var stageNext = [nStages]string{"plan it", "implement", "open MR", "get it reviewed", "merge", "QA notes", ""}
 
 func cardTurn(c boardCard, waiting []inboxItem) (turn, string, string) {
+	_, hold := nextStep(c)
+	if hold != nil && hold.Outcome == runs.Waiting && len(waiting) == 0 {
+		return turnColleague, cmp.Or(hold.Reason, "waiting"), ""
+	}
 	if waitingForAnswers(c) && len(waiting) == 0 {
 		return turnColleague, "waiting for answers", ""
 	}
-	if _, hold := nextStep(c); hold != nil && hold.Outcome == runs.NeedsYou && hold.Reason == runs.ContextFull {
+	if hold != nil && hold.Outcome == runs.NeedsYou && hold.Reason == runs.ContextFull {
 		return turnNeedsYou, "context full", ""
 	}
 	for _, r := range c.sessions {

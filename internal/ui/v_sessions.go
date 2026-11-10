@@ -155,6 +155,8 @@ func (m *Model) status(r row) string {
 	case s.Working():
 		verb, _ := activity(r)
 		return sOK.Render(m.activityGlyph(verb))
+	case r.summarized(waitingPrefix):
+		return sDim.Render("⧗ waiting")
 	case r.done():
 		return sOK.Render("✓ done")
 	default:

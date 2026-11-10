@@ -79,6 +79,8 @@ func TestStripHintsShell(t *testing.T) {
 	}{
 		{"context full", boardCard{stage: stPlan, runs: hold(runs.NeedsYou, runs.ContextFull)}, "◆ context full · enter"},
 		{"Claude asks", boardCard{stage: stPlan, runs: hold(runs.NeedsYou, "which table?")}, "◆ answer Claude · enter"},
+		{"asked others", boardCard{stage: stPlan, runs: hold(runs.Waiting, "asked Bob")}, "⧗ asked Bob"},
+		{"waiting, no reason", boardCard{stage: stPlan, runs: hold(runs.Waiting, "")}, "⧗ waiting"},
 		{"running", boardCard{stage: stPlan, runs: hold(runs.Running, "")}, ""},
 		{"findings", boardCard{mr: &review, rstage: rsFindings}, "◆ check findings · enter"},
 		{"autopilot off", boardCard{stage: stPlan}, ""},
@@ -101,6 +103,8 @@ func TestStripHintsShell(t *testing.T) {
 		{boardCard{stage: stPlan, auto: true, gate: autopilot.PlanOK}, turnNeedsYou, "plan OK?"},
 		{boardCard{stage: stPlan, auto: true, gate: autopilot.Backoff}, turnNeedsYou, "implement failed twice"},
 		{boardCard{stage: stPlan, runs: hold(runs.NeedsYou, runs.ContextFull)}, turnNeedsYou, "context full"},
+		{boardCard{stage: stPlan, runs: hold(runs.Waiting, "asked 2 questions")}, turnColleague, "asked 2 questions"},
+		{boardCard{stage: stPlan, runs: hold(runs.Waiting, "")}, turnColleague, "waiting"},
 	} {
 		if tn, next, _ := cardTurn(c.card, nil); tn != c.turn || next != c.next {
 			t.Errorf("%+v: %d %q", c.card.gate, tn, next)

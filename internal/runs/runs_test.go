@@ -263,7 +263,7 @@ func TestReconcile(t *testing.T) {
 		"asked":    {NeedsYou, "asked 2 questions"},
 		"doneSum":  {OK, "MR !5 open"},
 		"needsSum": {NeedsYou, "pick a name"},
-		"silent":   {Failed, "ended without a result"},
+		"silent":   {Waiting, "Bob"},
 		"gone":     {Failed, "ended without a result"},
 		"fresh":    {Failed, "ended without a result"},
 		"young":    {Running, ""},
@@ -359,7 +359,7 @@ func TestStuckAtStartupErrors(t *testing.T) {
 	if _, err := s.Reconcile([]Seen{{Session: "a", Starting: true}}, t0.Add(time.Hour)); err == nil {
 		t.Error("noting stuck: no error")
 	}
-	if _, err := s.Reconcile([]Seen{{Session: "b", Live: true}}, t0.Add(time.Hour)); err == nil {
+	if _, err := s.Reconcile([]Seen{{Session: "a", Live: true, Working: true}, {Session: "b", Live: true}}, t0.Add(time.Hour)); err == nil {
 		t.Error("clearing stuck: no error")
 	}
 }
@@ -380,6 +380,48 @@ func TestStuckWithTranscript(t *testing.T) {
 	}
 	if r := s.For("ABC-1")[0]; r.Outcome != Running || r.Reason != StuckAtStartup {
 		t.Errorf("run %+v", r)
+	}
+}
+
+func TestWaiting(t *testing.T) {
+	s := open(t)
+	if o, r, ok := Result("asked\nCLAUDIA_RESULT: waiting — asked 3 questions"); !ok || o != Waiting || r != "asked 3 questions" {
+		t.Errorf("result %q %q %v", o, r, ok)
+	}
+	if (Run{Outcome: Waiting}).Settled() || !(Run{Outcome: OK}).Settled() {
+		t.Error("waiting counts as open")
+	}
+	_ = s.Start(Run{ID: "w", Subject: "ABC-1", Step: "readiness", Session: "a", Started: t0, StartedBy: ByAutopilot})
+	_ = s.Start(Run{ID: "h", Subject: "ABC-2", Step: "plan", Session: "b", Started: t0})
+	_ = s.Start(Run{ID: "m", Subject: "ABC-2", Step: "merge", Started: t0, Outcome: OK, StartedBy: ByAutopilot})
+	now := t0.Add(time.Hour)
+	if _, err := s.Reconcile([]Seen{{Session: "a", Live: true, Reply: "CLAUDIA_RESULT: waiting — asked 3 questions"}}, now); err != nil {
+		t.Fatal(err)
+	}
+	// A dead session doesn't end a waiting run: it carries on once answered.
+	if _, err := s.Reconcile(nil, now); err != nil {
+		t.Fatal(err)
+	}
+	if r := s.For("ABC-1")[0]; r.Outcome != Waiting || r.Reason != "asked 3 questions" {
+		t.Errorf("run %+v", r)
+	}
+	if by := s.SessionsStartedBy(ByAutopilot); len(by) != 1 || !by["a"] {
+		t.Errorf("autopilot sessions %v", by)
+	}
+	// Resumed with a new run, only the newest one settles.
+	_ = s.Start(Run{ID: "w2", Subject: "ABC-1", Step: "readiness", Session: "a", Started: now})
+	if _, err := s.Reconcile([]Seen{{Session: "a", Live: true, Reply: "CLAUDIA_RESULT: ok — ready"}}, now.Add(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	rs := s.For("ABC-1")
+	if rs[0].ID != "w2" || rs[0].Outcome != OK || rs[1].Outcome != Waiting {
+		t.Errorf("runs %+v", rs)
+	}
+	if l := s.Latest(); len(l) != 2 || l["a"].ID != "w2" || l["b"].ID != "h" {
+		t.Errorf("latest %+v", l)
+	}
+	if o, r := fallback("Waiting: Michal"); o != Waiting || r != "Michal" {
+		t.Errorf("fallback %q %q", o, r)
 	}
 }
 

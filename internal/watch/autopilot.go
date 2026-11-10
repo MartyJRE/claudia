@@ -82,10 +82,13 @@ func (w *watcher) autopilot(now time.Time) {
 	p.links.Reload()
 	kinds := launch.Kinds()
 	var ss []board.Session
+	latest := w.runs.Latest()
 	w.summaryMu.Lock()
 	for _, s := range p.board.Sessions() {
 		sum := w.summaries[s.ID]
-		ss = append(ss, board.Session{Session: s, Kind: kinds[s.ID], Summary: sum.Text, SummaryFor: sum.For})
+		bs := board.Session{Session: s, Kind: kinds[s.ID], Summary: sum.Text, SummaryFor: sum.For}
+		bs.WaitOnRun(latest)
+		ss = append(ss, bs)
 	}
 	w.summaryMu.Unlock()
 	tickPilot(p.Pilot, now, cfg, autopilot.Inputs{GL: w.gl, Jira: w.js, Sessions: ss, Links: p.links, Repos: p.repos,

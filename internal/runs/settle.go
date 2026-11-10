@@ -11,7 +11,7 @@ import (
 // Marker is the line a run ends its last message with.
 const Marker = "CLAUDIA_RESULT:"
 
-var resultLine = regexp.MustCompile(`(?m)` + Marker + `[ \t]*(ok|needs-you|failed)\b[ \t—–:-]*(.*)$`)
+var resultLine = regexp.MustCompile(`(?m)` + Marker + `[ \t]*(ok|needs-you|waiting|failed)\b[ \t—–:-]*(.*)$`)
 
 // Result reads the last result line of a reply.
 func Result(text string) (outcome, reason string, ok bool) {
@@ -101,7 +101,13 @@ func (s *Store) Reconcile(seen []Seen, now time.Time) (bool, error) {
 		by[sn.Session] = sn
 	}
 	changed := false
+	newest := map[string]bool{}
 	for _, r := range s.open() {
+		// A resumed session's older runs keep their outcome.
+		if newest[r.Session] {
+			continue
+		}
+		newest[r.Session] = true
 		sn := by[r.Session]
 		if r.Outcome == Running && r.Reason == StuckAtStartup && sn.Live {
 			if err := s.Note(r.Session, ""); err != nil {
@@ -127,7 +133,7 @@ func (s *Store) Reconcile(seen []Seen, now time.Time) (bool, error) {
 				}
 				continue
 			}
-			if r.Outcome == NeedsYou || now.Sub(r.Started) < grace {
+			if r.Outcome == NeedsYou || r.Outcome == Waiting || now.Sub(r.Started) < grace {
 				continue
 			}
 			if !ok {
@@ -149,7 +155,7 @@ func (s *Store) Reconcile(seen []Seen, now time.Time) (bool, error) {
 // fallback reads the outcome off the summary of a session that ended without
 // a result line.
 func fallback(summary string) (string, string) {
-	for prefix, outcome := range map[string]string{"Done:": OK, "Needs you:": NeedsYou} {
+	for prefix, outcome := range map[string]string{"Done:": OK, "Needs you:": NeedsYou, "Waiting:": Waiting} {
 		if rest, ok := strings.CutPrefix(summary, prefix); ok {
 			return outcome, strings.TrimSpace(rest)
 		}

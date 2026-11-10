@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"cmp"
 	"fmt"
 	"slices"
 	"strconv"
@@ -93,6 +94,8 @@ func (m *Model) stripHint(c boardCard, next string, hold *runs.Run) (string, boo
 	switch {
 	case hold != nil && hold.Outcome == runs.NeedsYou && hold.Reason == runs.ContextFull:
 		return ask("context full", "enter")
+	case hold != nil && hold.Outcome == runs.Waiting:
+		return sDim.Render("⧗ " + cmp.Or(hold.Reason, "waiting")), true
 	case hold != nil && waitingForAnswers(c):
 		return sDim.Render("⧗ waiting for answers"), true
 	case hold != nil && hold.Outcome == runs.NeedsYou:
