@@ -51,11 +51,14 @@ type Transcript struct {
 	Usage    Usage
 	Started  time.Time
 	Updated  time.Time
+	// Activity is the newest tool call still waiting for its result.
+	Activity Activity
 
 	offset   int64
 	size     int64
 	mtime    time.Time
 	requests map[string]bool
+	pending  []pendingTool
 }
 
 // Turn is one prompt (Role "user") or reply ("assistant") in a Tail.
@@ -252,6 +255,7 @@ func (t *Transcript) apply(line []byte) {
 			t.Updated = e.Timestamp
 		}
 		if e.Type == "user" {
+			t.noteResults(e.Message.Content)
 			if t.FirstPrompt == "" {
 				t.FirstPrompt = promptText(e.Message.Content)
 			}
@@ -269,6 +273,7 @@ func (t *Transcript) apply(line []byte) {
 		}
 		t.addTurn("assistant", replyText(e.Message.Content))
 		t.notePlan(e.Message.Content)
+		t.noteTools(e.Message.Content)
 		if m := e.Message.Model; m != "" {
 			if m != t.Model {
 				t.Models = append(t.Models, m)
