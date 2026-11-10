@@ -47,6 +47,12 @@ func (c *Client) whoami() (me, error) {
 	return c.me, err
 }
 
+// MeID is the signed-in user's id, which reactions are filed under.
+func (c *Client) MeID() (string, error) {
+	m, err := c.whoami()
+	return m.ID, err
+}
+
 type chatMessage struct {
 	ID          string    `json:"id"`
 	Created     time.Time `json:"createdDateTime"`

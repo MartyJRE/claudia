@@ -82,7 +82,7 @@ func Title(c config.Config, issues map[string]atlassian.Issue, intent, verb, key
 
 // TicketRepo is the repo a ticket's step runs in without asking: the one on a
 // branch named after the ticket, else the one picked for it before, else the
-// single clone of the project its MRs are in. Several of either is a question.
+// single clone of the project its MRs are in. Several unpicked is a question.
 func TicketRepo(all []repos.Repo, key string, mrs []gitlab.MR, picked string) (repos.Repo, bool) {
 	lower := strings.ToLower(key)
 	var onBranch []repos.Repo
@@ -91,17 +91,21 @@ func TicketRepo(all []repos.Repo, key string, mrs []gitlab.MR, picked string) (r
 			onBranch = append(onBranch, r)
 		}
 	}
-	switch len(onBranch) {
-	case 1:
+	if len(onBranch) == 1 {
 		return onBranch[0], true
-	case 0:
-	default:
-		return repos.Repo{}, false
 	}
-	for _, r := range all {
+	// A pick settles which of several, but not one off the ticket's branch.
+	from := onBranch
+	if len(onBranch) == 0 {
+		from = all
+	}
+	for _, r := range from {
 		if picked != "" && r.Dir == picked {
 			return r, true
 		}
+	}
+	if len(onBranch) > 1 {
+		return repos.Repo{}, false
 	}
 	projects := map[string]bool{}
 	for _, mr := range mrs {

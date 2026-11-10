@@ -76,6 +76,8 @@ func TestTicketRepo(t *testing.T) {
 	}{
 		{"on the ticket's branch", []repos.Repo{pay, web}, nil, "", "/c/web"},
 		{"two on its branch", []repos.Repo{web, api}, nil, "", ""},
+		{"two on its branch, one picked", []repos.Repo{web, api}, nil, "/c/api", "/c/api"},
+		{"two on its branch, another picked", []repos.Repo{web, api, pay}, nil, "/c/pay", ""},
 		{"picked before", []repos.Repo{pay, pay2}, nil, "/c/pay2", "/c/pay2"},
 		{"picked, since gone", []repos.Repo{pay}, nil, "/c/old", ""},
 		{"the one clone of its MR", []repos.Repo{pay, repos.Repo{Dir: "/c/x", Project: "g/x"}}, []gitlab.MR{mr("g/pay", "feat/y")}, "", "/c/pay"},

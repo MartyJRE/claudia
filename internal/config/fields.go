@@ -118,6 +118,8 @@ var Fields = []Field{
 		Default: "30", Help: "what the autopilot's runs may cost in a day", Example: `30`},
 	{Key: "autopilot.review_every", Group: "Autopilot", Label: "review every", Kind: KindDuration,
 		Default: "1h", Help: "at most one review started on its own per period, e.g. 30m"},
+	{Key: "autopilot.permission_mode", Group: "Autopilot", Label: "permission mode", Kind: KindString,
+		Default: "auto", Help: "how the runs it starts ask before acting: default (your usual mode), acceptEdits, auto or bypassPermissions; bypassPermissions has no sandbox behind it, the run can do anything you can"},
 
 	{Key: "brief_every", Group: "UI", Label: "brief every", Kind: KindDuration,
 		Default: "2h", Help: "how often the inbox brief is rewritten, e.g. 30m; off leaves only the on-demand refresh"},

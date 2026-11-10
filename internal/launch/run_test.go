@@ -19,7 +19,7 @@ func TestAsRun(t *testing.T) {
 		t.Fatalf("args %q", run.Args)
 	}
 	note := run.Args[5]
-	for _, want := range []string{"ctl here", "This is claudia run run-1, step plan for ABC-2.", "`CLAUDIA_RESULT: ok|needs-you|failed — <short reason>`", "`size: simple`"} {
+	for _, want := range []string{"ctl here", "This is claudia run run-1, step plan for ABC-2.", "`CLAUDIA_RESULT: ok|needs-you|failed — <short reason>`", "`size: simple`", "push broad searches and big reads into subagents"} {
 		if !strings.Contains(note, want) {
 			t.Errorf("note misses %q: %s", want, note)
 		}
@@ -56,5 +56,17 @@ func TestStartEnv(t *testing.T) {
 	}
 	if strings.TrimSpace(string(got)) != "run-7 /p/personal" {
 		t.Errorf("env in the window %q", got)
+	}
+}
+
+func TestWithPermissionMode(t *testing.T) {
+	sp, _ := New("/code/x", work, "n", "go")
+	if got := sp.WithPermissionMode("auto"); !slices.Equal(got.Args[:2], []string{"--permission-mode", "auto"}) || got.Args[len(got.Args)-1] != "go" || sp.Args[0] == "--permission-mode" {
+		t.Errorf("args %q", got.Args)
+	}
+	for _, m := range []string{"", "default"} {
+		if got := sp.WithPermissionMode(m); !slices.Equal(got.Args, sp.Args) {
+			t.Errorf("%q: %q", m, got.Args)
+		}
 	}
 }

@@ -11,6 +11,14 @@ func TestAutopilotDefaults(t *testing.T) {
 	if a.Enabled || a.Mode("plan") != ModeAuto || a.Mode("implement") != ModeAfterPlanOK || a.Mode("merge") != ModeAsk || a.Mode("findings") != ModeAsk {
 		t.Error("modes")
 	}
+	if a.PermissionMode() != "auto" {
+		t.Error("permission mode")
+	}
+	a.PermissionModeRaw = "bypassPermissions"
+	if a.PermissionMode() != "bypassPermissions" {
+		t.Error("set permission mode")
+	}
+	a.PermissionModeRaw = ""
 	if !a.ReviewApprove() || a.ReviewReact() != "✅" || a.MaxRunning() != 1 || a.ReviewEvery() != time.Hour {
 		t.Error("review and running")
 	}
@@ -68,6 +76,8 @@ func TestCheckAutopilot(t *testing.T) {
 		{Autopilot{Days: []string{"someday"}}, `"someday" isn't a day`},
 		{Autopilot{Days: []string{"mo"}}, `"mo" isn't a day`},
 		{Autopilot{ReviewEveryRaw: "hourly"}, "autopilot.review_every"},
+		{Autopilot{PermissionModeRaw: "yolo"}, "autopilot.permission_mode"},
+		{Autopilot{PermissionModeRaw: "acceptEdits"}, ""},
 	} {
 		err := CheckAutopilot(c.a)
 		if (c.err == "") != (err == nil) || err != nil && !strings.Contains(err.Error(), c.err) {
