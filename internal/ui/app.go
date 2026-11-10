@@ -858,6 +858,9 @@ func (m *Model) subtitle() string {
 		if m.boardPrefs.Team {
 			s = "team sprint"
 		}
+		if sp := m.currentSprint(); sp != "" {
+			s += " in " + sp
+		}
 		if m.boardPrefs.Done {
 			s += " incl. done"
 		}

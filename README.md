@@ -54,7 +54,8 @@ on the ticket's branch) is Building, an analysis session or a plan is Plan.
 The Jira status counts too, since merged MRs drop out of GitLab's list after a
 few days: a ticket goes to the further of the two, so one in testing sits in QA.
 Done tickets join as a last column with `d`, tickets planned for a future sprint
-are folded under Up next until `f`, and `board.statuses` can pin a Jira status
+are folded under Up next until `f` (then each names its sprint, and the subtitle
+names the current one), and `board.statuses` can pin a Jira status
 to a column. Each card says whose turn it is: `◆ needs you` (a session asks, or
 the Inbox has something for the ticket; these go first), Claude at work with its
 activity, or `⧗ waiting` on reviewers, someone a session named, or a status on
