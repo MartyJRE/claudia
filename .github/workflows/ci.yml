@@ -75,6 +75,42 @@ jobs:
           echo "Swift coverage: $pct%" >> "$GITHUB_STEP_SUMMARY"
           echo "pct=$pct" >> "$GITHUB_OUTPUT"
 
+  # Every green push to main is a release. Tagging and goreleaser share one job
+  # because a tag pushed with GITHUB_TOKEN starts no other workflow.
+  release:
+    if: github.event_name == 'push'
+    needs: [check, swift]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency: release
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: tag
+        id: tag
+        run: |
+          tag=$(.github/scripts/next-version.sh)
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          if [ -z "$tag" ]; then
+            echo "HEAD is already released" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          git tag "$tag"
+          git push origin "$tag"
+          echo "Released $tag" >> "$GITHUB_STEP_SUMMARY"
+      - uses: goreleaser/goreleaser-action@v6
+        if: steps.tag.outputs.tag != ''
+        with:
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   swift-badge:
     if: github.event_name == 'push'
     needs: swift
