@@ -50,8 +50,13 @@ func TestNewRepoOnGitHubShell(t *testing.T) {
 	if it, _ := m.chooser.selected(); it.value != "private" {
 		t.Errorf("GitHub repos default to private: %+v", it)
 	}
+	pressShell(m, "enter")
+	if m.prompt == nil || m.prompt.in.Value() != "main" {
+		t.Fatal("GitHub repos default to main")
+	}
+	containsAllShell(t, "branch", screenShell(m), "default branch of gadget", "enter create")
 	m.Update(pressShell(m, "enter")())
-	want := repos.New{Dir: root + "/Personal/gadget", Visibility: "private"}
+	want := repos.New{Dir: root + "/Personal/gadget", Visibility: "private", Branch: "main"}
 	if *created != want {
 		t.Errorf("created %+v", *created)
 	}
@@ -83,8 +88,18 @@ func TestNewRepoOnGitLabShell(t *testing.T) {
 	if it, _ := m.chooser.selected(); it.value != "internal" {
 		t.Errorf("GitLab repos default to internal: %+v", it)
 	}
+	pressShell(m, "down", "enter")
+	if m.prompt == nil || m.prompt.in.Value() != "master" {
+		t.Fatal("GitLab repos default to master")
+	}
+	m.prompt.in.SetValue("develop..")
+	pressShell(m, "enter")
+	if m.prompt == nil || m.flash != "not a branch name git takes" {
+		t.Fatalf("a bad branch keeps the prompt open: %q", m.flash)
+	}
+	m.prompt.in.SetValue("develop")
 	m.Update(pressShell(m, "enter")())
-	want := repos.New{Dir: root + "/Work/acme/devops/svc", Group: "acme/devops", GitLabHost: "gitlab.example.com", Visibility: "internal"}
+	want := repos.New{Dir: root + "/Work/acme/devops/svc", Group: "acme/devops", GitLabHost: "gitlab.example.com", Visibility: "private", Branch: "develop"}
 	if *created != want {
 		t.Errorf("created %+v", *created)
 	}
