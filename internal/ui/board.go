@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/MartyJRE/claudia/internal/atlassian"
+	"github.com/MartyJRE/claudia/internal/autopilot"
 	"github.com/MartyJRE/claudia/internal/board"
 	"github.com/MartyJRE/claudia/internal/claude"
 	"github.com/MartyJRE/claudia/internal/gitlab"
@@ -49,6 +50,14 @@ type boardCard struct {
 	mr       *gitlab.MR // set on a review card, which has no issue
 	rstage   rstage
 	runs     []runs.Run // newest first
+	// What the autopilot makes of the card's next step.
+	auto   bool
+	gate   autopilot.Gate
+	over   map[string]string
+	block  string
+	planOK bool
+	ctx    float64 // how full the running run's context is
+	hinted bool    // the strip says what to do, so the chips needn't
 }
 
 type boardPrefs struct {
@@ -131,7 +140,10 @@ func (m *Model) boardCards() []boardCard {
 	for _, bc := range board.Cards(src, m.ix, sessionsOf(m.sessions), m.runsFor, getConfig().Board.Statuses) {
 		c := m.fromBoard(bc, byID)
 		c.cost = m.costs[c.issue.Key]
+		m.applyAutopilot(&c)
 		c.turn, c.next, c.verb = cardTurn(c, waiting[c.issue.Key])
+		next, hold := nextStep(c)
+		_, c.hinted = m.stripHint(c, next, hold)
 		cards = append(cards, c)
 	}
 	return cards
@@ -153,6 +165,9 @@ var stageNext = [nStages]string{"plan it", "implement", "open MR", "get it revie
 func cardTurn(c boardCard, waiting []inboxItem) (turn, string, string) {
 	if waitingForAnswers(c) && len(waiting) == 0 {
 		return turnColleague, "waiting for answers", ""
+	}
+	if _, hold := nextStep(c); hold != nil && hold.Outcome == runs.NeedsYou && hold.Reason == runs.ContextFull {
+		return turnNeedsYou, "context full", ""
 	}
 	for _, r := range c.sessions {
 		if r.needsYou() {
@@ -188,8 +203,15 @@ func cardTurn(c boardCard, waiting []inboxItem) (turn, string, string) {
 	if onHold(c.issue.Status) {
 		return turnColleague, "on hold: " + c.issue.Status, ""
 	}
+	id, _ := nextStep(c)
+	if t, next, verb, ok := autoTurn(c, id); ok && c.gate != autopilot.Off {
+		return t, next, verb
+	}
 	next := stageNext[c.stage]
-	if id, _ := nextStep(c); id != "" {
+	switch {
+	case c.auto && c.gate == autopilot.Off:
+		next = ""
+	case id != "":
 		next = stepLabel(id)
 	}
 	for _, mr := range c.mrs {

@@ -81,8 +81,11 @@ var actions = []action{
 	{"board.done", []string{"d"}, "show done"},
 	{"board.later", []string{"f"}, "next sprint"},
 	{"board.reviews", []string{"r"}, "tickets/reviews/all"},
-	{"board.run", []string{"x"}, "run the next step"},
-	{"board.run_bg", []string{"X"}, "run it in the background"},
+	{"board.run", []string{"s"}, "start the next step"},
+	{"board.run_bg", []string{"S"}, "start it in the background"},
+	{"board.plan_ok", []string{"p"}, "plan OK"},
+	{"board.pause", []string{"P"}, "pause/resume the autopilot"},
+	{"board.override", []string{"A"}, "this card's autopilot"},
 
 	{"usage.layout", []string{"v"}, "layout"},
 

@@ -155,7 +155,8 @@ type Model struct {
 	db            *runs.Store // the run log; nil when it couldn't be opened
 	dbErr         error
 	runCache      map[string][]runs.Run // per subject, until the next refresh
-	step          *runs.Run             // the run x is starting, for the next session launched
+	step          *runs.Run             // the run s is starting, for the next session launched
+	ap            apState
 	sessLoaded    bool
 	sessLoading   bool
 	gl            gitlab.Snapshot
@@ -723,6 +724,9 @@ func (m *Model) viewHeader() string {
 	}
 	title := sAccent.Render(" ✻ claudia")
 	var pills []string
+	if p := m.autopilotPill(); p != "" {
+		pills = append(pills, p)
+	}
 	if m.updateAvail {
 		pills = append(pills, pill(black, cyan, "⬆ update · ctrl+u"))
 	}
@@ -894,6 +898,13 @@ func (m *Model) subtitle() string {
 		}
 		s += " by stage"
 		hint := sKey.Render(m.key("board.reviews")) + sDim.Render(" view  ") + sKey.Render(m.key("board.team")) + sDim.Render(" mine/team  ") + sKey.Render(m.key("board.done")) + sDim.Render(" done  ") + sKey.Render(m.key("board.later")) + sDim.Render(" next sprint  ")
+		if m.ap.on {
+			word := " pause  "
+			if m.ap.paused {
+				word = " resume  "
+			}
+			hint += sKey.Render(m.key("board.pause")) + sDim.Render(word)
+		}
 		if m.boardFocus {
 			hint += sKey.Render("↑") + sDim.Render(" on a top card steps out")
 		} else {
@@ -989,7 +1000,7 @@ func (m *Model) help() [][2]string {
 			return m.reviewHints(c)
 		}
 		return append([][2]string{{m.key("board.left") + "/" + m.key("board.right"), "columns"}, m.hint("board.run", runHint(c)), m.hint("board.run_bg", "in the background")},
-			m.hints("board.sessions", "board.claude", "board.claude_bg", "board.open", "board.mr", "board.threads", "board.move", "board.copy")...)
+			m.hints("board.plan_ok", "board.override", "board.sessions", "board.claude", "board.claude_bg", "board.open", "board.mr", "board.threads", "board.move", "board.copy")...)
 	case vUsage:
 		return m.hints("usage.layout")
 	}
