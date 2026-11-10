@@ -7,10 +7,10 @@ on:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - name: tmux for the tmux tests
@@ -35,13 +35,13 @@ jobs:
   # survives); publish-badge.sh retries when the two push at once.
   coverage:
     if: github.event_name == 'push'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     concurrency: badge-coverage
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - name: tmux for the tmux tests
@@ -64,7 +64,7 @@ jobs:
     outputs:
       pct: ${{ steps.coverage.outputs.pct }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: build
         run: swift build --package-path notifier
       - name: test with coverage
@@ -80,15 +80,15 @@ jobs:
   release:
     if: github.event_name == 'push'
     needs: [check, swift]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     concurrency: release
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - name: tag
@@ -103,7 +103,7 @@ jobs:
           git tag "$tag"
           git push origin "$tag"
           echo "Released $tag" >> "$GITHUB_STEP_SUMMARY"
-      - uses: goreleaser/goreleaser-action@v6
+      - uses: goreleaser/goreleaser-action@v7
         if: steps.tag.outputs.tag != ''
         with:
           version: "~> v2"
@@ -114,12 +114,12 @@ jobs:
   swift-badge:
     if: github.event_name == 'push'
     needs: swift
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     concurrency: badge-swift
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: publish badge
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
