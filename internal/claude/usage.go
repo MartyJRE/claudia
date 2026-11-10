@@ -95,14 +95,25 @@ type usageFile struct {
 	mtime  time.Time
 }
 
-// UsageScanner totals token usage per local day and model over every transcript,
-// subagents included, reading each file incrementally.
+// UsageScanner totals token usage per local day and model, and per session,
+// over every transcript, subagents included, reading each file incrementally.
+// The first scan reads every transcript on disk, later ones only those changed
+// in the last Days.
 type UsageScanner struct {
 	Profiles []Profile
 	Days     int
 	files    map[string]*usageFile
 	seen     map[string]bool
 	agg      map[[2]string]*Tokens
+	sess     map[string]*sessionAgg
+	scanned  bool
+}
+
+type sessionAgg struct {
+	profile     string
+	ticket      string
+	models      map[string]*Tokens
+	first, last time.Time
 }
 
 func NewUsageScanner(profiles []Profile, days int) *UsageScanner {
@@ -111,6 +122,7 @@ func NewUsageScanner(profiles []Profile, days int) *UsageScanner {
 
 type usageLine struct {
 	Type      string    `json:"type"`
+	GitBranch string    `json:"gitBranch"`
 	RequestID string    `json:"requestId"`
 	Timestamp time.Time `json:"timestamp"`
 	Message   struct {
@@ -133,6 +145,7 @@ func (s *UsageScanner) reset() {
 	s.files = map[string]*usageFile{}
 	s.seen = map[string]bool{}
 	s.agg = map[[2]string]*Tokens{}
+	s.sess = map[string]*sessionAgg{}
 }
 
 func (s *UsageScanner) Scan() []DayModel {
@@ -140,6 +153,11 @@ func (s *UsageScanner) Scan() []DayModel {
 		s.reset()
 	}
 	cutoff := time.Now().AddDate(0, 0, -s.Days)
+	fileCutoff := cutoff
+	if !s.scanned {
+		fileCutoff = time.Time{}
+	}
+	s.scanned = true
 	for _, p := range s.Profiles {
 		root := filepath.Join(p.Dir, "projects")
 		_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
@@ -147,13 +165,14 @@ func (s *UsageScanner) Scan() []DayModel {
 				return nil
 			}
 			info, err := d.Info()
-			if err != nil || info.ModTime().Before(cutoff) {
+			if err != nil || info.ModTime().Before(fileCutoff) {
 				return nil
 			}
-			if !s.feed(path, info) {
+			src := usageSource{session: sessionOf(path), profile: p.Name}
+			if !s.feed(path, info, src) {
 				// A transcript shrank (rewritten); start over so nothing is counted twice.
 				s.reset()
-				s.feed(path, info)
+				s.feed(path, info, src)
 			}
 			return nil
 		})
@@ -174,7 +193,20 @@ func (s *UsageScanner) Scan() []DayModel {
 	return out
 }
 
-func (s *UsageScanner) feed(path string, info fs.FileInfo) bool {
+// usageSource is the session a transcript's usage counts toward.
+type usageSource struct{ session, profile string }
+
+// sessionOf is a transcript's session id; a subagent's
+// <sid>/subagents/agent-*.jsonl counts toward its parent.
+func sessionOf(path string) string {
+	dir := filepath.Dir(path)
+	if filepath.Base(dir) == "subagents" {
+		return filepath.Base(filepath.Dir(dir))
+	}
+	return strings.TrimSuffix(filepath.Base(path), ".jsonl")
+}
+
+func (s *UsageScanner) feed(path string, info fs.FileInfo, src usageSource) bool {
 	f := s.files[path]
 	if f == nil {
 		f = &usageFile{}
@@ -214,17 +246,26 @@ func (s *UsageScanner) feed(path string, info fs.FileInfo) bool {
 			return true
 		}
 		f.offset += int64(len(line))
-		s.apply(line)
+		s.apply(line, src)
 	}
 }
 
-func (s *UsageScanner) apply(line []byte) {
+func (s *UsageScanner) apply(line []byte, src usageSource) {
 	if !bytes.Contains(line, []byte(`"usage"`)) {
 		return
 	}
 	var e usageLine
 	if json.Unmarshal(line, &e) != nil || e.Type != "assistant" || e.Message.Model == "" || e.Message.Model == "<synthetic>" {
 		return
+	}
+	sa := s.sess[src.session]
+	if sa == nil {
+		sa = &sessionAgg{profile: src.profile, models: map[string]*Tokens{}}
+		s.sess[src.session] = sa
+	}
+	// Before the dedup, so a fork still knows its ticket from the lines it copied.
+	if k := TicketFrom(e.GitBranch); k != "" {
+		sa.ticket = k
 	}
 	// Each content block of a response is its own line with the same usage, and
 	// resumed or forked sessions copy earlier lines: count every response once.
@@ -245,6 +286,39 @@ func (s *UsageScanner) apply(line []byte) {
 		s.agg[k] = a
 	}
 	a.Add(t)
+	mt := sa.models[e.Message.Model]
+	if mt == nil {
+		mt = &Tokens{}
+		sa.models[e.Message.Model] = mt
+	}
+	mt.Add(t)
+	if sa.first.IsZero() || e.Timestamp.Before(sa.first) {
+		sa.first = e.Timestamp
+	}
+	if e.Timestamp.After(sa.last) {
+		sa.last = e.Timestamp
+	}
+}
+
+// Sessions is what each session scanned so far cost. It reads the scanner's
+// state, so call it between scans, never during one.
+func (s *UsageScanner) Sessions() []SessionCost {
+	if s == nil {
+		return nil
+	}
+	var out []SessionCost
+	for id, a := range s.sess {
+		if len(a.models) == 0 {
+			continue
+		}
+		c := SessionCost{ID: id, Ticket: a.ticket, Profile: a.profile, Models: map[string]Tokens{}, First: a.first, Last: a.last}
+		for model, t := range a.models {
+			c.Models[model] = *t
+		}
+		out = append(out, c.priced())
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out
 }
 
 // Limits is the plan usage Claude Code passes to the status line; claudia's
