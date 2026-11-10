@@ -84,11 +84,11 @@ func TestNotesTree(t *testing.T) {
 	if m.vaultLoading || m.vaultAt.IsZero() {
 		t.Error("vaultMsg finishes loading")
 	}
-	if got, want := noteRowsViews(m.vis.notes), "#01 - Projects|#04 - Permanent|Inbox"; got != want {
+	if got, want := noteRowsViews(m.vis.notes), "#01 - Projects|Teams|Inbox"; got != want {
 		t.Fatalf("closed tree: got %s want %s", got, want)
 	}
 	s := screenViews(m)
-	for _, want := range []string{"▸ 01 - Projects  2", "▸ 04 - Permanent  1", "Inbox", "your vault"} {
+	for _, want := range []string{"▸ 01 - Projects  2", "Teams  04 - Permanent", "Inbox", "your vault"} {
 		if !strings.Contains(s, want) {
 			t.Errorf("screen lacks %q:\n%s", want, s)
 		}
@@ -100,17 +100,15 @@ func TestNotesTree(t *testing.T) {
 	pressViews(m, " ")
 	cursorToNoteViews(t, m, "#ABC-2")
 	pressViews(m, "enter")
-	cursorToNoteViews(t, m, "#Sub")
-	pressViews(m, " ")
-	if got, want := noteRowsViews(m.vis.notes), "#01 - Projects-| #ABC-2-|  #Sub-|   Deep|  Plan|#04 - Permanent|Inbox"; got != want {
+	if got, want := noteRowsViews(m.vis.notes), "#01 - Projects-| #ABC-2-|  Deep|  Plan|Teams|Inbox"; got != want {
 		t.Errorf("open tree: got %s want %s", got, want)
 	}
-	if p := loadNotesPrefs(); len(p.Open) != 3 {
+	if p := loadNotesPrefs(); len(p.Open) != 2 {
 		t.Errorf("open folders are saved: %v", p.Open)
 	}
 	cursorToNoteViews(t, m, "#01 - Projects")
 	pressViews(m, " ")
-	if got := noteRowsViews(m.vis.notes); got != "#01 - Projects|#04 - Permanent|Inbox" {
+	if got := noteRowsViews(m.vis.notes); got != "#01 - Projects|Teams|Inbox" {
 		t.Errorf("closing the top folder hides everything under it: %s", got)
 	}
 }

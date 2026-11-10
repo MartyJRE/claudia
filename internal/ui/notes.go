@@ -354,7 +354,8 @@ type nrow struct {
 	depth     int
 	open      bool
 	count     int
-	flatTitle bool // recent/filter lists show the folder next to the title
+	flatTitle bool   // recent/filter lists show the folder next to the title
+	via       string // tree: the folder(s) of a lone note, drawn in their place
 }
 
 func (r nrow) isFolder() bool { return r.folder != "" }
@@ -404,11 +405,13 @@ func (m *Model) filterNotes(match func(...string) bool, filtering bool) []nrow {
 		return dirs[p]
 	}
 	counts := map[string]int{}
+	only := map[string]vault.Note{} // a folder's note, where it holds just one
 	for _, n := range all {
 		f := n.Folder()
 		get(f).notes = append(get(f).notes, n)
 		for p := f; p != "."; p = filepath.Dir(p) {
 			counts[p]++
+			only[p] = n
 			get(filepath.Dir(p)).subs[p] = true
 			get(p)
 		}
@@ -423,6 +426,11 @@ func (m *Model) filterNotes(match func(...string) bool, filtering bool) []nrow {
 		}
 		slices.Sort(subs)
 		for _, s := range subs {
+			if counts[s] == 1 {
+				n := only[s]
+				rows = append(rows, nrow{note: n, depth: depth, via: strings.TrimPrefix(n.Folder(), p+"/")})
+				continue
+			}
 			open := slices.Contains(m.notesPrefs.Open, s)
 			rows = append(rows, nrow{folder: s, depth: depth, open: open, count: counts[s]})
 			if open {
@@ -466,6 +474,9 @@ func (m *Model) listNotes(h int) string {
 			st = sBold
 		}
 		title := sDim.Render(indent+"  ") + st.Render(r.note.Title)
+		if r.via != "" {
+			title += sDim.Render("  " + r.via)
+		}
 		if r.flatTitle {
 			title = st.Render(r.note.Title) + sDim.Render("  "+r.note.Folder())
 		}
