@@ -35,7 +35,7 @@ switches between those sessions.
 | Key | View | What it shows |
 |---|---|---|
 | 1 | Inbox | Everyone waiting on you, oldest first |
-| 2 | Board | Your tickets as a kanban, by stage, with whose turn it is and what each cost |
+| 2 | Board | Your tickets and the reviews waiting on you as a kanban, by stage, with whose turn it is and what each cost |
 | 3 | Sessions | Live and recent Claude sessions with status, branch, ticket, model, and a line on where each stands |
 | 4 | Review | MRs where you are a reviewer and haven't approved yet |
 | 5 | My MRs | Your open MRs (reviewers, pipelines, review threads) and recently merged ones |
@@ -65,7 +65,22 @@ the ticket's cost so far, sessions, MRs and that step. On arrival
 ←/→ move between columns, and `↑` on a column's top card (or `esc`) steps back
 out. Inside, `enter` lists the ticket's
 sessions or starts one, `c`/`C` start Claude on it, `o` opens it in Jira, `M`
-its MR, `t` the MR's threads, `m` moves it in Jira, `a` shows the team's sprint:
+its MR, `t` the MR's threads, `m` moves it in Jira, `a` shows the team's sprint.
+
+Reviews are a second kind of card, tinted apart: one per open, non-draft MR
+where you're a reviewer, with stages of their own. Requested (no review yet, or
+the MR changed since Claude reviewed it), Reviewing (a review session is at
+work), Check findings (the session stopped; the card shows the first line of
+what it found and needs you), Waiting on author (you reviewed without
+approving), and Done once you approve, shown with `d`. `r` cycles the board
+between Tickets, Reviews (those four columns) and All (review cards in the
+ticket columns: Requested under Up next, Reviewing under Building, Check
+findings under Review, Waiting on author under Merge), and remembers the choice.
+On Tickets a ticket whose MR waits on your review needs you; on Reviews and All
+the review card says so instead. On a review card `enter` lists its review
+sessions or starts one, `c`/`C` review it with Claude, `o` opens the MR, `t` its
+threads and `y` copies its link. `f` steps through sprints for tickets only.
+Mentions, Teams posts and mail stay in the Inbox and never make cards:
 
 <img src="assets/board.svg" width="860" alt="Board: tickets in columns by stage, each saying whose turn it is">
 

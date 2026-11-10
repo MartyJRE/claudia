@@ -118,7 +118,9 @@ func (m *Model) currentTicket() string {
 			return m.ix.sessionTicket[r.ID]
 		}
 	case vBoard:
-		if c, ok := m.currentCard(); ok {
+		if c, ok := m.currentCard(); ok && c.review() {
+			return mrTicket(*c.mr)
+		} else if ok {
 			return c.issue.Key
 		}
 	case vReview, vMine:

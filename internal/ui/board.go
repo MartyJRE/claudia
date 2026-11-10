@@ -48,11 +48,36 @@ type boardCard struct {
 	sessions []row
 	mrs      []gitlab.MR
 	cost     claude.TicketCost
+	mr       *gitlab.MR // set on a review card, which has no issue
+	rstage   rstage
 }
 
 type boardPrefs struct {
-	Team bool `json:"team"`
-	Done bool `json:"done"`
+	Team bool   `json:"team"`
+	Done bool   `json:"done"`
+	View string `json:"view,omitempty"` // tickets, reviews or all
+}
+
+// boardView is what r cycles through: my tickets, the reviews waiting on me,
+// or both on the ticket columns.
+type boardView int
+
+const (
+	bvTickets boardView = iota
+	bvReviews
+	bvAll
+	nBoardViews
+)
+
+var boardViewNames = [nBoardViews]string{"Tickets", "Reviews", "All"}
+
+func (p boardPrefs) view() boardView {
+	for v, name := range boardViewNames {
+		if strings.EqualFold(p.View, name) {
+			return boardView(v)
+		}
+	}
+	return bvTickets
 }
 
 const boardPrefsFile = "board-prefs.json"
@@ -76,9 +101,11 @@ func (m *Model) boardCards() []boardCard {
 	for _, r := range m.sessions {
 		byID[r.ID] = r
 	}
+	// Where review cards show, a review request isn't the ticket's turn too.
+	reviews := m.boardPrefs.view() != bvTickets
 	waiting := map[string][]inboxItem{}
 	for _, it := range m.inbox() {
-		if _, snoozed := m.dismissed[it.id]; it.ticket != "" && !snoozed {
+		if _, snoozed := m.dismissed[it.id]; it.ticket != "" && !snoozed && (it.kind != kReview || !reviews) {
 			waiting[it.ticket] = append(waiting[it.ticket], it)
 		}
 	}
@@ -261,19 +288,39 @@ func cardTurn(c boardCard, waiting []inboxItem) (turn, string, string) {
 	return turnYou, next, ""
 }
 
-// boardColumns is the stages the board shows: Done only when asked for.
-func (m *Model) boardColumns() []stage {
-	cols := []stage{stUpNext, stPlan, stBuilding, stReview, stMerge, stQA}
-	if m.boardPrefs.Done {
-		cols = append(cols, stDone)
+// boardCol is one column the board shows: a ticket stage, or a review stage on
+// the Reviews view.
+type boardCol struct {
+	name   string
+	st     stage
+	rs     rstage
+	review bool
+}
+
+// boardColumns is the columns the board shows: Done only when asked for.
+func (m *Model) boardColumns() []boardCol {
+	var cols []boardCol
+	if m.boardPrefs.view() == bvReviews {
+		for rs := range nRStages {
+			if rs != rsDone || m.boardPrefs.Done {
+				cols = append(cols, boardCol{name: rstageNames[rs], rs: rs, review: true})
+			}
+		}
+		return cols
+	}
+	for _, st := range []stage{stUpNext, stPlan, stBuilding, stReview, stMerge, stQA, stDone} {
+		if st != stDone || m.boardPrefs.Done {
+			cols = append(cols, boardCol{name: stageNames[st], st: st})
+		}
 	}
 	return cols
 }
 
 // layoutBoard lays the cards into the shown columns, needs-you cards first and
 // Jira's rank after that.
-func (m *Model) layoutBoard(cards []boardCard, match func(...string) bool) [][]boardCard {
+func (m *Model) layoutBoard(cards, reviews []boardCard, match func(...string) bool) [][]boardCard {
 	cols := m.boardColumns()
+	m.vis.boardCols = cols
 	out := make([][]boardCard, len(cols))
 	m.boardLater = 0
 	m.boardFutures = futureSprints(cards)
@@ -284,8 +331,9 @@ func (m *Model) layoutBoard(cards []boardCard, match func(...string) bool) [][]b
 	if m.boardSprint > 0 {
 		shown = m.boardFutures[m.boardSprint-1]
 	}
+	view := m.boardPrefs.view()
 	for _, c := range cards {
-		i := slices.Index(cols, c.stage)
+		i := slices.IndexFunc(cols, func(col boardCol) bool { return !col.review && col.st == c.stage })
 		is := c.issue
 		if i < 0 || !match(is.Key, is.Summary, is.Status, is.Assignee, stageNames[c.stage], c.next) {
 			continue
@@ -297,6 +345,19 @@ func (m *Model) layoutBoard(cards []boardCard, match func(...string) bool) [][]b
 			}
 		case later(c):
 			m.boardLater++
+			continue
+		}
+		out[i] = append(out[i], c)
+	}
+	for _, c := range reviews {
+		i := slices.IndexFunc(cols, func(col boardCol) bool {
+			if view == bvAll {
+				return !col.review && col.st == c.stage
+			}
+			return col.review && col.rs == c.rstage
+		})
+		// A future sprint shown on All is about tickets only.
+		if i < 0 || (view == bvAll && shown != "") || !match(fmt.Sprintf("!%d", c.mr.IID), c.mr.Title, c.mr.Repo(), c.mr.Author.Username, rstageNames[c.rstage], c.next) {
 			continue
 		}
 		out[i] = append(out[i], c)
