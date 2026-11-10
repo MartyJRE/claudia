@@ -279,6 +279,9 @@ func cardTurn(c boardCard, waiting []inboxItem) (turn, string, string) {
 		return turnColleague, "on hold: " + c.issue.Status, ""
 	}
 	next := stageNext[c.stage]
+	if id, _ := nextStep(c); id != "" {
+		next = stepLabel(id)
+	}
 	for _, mr := range c.mrs {
 		if !openMR(mr) {
 			continue

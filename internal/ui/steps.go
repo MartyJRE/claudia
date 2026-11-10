@@ -144,6 +144,21 @@ func waitingForAnswers(c boardCard) bool {
 
 var runFrames = frames{[]string{"━", "╸", " ", "╺"}, 2}
 
+// sPassed is a step the card's stage shows it got past, though claudia didn't run it.
+var sPassed = lipgloss.NewStyle().Foreground(lipgloss.Color("#5a7348"))
+
+// stageStep is the first ticket step a stage still has ahead of it.
+var stageStep = [nStages]int{stUpNext: 0, stPlan: 2, stBuilding: 3, stReview: 4, stMerge: 5, stQA: 6, stDone: len(ticketSteps)}
+
+// passed: the card is beyond this step whether or not it ran here.
+func (c boardCard) passed(id string) bool {
+	if c.review() {
+		return id == "review" && c.rstage != rsRequested && c.rstage != rsReviewing
+	}
+	i := slices.IndexFunc(ticketSteps, func(s step) bool { return s.id == id })
+	return i < stageStep[c.stage]
+}
+
 // segment is one step on the strip, coloured by how its latest run went.
 func (m *Model) segment(c boardCard, id, next string) string {
 	if id == "findings" {
@@ -153,7 +168,7 @@ func (m *Model) segment(c boardCard, id, next string) string {
 		case rsWaiting, rsDone:
 			return sOK.Render("━")
 		}
-		return sDim.Render("─")
+		return sRule.Render("─")
 	}
 	r := c.latest(id)
 	if r != nil && c.stale(r) {
@@ -163,9 +178,11 @@ func (m *Model) segment(c boardCard, id, next string) string {
 	case r != nil && r.Outcome == runs.Running:
 		return lipgloss.NewStyle().Foreground(blue).Render(m.glyph(runFrames))
 	case id == next:
-		return sBold.Render("━")
+		return sAccent.Render("━")
+	case r == nil && c.passed(id):
+		return sPassed.Render("━")
 	case r == nil:
-		return sDim.Render("─")
+		return sRule.Render("─")
 	}
 	return outcomeStyle(r.Outcome).Render("━")
 }
@@ -198,7 +215,7 @@ func (m *Model) stepStrip(c boardCard) string {
 	case hold != nil:
 		strip += "  " + outcomeStyle(hold.Outcome).Render(stepLabel(hold.Step))
 	case next != "":
-		strip += "  " + sText.Render(stepLabel(next))
+		strip += "  " + sAccent.Render(stepLabel(next))
 	}
 	return strip
 }
