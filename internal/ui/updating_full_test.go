@@ -4,7 +4,6 @@ import (
 	"errors"
 	"slices"
 	"testing"
-	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -40,9 +39,8 @@ func TestUpdateInstallsAndRestartsFull(t *testing.T) {
 	if m.startUpdate() != nil {
 		t.Error("one update at a time")
 	}
-	last := runUpdate(t, m, cmd)
-	if !isQuitShell(last) || !m.Result.Restart {
-		t.Fatal("a finished update restarts claudia")
+	if last := runUpdate(t, m, cmd); last != nil || m.Result.Restart {
+		t.Fatal("a finished update waits for enter")
 	}
 	if m.upd.plan.Latest != "abc1234" || m.upd.stage != upDone || stopped != 1 {
 		t.Errorf("plan %+v stage %d watcher stopped %d", m.upd.plan, m.upd.stage, stopped)
@@ -50,8 +48,11 @@ func TestUpdateInstallsAndRestartsFull(t *testing.T) {
 	if !slices.Equal(m.upd.log, []string{"go: downloading github.com/x v1"}) {
 		t.Errorf("meta tag lines are dropped: %q", m.upd.log)
 	}
-	if len(*ticks) != 1 || (*ticks)[0] != 3*time.Second {
-		t.Errorf("restart after 3s: %v", *ticks)
+	if len(*ticks) != 0 {
+		t.Errorf("no restart timer: %v", *ticks)
+	}
+	if !isQuitShell(pressShell(m, "enter")) || !m.Result.Restart {
+		t.Error("enter restarts claudia")
 	}
 }
 

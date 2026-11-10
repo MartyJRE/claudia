@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -16,6 +17,7 @@ import (
 func buildingViews(t *testing.T, plan update.Plan) *Model {
 	m := newModelViews(t)
 	m.upd = &updateView{stage: upBuilding, plan: plan, stream: make(chan tea.Msg, 4)}
+	m.renderUpdateNotes()
 	return m
 }
 
@@ -44,7 +46,7 @@ func TestUpdateStartsOnce(t *testing.T) {
 
 func TestUpdateMessagesWithoutScreen(t *testing.T) {
 	m := newModelViews(t)
-	for _, msg := range []tea.Msg{upLogMsg("x"), upDoneMsg{}, upRestartMsg{}} {
+	for _, msg := range []tea.Msg{upLogMsg("x"), upDoneMsg{}, releasesMsg{}} {
 		if _, cmd := m.Update(msg); cmd != nil || m.Result.Restart {
 			t.Errorf("%T without the update screen is ignored", msg)
 		}
@@ -103,39 +105,73 @@ func TestUpdateFails(t *testing.T) {
 
 func TestUpdateDoneRestarts(t *testing.T) {
 	var commits []update.Commit
-	for i := range 15 {
+	for i := range 60 {
 		commits = append(commits, update.Commit{SHA: fmt.Sprintf("c%06d", i), Subject: fmt.Sprintf("change %d", i)})
 	}
 	m := buildingViews(t, update.Plan{Latest: "c000000", Commits: commits})
-	if _, cmd := m.Update(upDoneMsg{}); cmd == nil || m.upd.stage != upDone {
-		t.Fatal("a finished build schedules the restart")
+	if _, cmd := m.Update(upDoneMsg{}); cmd != nil || m.upd.stage != upDone || m.Result.Restart {
+		t.Fatal("a finished build waits for enter")
 	}
 	s := screenViews(m)
-	for _, want := range []string{" → c000000", "✓ downloading and building", "✓ restarting the background watcher", "restarting claudia in 3…  enter now", "change 11", "… and 3 more"} {
+	for _, want := range []string{" → c000000", "✓ downloading and building", "✓ restarting the background watcher", "restart claudia", "enter restart now", "esc later", "W release notes", "change 0"} {
 		if !strings.Contains(s, want) {
 			t.Errorf("done screen lacks %q:\n%s", want, s)
 		}
 	}
-	if strings.Contains(s, "change 12") {
-		t.Error("only 12 commits are listed")
+	if strings.Contains(s, "change 59") {
+		t.Error("what's new scrolls rather than running off the screen")
+	}
+	if n := strings.Count(s, "\n") + 1; n > m.height {
+		t.Errorf("%d lines on a %d-line terminal", n, m.height)
+	}
+	pressViews(m, "G")
+	if s := screenViews(m); !strings.Contains(s, "change 59") || strings.Contains(s, "change 0\n") {
+		t.Errorf("G scrolls to the oldest:\n%s", s)
+	}
+	pressViews(m, "g", "j")
+	if m.upd.notes.YOffset != 1 {
+		t.Errorf("j scrolls what's new: %d", m.upd.notes.YOffset)
 	}
 
-	_, cmd := m.Update(upRestartMsg{})
+	fake(t, &fetchReleases, func(int) ([]update.Release, error) { return nil, nil })
+	if cmd := pressViews(m, "W"); cmd == nil || m.rel == nil {
+		t.Fatal("W opens the release notes over the update screen")
+	}
+	pressViews(m, "esc")
+	if m.rel != nil || m.upd == nil || m.Result.Restart {
+		t.Error("esc on the release notes goes back to the update screen")
+	}
+
+	cmd := pressViews(m, "enter")
 	if !m.Result.Restart || cmd == nil {
-		t.Fatal("the timer restarts")
+		t.Error("enter restarts")
 	}
 	if _, ok := cmd().(tea.QuitMsg); !ok {
 		t.Error("restarting quits the program")
 	}
-
-	m.Result.Restart = false
-	cmd = pressViews(m, "enter")
-	if !m.Result.Restart || cmd == nil {
-		t.Error("enter restarts right away")
-	}
 	pressViews(m, "esc")
 	if m.upd != nil {
 		t.Error("esc goes back once it's over")
+	}
+}
+
+func TestUpdateReleaseNotes(t *testing.T) {
+	m := buildingViews(t, update.Plan{Current: "v0.1.0", Latest: "v0.3.0", Releases: []update.Release{
+		{Tag: "v0.3.0", Body: "### ui\n- **rounded** pills", Published: time.Date(2026, 11, 10, 9, 0, 0, 0, time.UTC)},
+		{Tag: "v0.2.0"},
+	}})
+	s := screenViews(m)
+	for _, want := range []string{"v0.1.0 → v0.3.0", "v0.3.0", "2026-11-10", "ui", "rounded pills", "v0.2.0"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("what's new lacks %q:\n%s", want, s)
+		}
+	}
+	if strings.Contains(s, "**") {
+		t.Errorf("the notes are rendered markdown:\n%s", s)
+	}
+	m.Update(tea.WindowSizeMsg{Width: 60, Height: 30})
+	if w := m.upd.notes.Width; w != 60 {
+		t.Errorf("a resize re-renders what's new: width %d", w)
 	}
 }
 

@@ -27,6 +27,7 @@ var actions = []action{
 	{"global.prev_view", []string{"shift+tab", "left", "h"}, "previous view"},
 	{"global.assistant", []string{"@"}, "assistant"},
 	{"global.update", []string{"ctrl+u"}, "update claudia"},
+	{"global.releases", []string{"W"}, "what's new"},
 	{"global.open_link", []string{"u"}, "open link"},
 	{"global.ticket_notes", []string{"N"}, "ticket's notes"},
 	{"global.write_note", []string{"w"}, "write note"},

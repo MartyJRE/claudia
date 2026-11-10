@@ -191,8 +191,8 @@ claudia                 # open claudia in its own tmux session
 claudia open <link>     # hand a link to claudia, as `u` does
 claudia brief           # print a fresh inbox brief
 claudia keys            # every key action, its current keys and any clashes
-claudia update          # install the newest version from GitHub (ctrl+u inside claudia)
-claudia version         # the commit this binary was built from
+claudia update          # install the newest release from GitHub (ctrl+u inside claudia)
+claudia version         # the release (or commit) this binary was built from
 claudia setup           # build the native notification helper
 claudia ctl help        # the commands Claude sessions use, see above
 claudia teams help      # Teams: login, waiting, show, reply, react, see below
@@ -213,6 +213,19 @@ claudia plan [pane]     # comment on the plan of the session in a tmux pane (def
 go install github.com/MartyJRE/claudia@latest
 claudia setup                # native notifications: builds ~/Applications/Claudia.app (needs Xcode CLT)
 ```
+
+Each [release](https://github.com/MartyJRE/claudia/releases) also has
+prebuilt binaries for macOS and Linux (amd64 and arm64).
+
+### Updates
+
+claudia checks GitHub for a new release every hour and shows `⬆ update` in the
+header when there is one. `ctrl+u` (or `claudia update`) lists what's new since
+your version, reinstalls with `go install …@latest` and restarts the background
+watcher; read the notes while it builds, then `enter` restarts claudia, or
+`esc` keeps the running one until you quit. `W` opens the release notes at any
+time: `[` and `]` step to the older and newer release, and the one you run is
+marked installed.
 
 In `~/.tmux.conf`, to toggle between claudia and the session you came from:
 
@@ -375,6 +388,11 @@ CI runs on every push to `main` and every PR. To check locally before pushing:
 ```sh
 gofmt -l . && go mod tidy -diff && go vet ./... && go test -race ./...
 ```
+
+Every green push to `main` is released: CI tags it with the next patch version
+and goreleaser publishes the binaries, with notes grouped by the commit
+subject's `scope:`. A `Release: minor` or `Release: major` trailer in any commit
+since the last release bumps that part instead.
 
 The tmux tests start a private tmux server, so they never touch your sessions.
 `TestPlanReviewInTmux` goes end to end: it builds the binary, runs a stand-in

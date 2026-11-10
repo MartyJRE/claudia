@@ -165,6 +165,7 @@ type Model struct {
 	prompt    *promptBox
 	reader    *reader
 	upd       *updateView
+	rel       *releasesView
 
 	confirmKey string
 	confirmAt  time.Time
@@ -268,6 +269,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.reader != nil {
 			m.renderReader()
 		}
+		if m.upd != nil {
+			m.renderUpdateNotes()
+		}
+		if m.rel != nil {
+			m.renderReleases()
+		}
 		m.filter.Width = msg.Width / 2
 		return m, nil
 	case sessionsMsg:
@@ -349,9 +356,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.setFlash(msg.err.Error(), true)
 		}
 		return m, m.refreshVault()
-	case upPlanMsg, upLogMsg, upDoneMsg, upRestartMsg:
+	case upPlanMsg, upLogMsg, upDoneMsg:
 		if m.upd != nil {
 			return m, m.updateMsg(msg)
+		}
+		return m, nil
+	case releasesMsg:
+		if m.rel != nil {
+			m.releasesLoaded(msg)
 		}
 		return m, nil
 	case mrLoadedMsg:
@@ -363,6 +375,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.reviewWithClaude(msg.mr)
 	case tea.KeyMsg:
 		switch {
+		case m.rel != nil:
+			return m.updateReleases(msg)
 		case m.upd != nil:
 			return m.updateKeys(msg)
 		case m.reader != nil:
@@ -459,6 +473,8 @@ func (m *Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.openAssistant()
 	case "global.update":
 		return m, m.startUpdate()
+	case "global.releases":
+		return m, m.openReleases()
 	case "global.open_link":
 		return m, m.askLink()
 	case "global.ticket_notes":
@@ -523,6 +539,9 @@ func (m *Model) confirm(key, prompt string) bool {
 func (m *Model) View() string {
 	if m.width == 0 {
 		return ""
+	}
+	if m.rel != nil {
+		return m.viewReleases()
 	}
 	if m.upd != nil {
 		return m.viewUpdate()
