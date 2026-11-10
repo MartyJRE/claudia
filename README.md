@@ -59,8 +59,10 @@ to a column. Each card says whose turn it is: `◆ needs you` (a session asks, o
 the Inbox has something for the ticket; these go first), Claude at work with its
 activity, or `⧗ waiting` on reviewers, someone a session named, or a status on
 hold; otherwise it's yours and the card shows the next step. Its last line has
-the ticket's cost so far, sessions, MRs and that step. `h`/`l` move between
-columns (tab and the digits still switch views), `enter` lists the ticket's
+the ticket's cost so far, sessions, MRs and that step. On arrival
+←/→ switch tabs as anywhere else; `↓` steps into the board, where `h`/`l` and
+←/→ move between columns, and `↑` on a column's top card (or `esc`) steps back
+out. Inside, `enter` lists the ticket's
 sessions or starts one, `c`/`C` start Claude on it, `o` opens it in Jira, `M`
 its MR, `t` the MR's threads, `m` moves it in Jira, `a` shows the team's sprint:
 
