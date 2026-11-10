@@ -144,6 +144,8 @@ type Model struct {
 	boardOff     int             // the first column shown when they don't all fit
 	boardCur     [nStages]cursor // each column's cursor while another has it
 	boardLater   int             // Up next tickets folded away as later sprints
+	boardSprint  int             // 0 the current sprint, n the nth future one (f)
+	boardFutures []string
 	boardNeeds   int
 	sessLoaded   bool
 	sessLoading  bool
@@ -864,7 +866,7 @@ func (m *Model) subtitle() string {
 		if m.boardPrefs.Done {
 			s += " incl. done"
 		}
-		hint := sKey.Render(m.key("board.team")) + sDim.Render(" mine/team  ") + sKey.Render(m.key("board.done")) + sDim.Render(" done  ") + sKey.Render(m.key("board.later")) + sDim.Render(" future sprints  ")
+		hint := sKey.Render(m.key("board.team")) + sDim.Render(" mine/team  ") + sKey.Render(m.key("board.done")) + sDim.Render(" done  ") + sKey.Render(m.key("board.later")) + sDim.Render(" next sprint  ")
 		if m.boardFocus {
 			hint += sKey.Render("↑") + sDim.Render(" on a top card steps out")
 		} else {

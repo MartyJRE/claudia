@@ -229,9 +229,6 @@ func costText(usd float64, unknown bool) string {
 // cardChips is the card's dim last line: cost, sessions, MRs and what's next.
 func cardChips(c boardCard) string {
 	var chips []string
-	if later(c) {
-		chips = append(chips, lipgloss.NewStyle().Foreground(cyan).Render(c.issue.Sprint.Name))
-	}
 	if c.cost.Sessions > 0 {
 		chips = append(chips, costText(c.cost.USD, c.cost.Unknown))
 	}
@@ -394,9 +391,14 @@ func (m *Model) keyBoard(k string) (tea.Model, tea.Cmd) {
 		m.refilter()
 		return m, nil
 	case "board.later":
-		m.boardPrefs.Later = !m.boardPrefs.Later
-		m.saveBoardPrefs()
+		if len(m.boardFutures) == 0 {
+			m.setFlash("no future sprint has your tickets", false)
+			return m, nil
+		}
+		m.boardSprint = (m.boardSprint + 1) % (len(m.boardFutures) + 1)
+		m.cur[vBoard], m.boardCur, m.boardFocus = cursor{}, [nStages]cursor{}, false
 		m.refilter()
+		m.setFlash("showing "+m.currentSprint(), false)
 		return m, nil
 	}
 	c, ok := m.currentCard()

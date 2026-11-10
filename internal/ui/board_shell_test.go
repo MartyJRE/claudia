@@ -447,21 +447,6 @@ func TestLedgerFromUsageShell(t *testing.T) {
 	containsAllShell(t, "save error", m.flash, "cost ledger:")
 }
 
-func TestBoardFutureSprintsShell(t *testing.T) {
-	m := boardModelShell(t)
-	pressShell(m, "f")
-	s := plainShell(m.View())
-	containsAllShell(t, "future shown", s, "Up next 2", "ABC-5", "Next sprint idea")
-	lacksShell(t, "future shown", s, "in future sprints")
-	if !loadBoardPrefs().Later {
-		t.Error("the choice isn't saved")
-	}
-	pressShell(m, "f")
-	if s := plainShell(m.View()); !strings.Contains(s, "Up next 1") || strings.Contains(s, "ABC-5") {
-		t.Errorf("future sprints still shown:\n%s", s)
-	}
-}
-
 func TestBoardStepInOutShell(t *testing.T) {
 	m := boardModelShell(t)
 	m.switchView(vSessions)
@@ -537,39 +522,79 @@ func TestBoardStepInOutShell(t *testing.T) {
 	}
 }
 
-func TestBoardSprintNamesShell(t *testing.T) {
+func TestBoardSprintsShell(t *testing.T) {
 	m := boardModelShell(t)
 	active := func(name string) *atlassian.Sprint { return &atlassian.Sprint{Name: name, State: "active"} }
+	future := func(name string, inDays int) *atlassian.Sprint {
+		return &atlassian.Sprint{Name: name, State: "future", Start: time.Now().AddDate(0, 0, inDays)}
+	}
 	for i := range m.jira.Sprint {
 		switch m.jira.Sprint[i].Key {
-		case "ABC-4":
+		case "ABC-4", "ABC-2":
 			m.jira.Sprint[i].Sprint = active("Sprint 8")
 		case "ABC-1":
 			m.jira.Sprint[i].Sprint = active("Discussion 2")
-		case "ABC-2":
-			m.jira.Sprint[i].Sprint = active("Sprint 8")
+		case "ABC-5":
+			m.jira.Sprint[i].Sprint = future("Sprint 10", 28)
 		}
 	}
+	m.jira.Sprint = append(m.jira.Sprint,
+		atlassian.Issue{Key: "ABC-6", Summary: "Sooner idea", Status: "To Do", Category: "new", Sprint: future("Sprint 9", 14)},
+		atlassian.Issue{Key: "ABC-8", Summary: "Also sooner", Status: "Dev in progress", Category: "indeterminate", Sprint: future("Sprint 9", 14)})
 	m.reindex()
 	m.refilter()
-	if got := m.currentSprint(); got != "Sprint 8" {
-		t.Errorf("current sprint %q", got)
-	}
-	pressShell(m, "f")
+
+	// The current sprint: its name in the subtitle, future tickets folded away.
 	s := screenShell(m)
-	containsAllShell(t, "future", s, "my tickets in Sprint 8 by stage", "ABC-5", "Sprint 9")
-	for _, l := range strings.Split(s, "\n") {
-		if strings.Contains(l, "Sprint 8") && !strings.Contains(l, "my tickets") && !strings.Contains(l, "Up next") {
-			t.Errorf("a current-sprint card names its sprint: %q", l)
-		}
+	containsAllShell(t, "current", s, "my tickets in Sprint 8 by stage", "f next sprint", "+ 2 in future sprints")
+	lacksShell(t, "current", s, "ABC-5", "ABC-6")
+	if !strings.Contains(s, "ABC-8") {
+		t.Error("an in-progress ticket shows even though it's planned for later")
 	}
 	containsAllShell(t, "detail", plainShell(m.detailBoard()), "Sprint 8")
 
-	// A tie goes to the name that sorts first, so it doesn't flicker.
+	// f steps to the soonest future sprint, then the next, then back.
+	pressShell(m, "f")
+	s = screenShell(m)
+	containsAllShell(t, "sprint 9", s, "my tickets in Sprint 9 by stage", "ABC-6", "ABC-8")
+	lacksShell(t, "sprint 9", s, "ABC-4", "ABC-5", "in future sprints")
+	containsAllShell(t, "flash", m.flash, "showing Sprint 9")
+	if m.boardFocus {
+		t.Error("switching sprints steps out of the board")
+	}
+	pressShell(m, "f")
+	containsAllShell(t, "sprint 10", screenShell(m), "in Sprint 10 by stage", "ABC-5")
+	pressShell(m, "f")
+	containsAllShell(t, "back", screenShell(m), "in Sprint 8 by stage", "ABC-4")
+
+	// A sprint that disappears on refresh drops the board back to the current one.
+	pressShell(m, "f", "f")
+	for i := range m.jira.Sprint {
+		m.jira.Sprint[i].Sprint = nil
+	}
+	m.reindex()
+	m.refilter()
+	if m.boardSprint != 0 {
+		t.Errorf("still on sprint %d", m.boardSprint)
+	}
+	if pressShell(m, "f"); !strings.Contains(m.flash, "no future sprint") {
+		t.Errorf("f with no future sprint: %q", m.flash)
+	}
+
+	// Sprints starting together sort by name; a tie between active sprints goes
+	// to the name that sorts first, so the subtitle doesn't flicker.
+	same := time.Now()
+	got := futureSprints([]boardCard{
+		{issue: atlassian.Issue{Sprint: &atlassian.Sprint{Name: "B", State: "future", Start: same}}},
+		{issue: atlassian.Issue{Sprint: &atlassian.Sprint{Name: "A", State: "future", Start: same}}},
+		{issue: atlassian.Issue{Sprint: &atlassian.Sprint{Name: "A", State: "future", Start: same}}},
+	})
+	if strings.Join(got, ",") != "A,B" {
+		t.Errorf("futures %v", got)
+	}
 	m.vis.board = [][]boardCard{{
 		{issue: atlassian.Issue{Sprint: active("B")}},
 		{issue: atlassian.Issue{Sprint: active("A")}},
-		{issue: atlassian.Issue{Sprint: &atlassian.Sprint{Name: "C", State: "future"}}},
 	}}
 	if got := m.currentSprint(); got != "A" {
 		t.Errorf("tie: %q", got)

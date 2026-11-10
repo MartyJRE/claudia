@@ -51,9 +51,8 @@ type boardCard struct {
 }
 
 type boardPrefs struct {
-	Team  bool `json:"team"`
-	Done  bool `json:"done"`
-	Later bool `json:"later"`
+	Team bool `json:"team"`
+	Done bool `json:"done"`
 }
 
 const boardPrefsFile = "board-prefs.json"
@@ -277,13 +276,26 @@ func (m *Model) layoutBoard(cards []boardCard, match func(...string) bool) [][]b
 	cols := m.boardColumns()
 	out := make([][]boardCard, len(cols))
 	m.boardLater = 0
+	m.boardFutures = futureSprints(cards)
+	if m.boardSprint > len(m.boardFutures) {
+		m.boardSprint = 0
+	}
+	shown := ""
+	if m.boardSprint > 0 {
+		shown = m.boardFutures[m.boardSprint-1]
+	}
 	for _, c := range cards {
 		i := slices.Index(cols, c.stage)
 		is := c.issue
 		if i < 0 || !match(is.Key, is.Summary, is.Status, is.Assignee, stageNames[c.stage], c.next) {
 			continue
 		}
-		if later(c) && !m.boardPrefs.Later {
+		switch {
+		case shown != "":
+			if is.Sprint == nil || is.Sprint.Name != shown {
+				continue
+			}
+		case later(c):
 			m.boardLater++
 			continue
 		}
@@ -304,8 +316,33 @@ func later(c boardCard) bool {
 	return c.stage == stUpNext && is.Category != "indeterminate" && is.Sprint != nil && is.Sprint.State == "future"
 }
 
-// currentSprint names the active sprint most of the board's cards are in.
+// futureSprints are the planned sprints the cards are in, soonest first.
+func futureSprints(cards []boardCard) []string {
+	var sprints []*atlassian.Sprint
+	for _, c := range cards {
+		if s := c.issue.Sprint; s != nil && s.State == "future" && !slices.ContainsFunc(sprints, func(o *atlassian.Sprint) bool { return o.Name == s.Name }) {
+			sprints = append(sprints, s)
+		}
+	}
+	slices.SortFunc(sprints, func(a, b *atlassian.Sprint) int {
+		if c := a.Start.Compare(b.Start); c != 0 {
+			return c
+		}
+		return strings.Compare(a.Name, b.Name)
+	})
+	names := make([]string, len(sprints))
+	for i, s := range sprints {
+		names[i] = s.Name
+	}
+	return names
+}
+
+// currentSprint names the sprint the board shows: the one f picked, else the
+// active sprint most of its cards are in.
 func (m *Model) currentSprint() string {
+	if m.boardSprint > 0 {
+		return m.boardFutures[m.boardSprint-1]
+	}
 	n := map[string]int{}
 	best := ""
 	for _, col := range m.vis.board {
