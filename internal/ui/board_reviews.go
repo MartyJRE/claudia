@@ -2,112 +2,45 @@ package ui
 
 import (
 	"fmt"
-	"slices"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/MartyJRE/claudia/internal/board"
 	"github.com/MartyJRE/claudia/internal/gitlab"
 	"github.com/MartyJRE/claudia/internal/runs"
 )
 
-// A review card is an MR waiting on my review; like a ticket's, its stage is
-// read off GitLab and the review sessions on every refresh.
-type rstage int
+type rstage = board.RStage
 
 const (
-	rsRequested rstage = iota
-	rsReviewing
-	rsFindings
-	rsWaiting
-	rsDone
-	nRStages
+	rsRequested = board.Requested
+	rsReviewing = board.Reviewing
+	rsFindings  = board.Findings
+	rsWaiting   = board.Waiting
+	rsDone      = board.Reviewed
+	nRStages    = board.NRStages
 )
 
-var rstageNames = [nRStages]string{"Requested", "Reviewing", "Check findings", "Waiting on author", "Done"}
-
-// allStage is the ticket column a review card sits in on the All view.
-var allStage = [nRStages]stage{stUpNext, stBuilding, stReview, stMerge, stDone}
+var rstageNames = board.RStageNames
 
 // reviewTint sets review cards apart from ticket cards, and stays distinct
 // from the cursor's visualGrey.
 var reviewTint = lipgloss.Color("#342e42")
 
 func (m *Model) reviewCards() []boardCard {
-	byID := map[string]row{}
-	for _, r := range m.sessions {
-		byID[r.ID] = r
-	}
+	byID := m.rowsByID()
 	var cards []boardCard
-	for _, mr := range m.gl.Review {
-		if mr.Draft {
-			continue
-		}
-		c := boardCard{mr: &mr, runs: m.runsFor(mr.WebURL)}
-		for _, id := range m.ix.mrSessions[mr.WebURL] {
-			if r, ok := byID[id]; ok {
-				c.sessions = append(c.sessions, r)
-			}
-		}
-		c.rstage, c.turn, c.next, c.verb, c.why = reviewStage(mr, c.sessions, c.runs, m.gl.Me.Username)
-		c.stage = allStage[c.rstage]
-		cards = append(cards, c)
+	for _, bc := range board.ReviewCards(m.gl, m.ix, sessionsOf(m.sessions), m.runsFor) {
+		cards = append(cards, m.fromBoard(bc, byID))
 	}
 	return cards
 }
 
 func reviewStage(mr gitlab.MR, sessions []row, rs []runs.Run, me string) (rstage, turn, string, string, string) {
-	var reviews []row
-	for _, r := range sessions {
-		if r.kind == "review" {
-			reviews = append(reviews, r)
-		}
-	}
-	if mr.ApprovedByMe(me) {
-		return rsDone, turnYou, "", "", "you approved it"
-	}
-	for _, r := range reviews {
-		if r.live() && r.Live.Status.Working() {
-			verb, detail := activity(r)
-			return rsReviewing, turnAgent, oneLine(detail), verb, fmt.Sprintf("%q is reviewing it", r.Name())
-		}
-	}
-	if mr.ReviewedByMe() {
-		return rsWaiting, turnColleague, "waits on " + mr.Author.Username, "", "you reviewed it without approving"
-	}
-	if len(reviews) == 0 {
-		return rsRequested, turnYou, "review it", "", "you're a reviewer and haven't reviewed it yet"
-	}
-	last := slices.MaxFunc(reviews, func(a, b row) int { return a.LastActive().Compare(b.LastActive()) })
-	// A review run knows the head it read: only a push makes its findings stale.
-	if i := slices.IndexFunc(rs, func(r runs.Run) bool { return r.Session == last.ID }); i >= 0 {
-		if rs[i].SHA != mr.SHA {
-			return rsRequested, turnYou, "review it again", "", fmt.Sprintf("new commits since %q reviewed it", last.Name())
-		}
-		return rsFindings, turnNeedsYou, findingHint(last), "", fmt.Sprintf("%q finished its review", last.Name())
-	}
-	// GitLab clears my review when the author asks for another, and a push or
-	// reply after the review means its findings may no longer hold.
-	if mr.UpdatedAt.After(last.LastActive()) {
-		return rsRequested, turnYou, "review it again", "", fmt.Sprintf("the MR changed after %q reviewed it", last.Name())
-	}
-	return rsFindings, turnNeedsYou, findingHint(last), "", fmt.Sprintf("%q finished its review", last.Name())
-}
-
-// findingHint is the first line of what the review session left, without the
-// watcher's prefix.
-func findingHint(r row) string {
-	s := r.summary
-	for _, p := range []string{needsYouPrefix, donePrefix, waitingPrefix} {
-		s = strings.TrimPrefix(s, p)
-	}
-	s, _, _ = strings.Cut(strings.TrimSpace(s), "\n")
-	if s == "" {
-		return "read the findings"
-	}
-	return s
+	return board.ReviewStage(mr, sessionsOf(sessions), rs, me)
 }
 
 func (c boardCard) review() bool { return c.mr != nil }
@@ -267,7 +200,7 @@ func (m *Model) keyReviewCard(act string, c boardCard) (tea.Model, tea.Cmd) {
 	ref := fmt.Sprintf("!%d", mr.IID)
 	switch act {
 	case "board.sessions":
-		if ids := m.ix.mrSessions[mr.WebURL]; len(ids) > 0 {
+		if ids := m.ix.MRSessions[mr.WebURL]; len(ids) > 0 {
 			m.chooseSessions(ids, "sessions for "+ref)
 			return m, nil
 		}

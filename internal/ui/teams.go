@@ -111,7 +111,7 @@ func (m *Model) mrIsDone(mr gitlab.MR) bool {
 // mrDone says whether an MR is done, from the MRs claudia tracks or ones it
 // looked up for Teams posts; known is false when it hasn't been looked up yet.
 func (m *Model) mrDone(u string) (done, known bool) {
-	if mr, ok := m.ix.mrs[u]; ok {
+	if mr, ok := m.ix.MRs[u]; ok {
 		return m.mrIsDone(mr), true
 	}
 	done, known = m.postMRs[u]
@@ -129,7 +129,7 @@ func (m *Model) lookupPostMRs() tea.Cmd {
 	for _, w := range m.teams.Waiting {
 		for _, u := range w.MRURLs {
 			if done, known := m.mrDone(u); !(known && done) && !slices.Contains(urls, u) {
-				if _, tracked := m.ix.mrs[u]; !tracked {
+				if _, tracked := m.ix.MRs[u]; !tracked {
 					urls = append(urls, u)
 				}
 			}

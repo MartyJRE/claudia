@@ -37,7 +37,7 @@ func (m *Model) filterSessions(match func(...string) bool) []row {
 		if !m.allSessions && !r.live() {
 			continue
 		}
-		if match(r.Name(), project(r.Dir()), branch(r), m.ix.sessionTicket[r.ID], r.Profile.Name) {
+		if match(r.Name(), project(r.Dir()), branch(r), m.ix.SessionTicket[r.ID], r.Profile.Name) {
 			out = append(out, r)
 		}
 	}
@@ -91,7 +91,7 @@ func (m *Model) sessionCells(i int, sel bool) []string {
 		name,
 		sText.Render(project(r.Dir())),
 		sBranch.Render(branch(r)),
-		sTicket.Render(m.ix.sessionTicket[r.ID]),
+		sTicket.Render(m.ix.SessionTicket[r.ID]),
 		modelChip(r),
 		sDim.Render(age(r.LastActive())),
 		m.where(r),
@@ -263,9 +263,9 @@ func (m *Model) detailSession() string {
 		return m.detailWorker(r)
 	}
 	head := colorDot(r) + sBold.Render(r.Name())
-	if t := m.ix.sessionTicket[r.ID]; t != "" {
+	if t := m.ix.SessionTicket[r.ID]; t != "" {
 		head += "  " + sTicket.Render(t)
-		if is, ok := m.ix.issues[t]; ok {
+		if is, ok := m.ix.Issues[t]; ok {
 			head += sDim.Render(" "+is.Summary+" · ") + statusText(is)
 		}
 	}
@@ -289,7 +289,7 @@ func (m *Model) detailSession() string {
 			lines = append(lines, sDim.Render("› ")+sText.Render(p))
 		}
 	}
-	if urls := m.ix.sessionMRs[r.ID]; len(urls) > 0 {
+	if urls := m.ix.SessionMRs[r.ID]; len(urls) > 0 {
 		var prs []string
 		for _, u := range urls {
 			prs = append(prs, m.mrRef(u))
@@ -313,12 +313,12 @@ func (m *Model) detailSession() string {
 			lines = append(lines, strings.Join(info, sDim.Render("   ")))
 		}
 	}
-	return m.panel(m.withNotes(lines, m.ix.sessionTicket[r.ID]))
+	return m.panel(m.withNotes(lines, m.ix.SessionTicket[r.ID]))
 }
 
 // mrRef renders an MR link with whatever claudia knows about its state.
 func (m *Model) mrRef(u string) string {
-	mr, ok := m.ix.mrs[u]
+	mr, ok := m.ix.MRs[u]
 	if !ok {
 		iid := u[strings.LastIndex(u, "/")+1:]
 		if i := strings.Index(u, "/-/"); i >= 0 {
@@ -391,12 +391,12 @@ func (m *Model) keySessions(k string) (tea.Model, tea.Cmd) {
 		}
 	case "sessions.ticket":
 		if r, ok := m.currentSession(); ok {
-			return m.gotoTicket(m.ix.sessionTicket[r.ID])
+			return m.gotoTicket(m.ix.SessionTicket[r.ID])
 		}
 	case "sessions.mr":
 		r, ok := m.currentSession()
-		if ok && len(m.ix.sessionMRs[r.ID]) > 0 {
-			urls := m.ix.sessionMRs[r.ID]
+		if ok && len(m.ix.SessionMRs[r.ID]) > 0 {
+			urls := m.ix.SessionMRs[r.ID]
 			return m, openURL(urls[len(urls)-1])
 		}
 		m.setFlash("no MR linked to this session", true)

@@ -14,6 +14,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/MartyJRE/claudia/internal/atlassian"
+	"github.com/MartyJRE/claudia/internal/board"
 	"github.com/MartyJRE/claudia/internal/brief"
 	"github.com/MartyJRE/claudia/internal/claude"
 	"github.com/MartyJRE/claudia/internal/gitlab"
@@ -87,33 +88,34 @@ func splitWorkers(rows []row) (sessions, workers []row) {
 }
 
 const (
-	needsYouPrefix = "Needs you:"
-	donePrefix     = "Done:"
-	waitingPrefix  = "Waiting:"
+	needsYouPrefix = board.NeedsYouPrefix
+	donePrefix     = board.DonePrefix
+	waitingPrefix  = board.WaitingPrefix
 )
 
-// summarized: the summary was written from the session's latest turn.
-func (r row) summarized(prefix string) bool {
-	return strings.HasPrefix(r.summary, prefix) && r.Transcript != nil && r.summaryFor.Equal(r.Updated)
+// sess is the row as the board reads it.
+func (r row) sess() board.Session {
+	return board.Session{Session: r.Session, Kind: r.kind, Summary: r.summary, SummaryFor: r.summaryFor}
 }
+
+func sessionsOf(rows []row) []board.Session {
+	out := make([]board.Session, len(rows))
+	for i, r := range rows {
+		out[i] = r.sess()
+	}
+	return out
+}
+
+// summarized: the summary was written from the session's latest turn.
+func (r row) summarized(prefix string) bool { return r.sess().Summarized(prefix) }
 
 // done: stopped, and its summary of that very turn says nothing is left, so
 // it's likely safe to close.
-func (r row) done() bool {
-	return r.live() && !r.Live.Status.Working() && !r.needsYou() && r.summarized(donePrefix)
-}
+func (r row) done() bool { return r.sess().Done() }
 
 // needsYou: Claude is waiting on a prompt, or it stopped and its summary of
 // that very turn says it's asking you something.
-func (r row) needsYou() bool {
-	if !r.live() || r.Live.Status.Working() {
-		return false
-	}
-	if r.Live.Status == claude.StatusWaiting {
-		return true
-	}
-	return r.summarized(needsYouPrefix)
-}
+func (r row) needsYou() bool { return r.sess().NeedsYou() }
 
 type Model struct {
 	opts   Options

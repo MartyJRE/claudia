@@ -21,7 +21,7 @@ func (m *Model) updateLedger() {
 	m.ledger.Reload()
 	changed := m.ledger.Merge(m.usageScanner.Sessions())
 	for _, r := range m.sessions {
-		t, ok := m.ix.sessionTicket[r.ID]
+		t, ok := m.ix.SessionTicket[r.ID]
 		if k, set := m.links.Ticket(r.ID); !ok && !(set && k == "-") {
 			continue
 		}
@@ -94,7 +94,7 @@ func (m *Model) costRows() []costRow {
 		return nil
 	}
 	parent := map[string]string{}
-	for k, is := range m.ix.issues {
+	for k, is := range m.ix.Issues {
 		parent[k] = is.Parent
 	}
 	var out []costRow
@@ -118,10 +118,10 @@ var costCols = []col{
 }
 
 func (m *Model) issueSummary(key string) string {
-	if is, ok := m.ix.issues[key]; ok {
+	if is, ok := m.ix.Issues[key]; ok {
 		return is.Summary
 	}
-	for _, is := range m.ix.issues {
+	for _, is := range m.ix.Issues {
 		if is.Parent == key && is.ParentSummary != "" {
 			return is.ParentSummary
 		}

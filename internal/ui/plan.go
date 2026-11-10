@@ -339,7 +339,7 @@ func (m *Model) viewPlan() string {
 	p := m.plan
 	w, h := m.width, m.planHeight()
 	head := planYou.Render("plan") + sDim.Render(" · ") + sBold.Render(p.sess.Name())
-	if t := m.ix.sessionTicket[p.sess.ID]; t != "" {
+	if t := m.ix.SessionTicket[p.sess.ID]; t != "" {
 		head += sDim.Render(" · ") + sTicket.Render(t)
 	}
 	n := sDim.Render(fmt.Sprintf("%d comment(s)", len(p.comments)))

@@ -284,7 +284,7 @@ func TestMessagesShell(t *testing.T) {
 	}
 
 	m.Update(fetched{src: srcJira, data: atlassian.JiraSnapshot{Sprint: []atlassian.Issue{{Key: "ABC-9", Summary: "new one"}}}})
-	if _, ok := m.ix.issues["ABC-9"]; !ok {
+	if _, ok := m.ix.Issues["ABC-9"]; !ok {
 		t.Errorf("Jira snapshot must be reindexed")
 	}
 	m.Update(fetched{src: srcConfluence, data: atlassian.ConfluenceSnapshot{Mine: []atlassian.Page{{Title: "Runbook"}}}})
@@ -345,7 +345,7 @@ func TestSessionsMsgShell(t *testing.T) {
 	if len(m.restore) != 1 || m.restore[0].ID != "eeeeeeee-gone" {
 		t.Errorf("sessions that came back are no longer offered: %+v", m.restore)
 	}
-	if m.ix.sessionTicket["aaaaaaaa-wait"] != "ABC-1" {
+	if m.ix.SessionTicket["aaaaaaaa-wait"] != "ABC-1" {
 		t.Errorf("index not rebuilt")
 	}
 }

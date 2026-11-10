@@ -287,7 +287,7 @@ func TestSessionsSetTicketShell(t *testing.T) {
 	}
 	typeShell(m, "invoices")
 	pressShell(m, "enter")
-	if got := m.ix.sessionTicket["cccccccc-idle"]; got != "ABC-2" {
+	if got := m.ix.SessionTicket["cccccccc-idle"]; got != "ABC-2" {
 		t.Errorf("picked ticket must be linked: %q", got)
 	}
 	if k, _ := links.Load().Ticket("cccccccc-idle"); k != "ABC-2" {
@@ -298,7 +298,7 @@ func TestSessionsSetTicketShell(t *testing.T) {
 	pressShell(m, "t")
 	typeShell(m, "none")
 	pressShell(m, "enter")
-	if got := m.ix.sessionTicket["aaaaaaaa-wait"]; got != "" {
+	if got := m.ix.SessionTicket["aaaaaaaa-wait"]; got != "" {
 		t.Errorf("none unlinks even a branch ticket: %q", got)
 	}
 }

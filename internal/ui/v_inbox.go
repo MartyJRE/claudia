@@ -139,7 +139,7 @@ func (m *Model) inbox() []inboxItem {
 		out = append(out, inboxItem{
 			id: fmt.Sprintf("cc:%s:%d", r.ID, r.Live.UpdatedAt), kind: kClaude,
 			where: project(r.Dir()), who: "claude", text: text, since: r.Live.Since(),
-			ticket: m.ix.sessionTicket[r.ID], sess: r,
+			ticket: m.ix.SessionTicket[r.ID], sess: r,
 		})
 	}
 	slices.SortStableFunc(out, func(a, b inboxItem) int { return a.since.Compare(b.since) })
@@ -260,7 +260,7 @@ func (m *Model) detailInbox() string {
 	}
 	if it.ticket != "" {
 		head += "  " + sTicket.Render(it.ticket)
-		if is, ok := m.ix.issues[it.ticket]; ok {
+		if is, ok := m.ix.Issues[it.ticket]; ok {
 			head += sDim.Render(" "+is.Summary+" · ") + statusText(is)
 		}
 	}

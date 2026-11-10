@@ -313,7 +313,7 @@ func TestPlanViewShell(t *testing.T) {
 	if !strings.Contains(screenShell(m), "boom") {
 		t.Error("a flash takes the footer")
 	}
-	m.ix.sessionTicket[r.ID] = "ABC-1"
+	m.ix.SessionTicket[r.ID] = "ABC-1"
 	if !strings.Contains(screenShell(m), "· ABC-1") {
 		t.Error("the ticket shows in the header")
 	}

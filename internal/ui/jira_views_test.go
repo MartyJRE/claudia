@@ -249,7 +249,7 @@ func TestJiraDetail(t *testing.T) {
 
 func TestJiraIssueSessions(t *testing.T) {
 	m := newModelViews(t)
-	m.ix.ticketSess = map[string][]string{"ABC-1": {"a", "b"}}
+	m.ix.TicketSess = map[string][]string{"ABC-1": {"a", "b"}}
 	m.sessions = []row{{Session: claude.Session{ID: "a"}}, {Session: claude.Session{ID: "b"}}}
 	if got := plainViews(m.issueSessions("ABC-1")); got != "✻ 2" {
 		t.Errorf("got %q", got)
@@ -257,7 +257,7 @@ func TestJiraIssueSessions(t *testing.T) {
 	if m.issueSessions("ABC-2") != "" {
 		t.Error("no sessions, no robot")
 	}
-	m.ix.ticketMRs = map[string][]gitlab.MR{"ABC-1": {{IID: 3}, {IID: 4, State: "merged"}}}
+	m.ix.TicketMRs = map[string][]gitlab.MR{"ABC-1": {{IID: 3}, {IID: 4, State: "merged"}}}
 	if got := plainViews(m.issueMRs("ABC-1")); got != "!3 !4" {
 		t.Errorf("mrs %q", got)
 	}

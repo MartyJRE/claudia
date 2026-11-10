@@ -32,7 +32,7 @@ func TestBriefTextShell(t *testing.T) {
 
 func TestSessionTitleCutShell(t *testing.T) {
 	m := &Model{}
-	m.ix.issues = map[string]atlassian.Issue{"ABC-1": {Key: "ABC-1", Summary: strings.Repeat("é", 60)}}
+	m.ix.Issues = map[string]atlassian.Issue{"ABC-1": {Key: "ABC-1", Summary: strings.Repeat("é", 60)}}
 	got := m.sessionTitle("x", "review", "ABC-1", "")
 	if want := "review: " + strings.Repeat("é", 49) + "…"; got != want {
 		t.Errorf("long summaries are cut on runes: %q", got)

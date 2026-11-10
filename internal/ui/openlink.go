@@ -108,7 +108,7 @@ func (m *Model) openLink(link string) (tea.Model, tea.Cmd) {
 	if base := getConfig().AtlassianURL; base != "" && strings.HasPrefix(link, base) && !strings.Contains(link, "/wiki/") {
 		if k := jiraKeyRe.FindString(link); k != "" {
 			summary := ""
-			if is, ok := m.ix.issues[k]; ok {
+			if is, ok := m.ix.Issues[k]; ok {
 				summary = is.Summary
 			}
 			return m.claudeForTicket(k, summary)
