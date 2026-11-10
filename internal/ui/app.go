@@ -128,52 +128,53 @@ type Model struct {
 	visual     *visualSel // rows picked with V
 	background bool       // the action being run was C: start claude without switching to it
 
-	sessions     []row
-	workers      []row // claudia's own runs, only ever shown in the Sessions tab
-	usage        []claude.DayModel
-	usageScanner *claude.UsageScanner
-	usageLoaded  bool
-	usageLoading bool
-	usageAt      time.Time
-	ledger       *claude.Ledger
-	costs        map[string]claude.TicketCost
-	jiraPrefs    jiraPrefs
-	boardPrefs   boardPrefs
-	boardFocus   bool            // stepped into the Board: h/l move columns, not tabs
-	boardCol     int             // the Board column the cursor is in
-	boardOff     int             // the first column shown when they don't all fit
-	boardCur     [nStages]cursor // each column's cursor while another has it
-	boardLater   int             // Up next tickets folded away as later sprints
-	boardSprint  int             // 0 the current sprint, n the nth future one (f)
-	boardFutures []string
-	boardNeeds   int
-	sessLoaded   bool
-	sessLoading  bool
-	gl           gitlab.Snapshot
-	jira         atlassian.JiraSnapshot
-	conf         atlassian.ConfluenceSnapshot
-	teams        teams.Snapshot
-	tm           *teams.Client
-	postMRs      map[string]bool // done-ness of MRs in Teams posts that claudia doesn't track
-	repos        []repos.Repo
-	ix           index
-	seen         seenStore
-	seenExisted  bool
-	dismissed    dismissed
-	dismissedAt  time.Time
-	vault        *vault.Index
-	vaultNotes   []vault.Note
-	vaultLoading bool
-	vaultAt      time.Time
-	notesPrefs   notesPrefs
-	sessPrefs    sessionPrefs
-	listPrefs    listPrefs
-	brief        brief.Brief
-	briefAt      time.Time
-	briefPending time.Time
-	updateAvail  bool
-	updateAt     time.Time
-	restore      []restoreItem
+	sessions      []row
+	workers       []row // claudia's own runs, only ever shown in the Sessions tab
+	usage         []claude.DayModel
+	usageScanner  *claude.UsageScanner
+	usageLoaded   bool
+	usageLoading  bool
+	usageAt       time.Time
+	ledger        *claude.Ledger
+	costs         map[string]claude.TicketCost
+	jiraPrefs     jiraPrefs
+	boardPrefs    boardPrefs
+	boardFocus    bool            // stepped into the Board: h/l move columns, not tabs
+	boardCol      int             // the Board column the cursor is in
+	boardOff      int             // the first column shown when they don't all fit
+	boardCur      [nStages]cursor // each column's cursor while another has it
+	boardRevNeeds int             // review cards that need you, for the subtitle
+	boardLater    int             // Up next tickets folded away as later sprints
+	boardSprint   int             // 0 the current sprint, n the nth future one (f)
+	boardFutures  []string
+	boardNeeds    int
+	sessLoaded    bool
+	sessLoading   bool
+	gl            gitlab.Snapshot
+	jira          atlassian.JiraSnapshot
+	conf          atlassian.ConfluenceSnapshot
+	teams         teams.Snapshot
+	tm            *teams.Client
+	postMRs       map[string]bool // done-ness of MRs in Teams posts that claudia doesn't track
+	repos         []repos.Repo
+	ix            index
+	seen          seenStore
+	seenExisted   bool
+	dismissed     dismissed
+	dismissedAt   time.Time
+	vault         *vault.Index
+	vaultNotes    []vault.Note
+	vaultLoading  bool
+	vaultAt       time.Time
+	notesPrefs    notesPrefs
+	sessPrefs     sessionPrefs
+	listPrefs     listPrefs
+	brief         brief.Brief
+	briefAt       time.Time
+	briefPending  time.Time
+	updateAvail   bool
+	updateAt      time.Time
+	restore       []restoreItem
 
 	busy      [nSources]bool
 	errs      [nSources]error
@@ -863,16 +864,23 @@ func (m *Model) subtitle() string {
 		if sp := m.currentSprint(); sp != "" {
 			s += " in " + sp
 		}
+		switch m.boardPrefs.view() {
+		case bvReviews:
+			s = "MRs waiting on your review"
+		case bvAll:
+			s += " and your reviews"
+		}
 		if m.boardPrefs.Done {
 			s += " incl. done"
 		}
-		hint := sKey.Render(m.key("board.team")) + sDim.Render(" mine/team  ") + sKey.Render(m.key("board.done")) + sDim.Render(" done  ") + sKey.Render(m.key("board.later")) + sDim.Render(" next sprint  ")
+		s += " by stage"
+		hint := sKey.Render(m.key("board.reviews")) + sDim.Render(" view  ") + sKey.Render(m.key("board.team")) + sDim.Render(" mine/team  ") + sKey.Render(m.key("board.done")) + sDim.Render(" done  ") + sKey.Render(m.key("board.later")) + sDim.Render(" next sprint  ")
 		if m.boardFocus {
 			hint += sKey.Render("↑") + sDim.Render(" on a top card steps out")
 		} else {
 			hint += sKey.Render("↓") + sDim.Render(" steps in")
 		}
-		return sDim.Render(s+" by stage, worked out from Jira, MRs and sessions") + "  " + hint
+		return m.boardViews() + "  " + sDim.Render(s) + "  " + hint
 	case vUsage:
 		layout := "  " + sKey.Render(m.key("usage.layout")) + sDim.Render(" layout")
 		if m.usageByTicket() {
@@ -955,7 +963,10 @@ func (m *Model) help() [][2]string {
 		return m.hints("confluence.open", "confluence.copy")
 	case vBoard:
 		if !m.boardFocus {
-			return append([][2]string{{"↓", "step in"}}, m.hints("board.team", "board.done", "board.later")...)
+			return append([][2]string{{"↓", "step in"}}, m.hints("board.reviews", "board.team", "board.done", "board.later")...)
+		}
+		if c, ok := m.currentCard(); ok && c.review() {
+			return m.reviewHints()
 		}
 		return append([][2]string{{m.key("board.left") + "/" + m.key("board.right"), "columns"}},
 			m.hints("board.sessions", "board.claude", "board.claude_bg", "board.open", "board.mr", "board.threads", "board.move", "board.copy")...)
@@ -995,16 +1006,17 @@ func (m *Model) count() int {
 }
 
 type visible struct {
-	board    [][]boardCard // per shown column
-	costRows []costRow
-	inbox    []inboxItem
-	notes    []nrow
-	sessions []srow
-	mrs      []mrRow
-	jira     []jrow
-	mentions []mention
-	pages    []atlassian.Page
-	usage    []usageRow
+	board     [][]boardCard // per shown column
+	boardCols []boardCol
+	costRows  []costRow
+	inbox     []inboxItem
+	notes     []nrow
+	sessions  []srow
+	mrs       []mrRow
+	jira      []jrow
+	mentions  []mention
+	pages     []atlassian.Page
+	usage     []usageRow
 
 	inboxRows, mrRows, mentionRows, pageRows []lrow
 

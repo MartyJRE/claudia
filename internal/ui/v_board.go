@@ -18,28 +18,31 @@ const (
 	cardHeight  = 3
 )
 
-// refilterBoard rebuilds the cards, keeping the cursor on its ticket while the
-// ticket stays in the column.
+// refilterBoard rebuilds the cards, keeping the cursor on its card while the
+// card stays in the column.
 func (m *Model) refilterBoard(match func(...string) bool) {
 	sel := ""
 	if c, ok := m.cardUnderCursor(); ok {
-		sel = c.issue.Key
+		sel = c.id()
 	}
-	cards := m.boardCards()
-	m.boardNeeds = 0
-	for _, c := range cards {
+	cards, reviews := m.boardCards(), m.reviewCards()
+	m.boardNeeds, m.boardRevNeeds = 0, 0
+	for _, c := range append(slices.Clip(cards), reviews...) {
 		if c.turn == turnNeedsYou && c.stage != stDone {
 			m.boardNeeds++
+			if c.review() {
+				m.boardRevNeeds++
+			}
 		}
 	}
-	m.vis.board = m.layoutBoard(cards, match)
+	m.vis.board = m.layoutBoard(cards, reviews, match)
 	m.boardCol = max(0, min(m.boardCol, len(m.vis.board)-1))
 	if len(m.vis.board[m.boardCol]) == 0 {
 		if i := slices.IndexFunc(m.vis.board, func(col []boardCard) bool { return len(col) > 0 }); i >= 0 {
 			m.boardCol, m.cur[vBoard] = i, m.boardCur[i]
 		}
 	}
-	if i := slices.IndexFunc(m.vis.board[m.boardCol], func(c boardCard) bool { return c.issue.Key == sel }); sel != "" && i >= 0 {
+	if i := slices.IndexFunc(m.vis.board[m.boardCol], func(c boardCard) bool { return c.id() == sel }); sel != "" && i >= 0 {
 		m.cur[vBoard].pos = i
 	}
 }
@@ -86,6 +89,8 @@ func (m *Model) listBoard(h int) string {
 	if !slices.ContainsFunc(m.vis.board, func(col []boardCard) bool { return len(col) > 0 }) {
 		empty := "nothing on the board — " + m.key("board.team") + " shows the team, " + m.key("board.done") + " what's done"
 		switch {
+		case m.boardPrefs.view() == bvReviews:
+			empty = "no reviews waiting on you — " + m.key("board.done") + " shows the approved ones"
 		case m.atl == nil && m.atlErr != nil:
 			empty = m.atlErr.Error()
 		case m.jira.FetchedAt.IsZero():
@@ -95,8 +100,7 @@ func (m *Model) listBoard(h int) string {
 		}
 		return lipgloss.Place(m.width, h, lipgloss.Center, lipgloss.Center, sDim.Render(empty))
 	}
-	cols := m.boardColumns()
-	n := len(cols)
+	n := len(m.vis.board)
 	shown := n
 	if n*(boardMinCol+1)-1 > m.width {
 		shown = max(1, (m.width+1)/(boardMinCol+1))
@@ -119,27 +123,28 @@ func (m *Model) listBoard(h int) string {
 			w++
 		}
 		i := m.boardOff + k
-		blocks = append(blocks, m.boardColumn(i, cols[i], w, h, shown))
+		blocks = append(blocks, m.boardColumn(i, w, h, i == m.boardOff && i > 0, i == m.boardOff+shown-1 && i < n-1))
 	}
 	out := lipgloss.JoinHorizontal(lipgloss.Top, blocks...)
 	return lipgloss.NewStyle().Height(h).MaxHeight(h).Render(out)
 }
 
-func (m *Model) boardColumn(i int, st stage, w, h, shown int) string {
+func (m *Model) boardColumn(i, w, h int, moreLeft, moreRight bool) string {
 	cards := m.vis.board[i]
+	col := m.vis.boardCols[i]
 	active := i == m.boardCol
 	name := sBold
 	if active {
 		name = sAccent
 	}
 	left, right := "", ""
-	if i == m.boardOff && i > 0 {
+	if moreLeft {
 		left = sDim.Render("‹ ")
 	}
-	if i == m.boardOff+shown-1 && i < len(m.vis.board)-1 {
+	if moreRight {
 		right = sDim.Render(" ›")
 	}
-	lines := []string{fit(left+name.Render(stageNames[st])+sDim.Render(fmt.Sprintf(" %d", len(cards)))+right, w), sRule.Render(strings.Repeat("─", w))}
+	lines := []string{fit(left+name.Render(col.name)+sDim.Render(fmt.Sprintf(" %d", len(cards)))+right, w), sRule.Render(strings.Repeat("─", w))}
 	if len(cards) == 0 {
 		lines = append(lines, fit(sDim.Render(" —"), w))
 	}
@@ -165,7 +170,7 @@ func (m *Model) boardColumn(i int, st stage, w, h, shown int) string {
 	if below := len(cards) - cur.offset - room; below > 0 && len(lines) < h {
 		lines = append(lines, sDim.Render(fmt.Sprintf("  ↓ %d more", below)))
 	}
-	if st == stUpNext && m.boardLater > 0 && len(lines) < h {
+	if !col.review && col.st == stUpNext && m.boardLater > 0 && len(lines) < h {
 		lines = append(lines, sDim.Render(fmt.Sprintf("  + %d in future sprints  ", m.boardLater))+sKey.Render(m.key("board.later")))
 	}
 	for len(lines) < h {
@@ -178,6 +183,9 @@ func (m *Model) boardColumn(i int, st stage, w, h, shown int) string {
 }
 
 func (m *Model) cardLines(c boardCard, w int, sel bool) []string {
+	if c.review() {
+		return m.reviewCardLines(c, w, sel)
+	}
 	inner := w - 2
 	lines := []string{
 		fit(sTicket.Render(c.issue.Key)+m.cardBadge(c), inner),
@@ -274,6 +282,9 @@ func (m *Model) detailBoard() string {
 			return m.panel(nil)
 		}
 		return m.panel([]string{sDim.Render("↓ steps into the board, ↑ on a column's top card steps back out; outside it ←/→ switch tabs")})
+	}
+	if c.review() {
+		return m.detailReview(c)
 	}
 	is := c.issue
 	lines := []string{sTicket.Render(is.Key) + " " + sBold.Render(is.Summary)}
@@ -385,12 +396,23 @@ func (m *Model) keyBoard(k string) (tea.Model, tea.Cmd) {
 		m.cur[vBoard], m.boardCur = cursor{}, [nStages]cursor{}
 		m.refilter()
 		return m, nil
+	case "board.reviews":
+		m.boardPrefs.View = strings.ToLower(boardViewNames[(m.boardPrefs.view()+1)%nBoardViews])
+		m.saveBoardPrefs()
+		m.cur[vBoard], m.boardCur, m.boardCol, m.boardOff = cursor{}, [nStages]cursor{}, 0, 0
+		m.refilter()
+		m.boardFocus = m.boardFocus && m.count() > 0
+		return m, nil
 	case "board.done":
 		m.boardPrefs.Done = !m.boardPrefs.Done
 		m.saveBoardPrefs()
 		m.refilter()
 		return m, nil
 	case "board.later":
+		if m.boardPrefs.view() == bvReviews {
+			m.setFlash("sprints are for tickets: "+m.key("board.reviews")+" shows them", false)
+			return m, nil
+		}
 		if len(m.boardFutures) == 0 {
 			m.setFlash("no future sprint has your tickets", false)
 			return m, nil
@@ -407,6 +429,9 @@ func (m *Model) keyBoard(k string) (tea.Model, tea.Cmd) {
 			m.setFlash("↓ steps into the board to pick a card", false)
 		}
 		return m, nil
+	}
+	if c.review() {
+		return m.keyReviewCard(act, c)
 	}
 	key := c.issue.Key
 	switch act {

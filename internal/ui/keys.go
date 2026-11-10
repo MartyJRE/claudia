@@ -79,6 +79,7 @@ var actions = []action{
 	{"board.team", []string{"a"}, "mine/team"},
 	{"board.done", []string{"d"}, "show done"},
 	{"board.later", []string{"f"}, "next sprint"},
+	{"board.reviews", []string{"r"}, "tickets/reviews/all"},
 
 	{"usage.layout", []string{"v"}, "layout"},
 
