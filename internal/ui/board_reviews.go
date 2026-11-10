@@ -113,7 +113,8 @@ func (c boardCard) id() string {
 }
 
 // boardViews names the three views r cycles through, the current one in
-// brackets, with the reviews that need you.
+// brackets, with the reviews that need you. The others get spaces where the
+// brackets would be, so the labels stay put as r moves the brackets.
 func (m *Model) boardViews() string {
 	cur := m.boardPrefs.view()
 	var parts []string
@@ -125,9 +126,9 @@ func (m *Model) boardViews() string {
 			parts = append(parts, sAccent.Render("["+name+"]"))
 			continue
 		}
-		parts = append(parts, sDim.Render(name))
+		parts = append(parts, sDim.Render(" "+name+" "))
 	}
-	return strings.Join(parts, sDim.Render(" · "))
+	return strings.Join(parts, sDim.Render("·"))
 }
 
 func reviewChips(c boardCard) string {
