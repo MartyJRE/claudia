@@ -19,6 +19,7 @@ import (
 	"github.com/MartyJRE/claudia/internal/claude"
 	"github.com/MartyJRE/claudia/internal/config"
 	"github.com/MartyJRE/claudia/internal/gitlab"
+	"github.com/MartyJRE/claudia/internal/runs"
 	"github.com/MartyJRE/claudia/internal/state"
 	"github.com/MartyJRE/claudia/internal/summary"
 	"github.com/MartyJRE/claudia/internal/tmux"
@@ -38,6 +39,7 @@ var (
 	checkUpdate  = update.Check
 	pollEvery    = 3 * time.Second
 	stopRun      chan struct{} // closing it ends Run; nil never does
+	openRuns     = runs.Open
 )
 
 // Running reports whether a watcher holds the lock. A pid alone can't say: a
@@ -117,6 +119,9 @@ type watcher struct {
 	summaries   map[string]summary.Summary
 	summarizing chan struct{}
 	summaryMu   sync.Mutex
+
+	runs      *runs.Store
+	settledAt time.Time
 }
 
 var summarize = summary.Generate
@@ -178,6 +183,11 @@ func Run(makeBrief func()) error {
 		summarizing: make(chan struct{}, 1),
 	}
 	w.atl, _ = atlassian.New()
+	if w.runs, err = openRuns(); err == nil {
+		defer w.runs.Close()
+	} else {
+		fmt.Fprintln(os.Stderr, time.Now().Format(time.TimeOnly), "runs:", err)
+	}
 
 	var lastGL, lastJira time.Time
 	lastBrief := time.Now()
@@ -234,13 +244,20 @@ func (w *watcher) sessions() {
 	w.baseline[0] = true
 	seen := map[string]bool{}
 	waiting := map[string]bool{} // window ids with a waiting Claude
+	var ran []runs.Seen
+	stopped := first
 	for _, s := range w.store.Sessions() {
+		w.summaryMu.Lock()
+		sum := w.summaries[s.ID]
+		w.summaryMu.Unlock()
+		ran = append(ran, runs.SeenOf(s, sum.Text, sum.For))
 		if s.Live == nil || s.Live.Worker != "" {
 			continue
 		}
 		seen[s.ID] = true
 		prev, had := w.status[s.ID]
 		w.status[s.ID] = s.Live.Status
+		stopped = stopped || had && prev.Working() && !s.Live.Status.Working()
 		if !s.Live.Status.Working() && w.summarizing != nil {
 			w.summarize(s)
 		}
@@ -267,14 +284,28 @@ func (w *watcher) sessions() {
 	for id := range w.status {
 		if !seen[id] {
 			delete(w.status, id)
+			stopped = true
 		}
 	}
+	w.settle(ran, stopped)
 	for _, l := range tmux.Borrowed() {
 		if !waiting[l.WindowID] && !l.Viewed {
 			_ = tmux.Unborrow(l)
 		}
 	}
 	tmux.MarkWaiting(waiting)
+}
+
+// settle reads how runs went when a session stopped or exited, so the run log
+// stays current with the TUI closed; once a minute it also catches a missed edge.
+func (w *watcher) settle(seen []runs.Seen, stopped bool) {
+	if w.runs == nil || !stopped && time.Since(w.settledAt) < time.Minute {
+		return
+	}
+	w.settledAt = time.Now()
+	if _, err := w.runs.Reconcile(seen, w.settledAt); err != nil {
+		fmt.Fprintln(os.Stderr, w.settledAt.Format(time.TimeOnly), "runs:", err)
+	}
 }
 
 // borrow links a waiting session's window into the session you're in, so it's a
