@@ -11,6 +11,9 @@ func TestDir(t *testing.T) {
 	if got := Path("x.json"); got != "/s/claudia/x.json" {
 		t.Errorf("got %s", got)
 	}
+	if got := WorkerDir("brief"); got != "/s/claudia/worker/brief" {
+		t.Errorf("worker dir %s", got)
+	}
 	t.Setenv("XDG_STATE_HOME", "")
 	t.Setenv("HOME", "/h")
 	if got := Dir(); got != "/h/.local/state/claudia" {

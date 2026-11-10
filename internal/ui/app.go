@@ -70,6 +70,20 @@ type row struct {
 
 func (r row) live() bool { return r.Live != nil }
 
+// worker: one of claudia's own headless runs, kept apart from the user's sessions.
+func (r row) worker() bool { return r.Live != nil && r.Live.Worker != "" }
+
+func splitWorkers(rows []row) (sessions, workers []row) {
+	for _, r := range rows {
+		if r.worker() {
+			workers = append(workers, r)
+		} else {
+			sessions = append(sessions, r)
+		}
+	}
+	return sessions, workers
+}
+
 const (
 	needsYouPrefix = "Needs you:"
 	donePrefix     = "Done:"
@@ -113,6 +127,7 @@ type Model struct {
 	background bool       // the action being run was C: start claude without switching to it
 
 	sessions     []row
+	workers      []row // claudia's own runs, only ever shown in the Sessions tab
 	usage        []claude.DayModel
 	usageScanner *claude.UsageScanner
 	usageLoaded  bool
@@ -279,7 +294,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.filter.Width = msg.Width / 2
 		return m, nil
 	case sessionsMsg:
-		m.sessions, m.sessLoaded, m.sessLoading = msg, true, false
+		m.sessions, m.workers = splitWorkers(msg)
+		m.sessLoaded, m.sessLoading = true, false
 		m.restore = notLive(m.restore, m.sessions)
 		saveLive(m.sessions, m.restore != nil)
 		m.reindex()

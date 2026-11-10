@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/MartyJRE/claudia/internal/claude"
+	"github.com/MartyJRE/claudia/internal/state"
 	"github.com/MartyJRE/claudia/internal/summary"
 	"github.com/MartyJRE/claudia/internal/tmux"
 )
@@ -102,6 +103,7 @@ func TestSessionsNotifyWhenWaiting(t *testing.T) {
 	reg := registry{t, prof}
 	reg.set("aaaaaaaa-pay", pay.PID, "/code/pay", claude.StatusBusy)
 	reg.set("bbbbbbbb-out", os.Getpid(), "/code/out", claude.StatusBusy)
+	reg.set("cccccccc-wrk", os.Getpid(), state.WorkerDir("brief"), claude.StatusBusy)
 	w := newWatcher(claude.Profile{Name: "work", Dir: prof})
 
 	w.sessions()
@@ -111,6 +113,7 @@ func TestSessionsNotifyWhenWaiting(t *testing.T) {
 
 	reg.set("aaaaaaaa-pay", pay.PID, "/code/pay", claude.StatusWaiting)
 	reg.set("bbbbbbbb-out", os.Getpid(), "/code/out", claude.StatusWaiting)
+	reg.set("cccccccc-wrk", os.Getpid(), state.WorkerDir("brief"), claude.StatusWaiting)
 	w.sessions()
 	n := got.take()
 	if len(n) != 2 {

@@ -65,6 +65,9 @@ type Config struct {
 	// RoundedPillsRaw: false draws pills square, for fonts without the Nerd
 	// Font half circles. Ghostty ships them, so they're on by default.
 	RoundedPillsRaw *bool `json:"rounded_pills"`
+	// WorkersRaw places claudia's own headless claude runs (brief, summaries)
+	// in the Sessions tab: "hidden" (the default), "top" or "bottom".
+	WorkersRaw string `json:"workers"`
 	// Teams links review requests posted in a Teams channel to their MRs.
 	Teams Teams `json:"teams"`
 }
@@ -101,6 +104,17 @@ type MailRule struct {
 }
 
 func (c Config) RoundedPills() bool { return c.RoundedPillsRaw == nil || *c.RoundedPillsRaw }
+
+var WorkerPlaces = []string{"hidden", "top", "bottom"}
+
+// Workers is where the Sessions tab lists claudia's workers; anything but
+// top or bottom hides them.
+func (c Config) Workers() string {
+	if v := strings.ToLower(strings.TrimSpace(c.WorkersRaw)); v == "top" || v == "bottom" {
+		return v
+	}
+	return "hidden"
+}
 
 // KeyList is one key or a list of them.
 type KeyList []string
@@ -154,6 +168,7 @@ func Get() Config {
 		env(&cfg.JiraProject, "CLAUDIA_JIRA_PROJECT")
 		env(&cfg.CodeRoot, "CLAUDIA_CODE_ROOT")
 		env(&cfg.WorkDir, "CLAUDIA_PREFER")
+		env(&cfg.WorkersRaw, "CLAUDIA_WORKERS")
 		if k := os.Getenv("CLAUDIA_JIRA_KEYS"); k != "" {
 			cfg.TicketKeys = strings.Split(k, ",")
 		}

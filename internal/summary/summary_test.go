@@ -25,7 +25,7 @@ func TestGenerate(t *testing.T) {
 	at := time.Date(2026, 11, 5, 9, 0, 0, 0, time.UTC)
 	var gotIn, gotDir string
 	var gotExtra []string
-	headless = func(system, input, dir string, extra ...string) (string, error) {
+	headless = func(_, system, input, dir string, extra ...string) (string, error) {
 		gotIn, gotDir, gotExtra = input, dir, extra
 		return "  \"Needs you: OK to send the test message?\"\nmore", nil
 	}
@@ -37,7 +37,9 @@ func TestGenerate(t *testing.T) {
 	if gotIn != "Title: outlook mail\n\nuser:\ndo it\n\nassistant:\nWant a test message?\n\n" || gotDir != "/profiles/work" || !slices.Equal(gotExtra, []string{"--model", "haiku"}) {
 		t.Errorf("runs as the session's profile on Haiku: %q %q %v", gotIn, gotDir, gotExtra)
 	}
-	headless = func(string, string, string, ...string) (string, error) { return "", errors.New("not logged in") }
+	headless = func(string, string, string, string, ...string) (string, error) {
+		return "", errors.New("not logged in")
+	}
 	if s := Generate(session(at)); s.Err != "not logged in" || !s.For.Equal(at) {
 		t.Errorf("error kept with the turn it was for: %+v", s)
 	}
@@ -117,18 +119,20 @@ func TestGenerateText(t *testing.T) {
 		{"", ""},
 		{"   \n  ", ""},
 	} {
-		headless = func(string, string, string, ...string) (string, error) { return tc.out, nil }
+		headless = func(string, string, string, string, ...string) (string, error) { return tc.out, nil }
 		if got := Generate(session(time.Time{})).Text; got != tc.want {
 			t.Errorf("%q gave %q, want %q", tc.out, got, tc.want)
 		}
 	}
 	var in string
-	headless = func(_, input, _ string, _ ...string) (string, error) { in = input; return "x", nil }
+	headless = func(_, _, input, _ string, _ ...string) (string, error) { in = input; return "x", nil }
 	Generate(claude.Session{ID: "abc", Transcript: &claude.Transcript{FirstPrompt: "fix it\nplease"}})
 	if in != "Title: fix it\n\n" {
 		t.Errorf("an untitled session is named by its first prompt line: %q", in)
 	}
-	headless = func(string, string, string, ...string) (string, error) { return "Done: half", errors.New("exit 1") }
+	headless = func(string, string, string, string, ...string) (string, error) {
+		return "Done: half", errors.New("exit 1")
+	}
 	if s := Generate(session(time.Time{})); s.Text != "Done: half" || s.Err != "exit 1" {
 		t.Errorf("text and error both kept: %+v", s)
 	}

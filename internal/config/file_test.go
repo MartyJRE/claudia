@@ -76,6 +76,7 @@ func TestSaveRejects(t *testing.T) {
 		`{"profiles": ["work"]}`:             "profiles",
 		`{"rounded_pills": "yes"}`:           "rounded_pills",
 		`{"teams": {"mail": {"rules": {}}}}`: "rules",
+		`{"workers": "left"}`:                "workers",
 	} {
 		fresh(t, raw)
 		f, err := Raw()
@@ -91,6 +92,11 @@ func TestSaveRejects(t *testing.T) {
 	}
 	for _, ok := range []string{"", "off", "0", "45m"} {
 		if err := CheckBriefEvery(ok); err != nil {
+			t.Errorf("%q: %v", ok, err)
+		}
+	}
+	for _, ok := range []string{"", "hidden", "Top", " bottom"} {
+		if err := CheckWorkers(ok); err != nil {
 			t.Errorf("%q: %v", ok, err)
 		}
 	}

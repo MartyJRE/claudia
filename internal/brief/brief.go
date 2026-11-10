@@ -65,13 +65,14 @@ func Generate(data any, previous, configDir string) (string, error) {
 	if previous == "" {
 		previous = "(none yet)"
 	}
-	return Headless(instructions, "Previous brief:\n"+previous+"\n\nCurrent state ("+time.Now().Format("Mon 2 Jan 15:04")+"):\n"+string(payload), configDir)
+	return Headless("brief", instructions, "Previous brief:\n"+previous+"\n\nCurrent state ("+time.Now().Format("Mon 2 Jan 15:04")+"):\n"+string(payload), configDir)
 }
 
-// Headless runs one tool-less `claude -p` that leaves no session behind, with
-// input on stdin, and returns what it printed. extra goes after the system
-// prompt, e.g. "--model", "haiku".
-func Headless(system, input, configDir string, extra ...string) (string, error) {
+// Headless runs one tool-less `claude -p` that leaves no transcript behind, with
+// input on stdin, and returns what it printed. It runs in the kind's worker
+// dir, so the live entry Claude Code still registers reads as claudia's
+// worker. extra goes after the system prompt, e.g. "--model", "haiku".
+func Headless(kind, system, input, configDir string, extra ...string) (string, error) {
 	bin, err := exec.LookPath("claude")
 	if err != nil {
 		home, _ := os.UserHomeDir()
@@ -79,8 +80,13 @@ func Headless(system, input, configDir string, extra ...string) (string, error) 
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancel()
-	args := append([]string{"-p", "--no-session-persistence", "--tools", "", "--system-prompt", system}, extra...)
+	dir := state.WorkerDir(kind)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
+	args := append([]string{"-p", "--no-session-persistence", "--name", "claudia-" + kind, "--tools", "", "--system-prompt", system}, extra...)
 	cmd := exec.CommandContext(ctx, bin, args...)
+	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), "CLAUDE_CONFIG_DIR="+configDir)
 	cmd.Stdin = strings.NewReader(input)
 	out, err := cmd.Output()

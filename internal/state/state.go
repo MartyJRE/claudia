@@ -16,6 +16,10 @@ func Dir() string {
 
 func Path(name string) string { return filepath.Join(Dir(), name) }
 
+// WorkerDir is where claudia's own headless claude runs of kind run; their cwd
+// is how their registry entries are told from the user's sessions.
+func WorkerDir(kind string) string { return filepath.Join(Dir(), "worker", kind) }
+
 func Load(name string, v any) bool {
 	b, err := os.ReadFile(Path(name))
 	if err != nil {

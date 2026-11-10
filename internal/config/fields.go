@@ -78,6 +78,8 @@ var Fields = []Field{
 		Default: "2h", Help: "how often the inbox brief is rewritten, e.g. 30m; off leaves only the on-demand refresh"},
 	{Key: "rounded_pills", Group: "UI", Label: "rounded pills", Kind: KindBool,
 		Default: "on", Help: "off draws pills square, for fonts without the Nerd Font half circles"},
+	{Key: "workers", Group: "UI", Label: "workers", Kind: KindString, Env: "CLAUDIA_WORKERS",
+		Default: "hidden", Help: "claudia's own background claude runs (brief, summaries) in the Sessions tab: hidden, top or bottom"},
 	{Key: "keys", Group: "UI", Label: "keys", Kind: KindJSON,
 		Help: "rebinds actions to a key or a list of keys; claudia keys lists the actions", Example: `{"sessions.close": "ctrl+w"}`},
 }

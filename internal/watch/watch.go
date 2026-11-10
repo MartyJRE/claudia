@@ -235,7 +235,7 @@ func (w *watcher) sessions() {
 	seen := map[string]bool{}
 	waiting := map[string]bool{} // window ids with a waiting Claude
 	for _, s := range w.store.Sessions() {
-		if s.Live == nil {
+		if s.Live == nil || s.Live.Worker != "" {
 			continue
 		}
 		seen[s.ID] = true
