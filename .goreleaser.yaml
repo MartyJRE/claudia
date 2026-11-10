@@ -1,0 +1,56 @@
+version: 2
+
+project_name: claudia
+
+# The notification helper needs no artifact of its own: its Swift sources are
+# embedded in the binary, and `claudia setup` builds it on the Mac it runs on.
+builds:
+  - main: .
+    binary: claudia
+    env:
+      - CGO_ENABLED=0
+    goos: [darwin, linux]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags:
+      - -s -w -X github.com/MartyJRE/claudia/internal/update.release={{ .Tag }}
+
+archives:
+  - formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  use: git
+  sort: asc
+  abbrev: -1
+  filters:
+    exclude:
+      - '^(ci|tests|go\.sum|readme)\b'
+      - '^Merge branch'
+  groups:
+    - title: Sessions
+      regexp: '^(sessions|tmux|profiles|launch|claudia)\b'
+      order: 0
+    - title: Inbox and MRs
+      regexp: '^(inbox|mrs|my MRs|review|brief|gitlab)\b'
+      order: 1
+    - title: Jira and Confluence
+      regexp: '^(jira|confluence|mentions)\b'
+      order: 2
+    - title: Teams
+      regexp: '^teams\b'
+      order: 3
+    - title: Notes and plans
+      regexp: '^(notes|vault|plan)\b'
+      order: 4
+    - title: Look and keys
+      regexp: '^(ui|header|usage|keys|settings|config)\b'
+      order: 5
+    - title: Updates, setup and notifications
+      regexp: '^(update|releases|setup|notifier|watch)\b'
+      order: 6
+    - title: Other
+      order: 999
