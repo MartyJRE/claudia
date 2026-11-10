@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -49,8 +50,12 @@ type Transcript struct {
 	Models   []string
 	PRs      []PRLink
 	Usage    Usage
-	Started  time.Time
-	Updated  time.Time
+	// Context is what the last request sent: input, cache read and cache
+	// written; ContextFull: Claude Code refused the last turn as too long.
+	Context     int
+	ContextFull bool
+	Started     time.Time
+	Updated     time.Time
 	// Activity is the newest tool call still waiting for its result.
 	Activity Activity
 
@@ -269,8 +274,12 @@ func (t *Transcript) apply(line []byte) {
 			return
 		}
 		if e.Message.Model == "<synthetic>" {
+			if tooLong.MatchString(replyText(e.Message.Content)) {
+				t.ContextFull = true
+			}
 			return
 		}
+		t.ContextFull = false
 		t.addTurn("assistant", replyText(e.Message.Content))
 		t.notePlan(e.Message.Content)
 		t.noteTools(e.Message.Content)
@@ -288,8 +297,28 @@ func (t *Transcript) apply(line []byte) {
 			t.Usage.Output += u.Output
 			t.Usage.CacheRead += u.CacheRead
 			t.Usage.CacheCreation += u.CacheCreation
+			t.Context = u.Input + u.CacheRead + u.CacheCreation
 		}
 	}
+}
+
+// tooLong is Claude Code's error when the context is full.
+var tooLong = regexp.MustCompile(`(?i)prompt is too long|context (limit|window)|conversation (is )?too long`)
+
+// ContextWindow is how many tokens a model's context holds.
+func ContextWindow(model string) int {
+	if strings.Contains(strings.ToLower(model), "[1m]") {
+		return 1_000_000
+	}
+	return 200_000
+}
+
+// ContextFill is how full the session's context was at its last request, 0-1.
+func (t *Transcript) ContextFill() float64 {
+	if t == nil || t.Context == 0 {
+		return 0
+	}
+	return float64(t.Context) / float64(ContextWindow(t.Model))
 }
 
 func promptText(raw json.RawMessage) string {
