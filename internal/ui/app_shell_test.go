@@ -25,7 +25,7 @@ func TestViewsRenderShell(t *testing.T) {
 		wants []string
 		lacks []string
 	}{
-		{vInbox, []string{"everyone waiting on you, oldest first", "✻ brief", "mention", "threads", "review", "claude",
+		{vInbox, []string{"everyone waiting on you · oldest first", "✻ brief", "mention", "threads", "review", "claude",
 			"billing !21", "payments !11", "1 open: rename this", "Eve Smith", "waiting since"}, []string{"!12", "!13"}},
 		{vSessions, []string{"live sessions · by repo", "◆ needs you", "working", "● your turn", "○ closed",
 			"Recently closed", "export csv", "invoice pdf ·personal", "Opus 5.5", "Sonnet 4.5", "tmux work:3", "ghostty", "external",
@@ -437,19 +437,19 @@ func TestSubtitleShell(t *testing.T) {
 		set  func()
 		want string
 	}{
-		{vInbox, func() { m.showAll = true }, "everyone waiting on you, oldest first · incl. snoozed"},
+		{vInbox, func() { m.showAll = true }, "everyone waiting on you · oldest first · incl. snoozed"},
 		{vSessions, func() { m.allSessions = true }, "all sessions, last 7 days · by repo  v layout  a live only"},
 		{vSessions, func() { m.allSessions, m.sessPrefs.Group = false, sessFlat }, "live sessions · flat  v layout  a show closed too"},
-		{vReview, func() { m.showAll = true }, "all review requests  a hide approved"},
-		{vReview, func() { m.showAll = false }, "review requests not yet approved by you  a show all"},
+		{vReview, func() { m.showAll = true }, "all review requests · flat  a hide approved"},
+		{vReview, func() { m.showAll = false }, "review requests not yet approved by you · flat  a show all"},
 		{vMine, func() {}, "open, then merged in the last 5 days"},
 		{vJira, func() { m.teamJira, m.jiraPrefs.Hidden = true, []string{"Done", "QA"} }, "team sprint"},
 		{vJira, func() {}, "2 statuses hidden"},
 		{vMentions, func() {}, "x dismiss  a show handled"},
 		{vConfluence, func() {}, "pages you edited recently"},
 		{vUsage, func() {}, "priced at API list rates"},
-		{vNotes, func() { m.notesPrefs.Recent = true }, "recently edited notes  v folders"},
-		{vNotes, func() { m.notesPrefs.Recent = false }, "your vault  v recently edited"},
+		{vNotes, func() { m.notesPrefs.Recent = true }, "your vault · recently edited"},
+		{vNotes, func() { m.notesPrefs.Recent = false }, "your vault · folders  N on any ticket"},
 	} {
 		m.view = c.v
 		c.set()

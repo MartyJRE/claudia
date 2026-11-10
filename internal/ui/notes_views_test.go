@@ -124,7 +124,7 @@ func TestNotesRecentLayoutAndFilter(t *testing.T) {
 		t.Errorf("recent: got %s want %s", got, want)
 	}
 	s := screenViews(m)
-	if !strings.Contains(s, "recently edited notes") || !strings.Contains(s, "Plan  01 - Projects/ABC-2") {
+	if !strings.Contains(s, "your vault · recently edited") || !strings.Contains(s, "Plan  01 - Projects/ABC-2") {
 		t.Errorf("recent screen:\n%s", s)
 	}
 	pressViews(m, "v")

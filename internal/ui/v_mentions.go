@@ -109,13 +109,17 @@ var mentionCols = []col{
 }
 
 func (m *Model) listMentions(h int) string {
-	rows := m.vis.mentions
+	rows := m.vis.mentionRows
 	empty := "inbox zero — a shows handled ones"
 	if m.atl == nil && m.atlErr != nil {
 		empty = m.atlErr.Error()
 	}
 	return m.table(mentionCols, len(rows), &m.cur[vMentions], h, func(i int, sel bool) []string {
-		x := rows[i]
+		r := rows[i]
+		if r.header() {
+			return m.listHeader(vMentions, r, mentionCols[0].w+1)
+		}
+		x := m.vis.mentions[r.item]
 		dot := lipgloss.NewStyle().Foreground(purple).Render("●")
 		st := sText
 		if !m.open(x) {
@@ -130,19 +134,22 @@ func (m *Model) listMentions(h int) string {
 		if !x.jira {
 			where = sDim.Render(x.where)
 		}
-		return []string{dot, where, st.Render(x.author), sDim.Render(x.title), st.Render(x.text), sDim.Render(age(x.at))}
+		return []string{dot, listIndent(r) + where, st.Render(x.author), sDim.Render(x.title), st.Render(x.text), sDim.Render(age(x.at))}
 	}, empty)
 }
 
 func (m *Model) currentMention() (mention, bool) {
-	c := m.cur[vMentions].pos
-	if c < 0 || c >= len(m.vis.mentions) {
+	i, ok := m.listItem(vMentions)
+	if !ok {
 		return mention{}, false
 	}
-	return m.vis.mentions[c], true
+	return m.vis.mentions[i], true
 }
 
 func (m *Model) detailMention() string {
+	if g, ok := m.currentGroup(vMentions); ok {
+		return m.detailGroup(vMentions, g)
+	}
 	x, ok := m.currentMention()
 	if !ok {
 		return m.panel(nil)
@@ -186,6 +193,9 @@ func (m *Model) detailMention() string {
 
 func (m *Model) keyMentions(k string) (tea.Model, tea.Cmd) {
 	act := m.action(k)
+	if m.keyList(act) {
+		return m, nil
+	}
 	if act == "mentions.all" {
 		m.showAll = !m.showAll
 		m.refilter()

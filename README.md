@@ -98,6 +98,15 @@ waits for your go-ahead before anything that can't be undone. Works in the
 Inbox, Review, My MRs, Jira, Mentions and Confluence. Every view lists its
 keys in the footer.
 
+`v` switches a view's layout, and the subtitle names the one you're in: the
+Inbox by kind, Review and My MRs by repo (My MRs also by state: failed
+pipeline, open threads, needs rebase, …), Mentions by ticket or space,
+Confluence by space, Jira by sprint › epic, by epic or flat, Notes as folders
+or recently edited. `space` folds a group, and outside Notes `-` folds all and
+`+` opens all. A group with a single item is just that item's row, with the
+group named beside it. Each view remembers its layout. In the Inbox and the MR
+views, `t` lists an MR's review threads.
+
 In Sessions, the live ones stay in the order they started, so activity never
 reshuffles the list. Below them, **Recently closed** keeps the last few closed
 sessions a keypress from coming back.

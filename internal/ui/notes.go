@@ -541,6 +541,10 @@ func (m *Model) keyNotes(k string) (tea.Model, tea.Cmd) {
 		m.saveNotesPrefs()
 		m.cur[vNotes] = cursor{}
 		m.refilter()
+		m.setFlash("layout: folders", false)
+		if m.notesPrefs.Recent {
+			m.setFlash("layout: recently edited", false)
+		}
 		return m, nil
 	case "notes.fold", "notes.read":
 		if !ok {

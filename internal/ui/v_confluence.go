@@ -23,7 +23,7 @@ func (m *Model) filterPages(match func(...string) bool) []atlassian.Page {
 }
 
 func (m *Model) listConfluence(h int) string {
-	rows := m.vis.pages
+	rows := m.vis.pageRows
 	empty := "no pages"
 	if m.atl == nil && m.atlErr != nil {
 		empty = m.atlErr.Error()
@@ -31,24 +31,31 @@ func (m *Model) listConfluence(h int) string {
 		empty = spinner[m.frame%len(spinner)] + " asking Confluence…"
 	}
 	return m.table(pageCols, len(rows), &m.cur[vConfluence], h, func(i int, sel bool) []string {
-		p := rows[i]
+		r := rows[i]
+		if r.header() {
+			return m.listHeader(vConfluence, r, 0)
+		}
+		p := m.vis.pages[r.item]
 		st := sText
 		if sel {
 			st = sBold
 		}
-		return []string{sDim.Render(p.Space), st.Render(p.Title), sDim.Render(age(p.Modified))}
+		return []string{sDim.Render(listIndent(r) + p.Space), st.Render(p.Title), sDim.Render(age(p.Modified))}
 	}, empty)
 }
 
 func (m *Model) currentPage() (atlassian.Page, bool) {
-	c := m.cur[vConfluence].pos
-	if c < 0 || c >= len(m.vis.pages) {
+	i, ok := m.listItem(vConfluence)
+	if !ok {
 		return atlassian.Page{}, false
 	}
-	return m.vis.pages[c], true
+	return m.vis.pages[i], true
 }
 
 func (m *Model) detailConfluence() string {
+	if g, ok := m.currentGroup(vConfluence); ok {
+		return m.detailGroup(vConfluence, g)
+	}
 	p, ok := m.currentPage()
 	if !ok {
 		return m.panel(nil)
@@ -62,11 +69,15 @@ func (m *Model) detailConfluence() string {
 }
 
 func (m *Model) keyConfluence(k string) (tea.Model, tea.Cmd) {
+	act := m.action(k)
+	if m.keyList(act) {
+		return m, nil
+	}
 	p, ok := m.currentPage()
 	if !ok {
 		return m, nil
 	}
-	switch m.action(k) {
+	switch act {
 	case "confluence.open":
 		return m, openURL(p.URL)
 	case "confluence.copy":

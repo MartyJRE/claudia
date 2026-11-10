@@ -256,9 +256,9 @@ func TestInboxKeysShell(t *testing.T) {
 	}
 
 	sel(kThreads)
-	pressShell(m, "v")
+	pressShell(m, "t")
 	if m.chooser == nil || m.chooser.title != "threads on !21" || len(m.chooser.all) != 2 {
-		t.Fatalf("v lists the MR's threads")
+		t.Fatalf("t lists the MR's threads")
 	}
 	pressShell(m, "esc")
 
