@@ -9,6 +9,9 @@ import (
 )
 
 // InHours: new runs may start now.
+// offHours is the pause reason outside working hours.
+const offHours = "outside working hours"
+
 func InHours(a config.Autopilot, now time.Time) bool {
 	from, to := a.WorkHours()
 	m := now.Hour()*60 + now.Minute()
@@ -61,7 +64,7 @@ func limit(a config.Autopilot, now time.Time, l claude.Limits, ok bool, dayUSD f
 	}
 	switch {
 	case !InHours(a, now):
-		reason = "outside working hours"
+		reason = offHours
 	case dayUSD >= a.MaxDayUSD():
 		reason = fmt.Sprintf("spent $%.0f of $%.0f today", dayUSD, a.MaxDayUSD())
 	}

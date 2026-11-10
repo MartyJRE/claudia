@@ -406,3 +406,20 @@ func TestStartFails(t *testing.T) {
 		t.Errorf("feedback %v", r.steps())
 	}
 }
+
+func TestWorkingHoursDontNotify(t *testing.T) {
+	p := &Pilot{}
+	var notes []Note
+	p.Notify = func(n Note) { notes = append(notes, n) }
+	for _, reason := range []string{"", offHours, "", offHours, "5h window 64%", offHours, ""} {
+		p.tell(reason)
+	}
+	var got []string
+	for _, n := range notes {
+		got = append(got, n.Title+": "+n.Body)
+	}
+	want := []string{"Autopilot paused: 5h window 64%"}
+	if !slices.Equal(got, want) {
+		t.Errorf("notes %q, want %q", got, want)
+	}
+}

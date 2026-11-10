@@ -227,9 +227,11 @@ func (p *Pilot) done(st Status) Status {
 }
 
 // tell posts a note when the autopilot pauses, resumes, or pauses for
-// another reason; not for the state it starts in.
+// another reason; not for the state it starts in, and not for working hours
+// opening and closing, which happens every day.
 func (p *Pilot) tell(reason string) {
-	if p.told && reason != p.reason {
+	routine := reason == offHours || reason == "" && p.reason == offHours
+	if p.told && reason != p.reason && !routine {
 		n := Note{Title: "Autopilot paused", Body: reason, ID: "autopilot:state"}
 		if reason == "" {
 			n = Note{Title: "Autopilot resumed", Body: "it starts the Board's steps again", ID: "autopilot:state"}
