@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+
+	"github.com/MartyJRE/claudia/internal/config"
 )
 
 type Pane struct {
@@ -90,6 +92,60 @@ func (l *Locator) Host(pid int) string {
 		}
 	}
 	return host
+}
+
+// Term is the terminal app the tmux client runs in, and its XTVERSION reply
+// (#{client_termtype}, e.g. "ghostty 1.4.0"), when tmux knows it.
+type Term struct {
+	App      string
+	Termtype string
+}
+
+// Kitty reports whether the terminal speaks the kitty graphics protocol.
+func (t Term) Kitty() bool {
+	for _, name := range []string{"ghostty", "kitty", "wezterm", "konsole"} {
+		if strings.EqualFold(t.App, name) || strings.HasPrefix(strings.ToLower(t.Termtype), name) {
+			return true
+		}
+	}
+	return false
+}
+
+// Terminal is the pinned terminal, else the app behind the most recently
+// active tmux client, else Ghostty.
+func Terminal() Term {
+	if app := config.Get().Terminal(); app != "" {
+		return Term{App: app}
+	}
+	out, _ := exec.Command("tmux", "list-clients", "-F", "#{client_pid}\t#{client_activity}\t#{client_termtype}").Output()
+	pid, termtype := latestClient(string(out))
+	if pid == 0 {
+		return Term{App: "Ghostty"}
+	}
+	app := NewLocator().Host(pid)
+	if app == "" {
+		app = "Ghostty"
+	}
+	return Term{App: app, Termtype: termtype}
+}
+
+func latestClient(out string) (pid int, termtype string) {
+	latest := -1
+	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+		f := strings.SplitN(line, "\t", 3)
+		if len(f) < 2 {
+			continue
+		}
+		p, _ := strconv.Atoi(f[0])
+		act, _ := strconv.Atoi(f[1])
+		if p > 0 && act > latest {
+			latest, pid, termtype = act, p, ""
+			if len(f) == 3 {
+				termtype = f[2]
+			}
+		}
+	}
+	return pid, termtype
 }
 
 func Switch(target string) error {

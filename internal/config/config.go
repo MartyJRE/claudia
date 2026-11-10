@@ -68,6 +68,9 @@ type Config struct {
 	// RoundedPillsRaw: false draws pills square, for fonts without the Nerd
 	// Font half circles. Ghostty ships them, so they're on by default.
 	RoundedPillsRaw *bool `json:"rounded_pills"`
+	// TerminalRaw pins the terminal app claudia runs in, e.g. "iTerm2";
+	// "auto" or empty detects it.
+	TerminalRaw string `json:"terminal"`
 	// AnimationsRaw: false keeps status glyphs and spinners still.
 	AnimationsRaw *bool `json:"animations"`
 	// WorkersRaw places claudia's own headless claude runs (brief, summaries)
@@ -118,6 +121,14 @@ type MailRule struct {
 func (c Config) RoundedPills() bool { return c.RoundedPillsRaw == nil || *c.RoundedPillsRaw }
 
 func (c Config) Animations() bool { return c.AnimationsRaw == nil || *c.AnimationsRaw }
+
+// Terminal is the pinned terminal app, or "" to detect it.
+func (c Config) Terminal() string {
+	if v := strings.TrimSpace(c.TerminalRaw); !strings.EqualFold(v, "auto") {
+		return v
+	}
+	return ""
+}
 
 var WorkerPlaces = []string{"hidden", "top", "bottom"}
 

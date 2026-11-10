@@ -11,6 +11,7 @@ func TestMain(m *testing.M) {
 	os.Setenv("XDG_CONFIG_HOME", dir)
 	os.Setenv("XDG_STATE_HOME", dir)
 	os.Setenv("HOME", dir)
+	imagesShown = func() bool { return true }
 	os.Setenv("CLAUDIA_JIRA_KEYS", "ABC")
 	os.Setenv("CLAUDIA_GITLAB_HOST", "gitlab.example.com")
 	os.Unsetenv("TMUX")

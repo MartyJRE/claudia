@@ -361,8 +361,8 @@ func Notifier() string {
 	return p
 }
 
-// clickCommand jumps to the pane and brings Ghostty forward. It runs from the
-// helper app with launchd's minimal PATH, hence the absolute tmux path.
+// clickCommand jumps to the pane and brings the terminal forward. It runs from
+// the helper app with launchd's minimal PATH, hence the absolute tmux path.
 func clickCommand(n note) string {
 	tm, err := exec.LookPath("tmux")
 	if err != nil {
@@ -372,7 +372,7 @@ func clickCommand(n note) string {
 	if n.borrowed != "" {
 		jump = fmt.Sprintf("%q switch-client -t %q || %s", tm, n.borrowed, jump)
 	}
-	return jump + "; open -a Ghostty"
+	return jump + "; open -a " + shellQuote(terminal().App)
 }
 
 // looking reports whether the pane is the one on screen, so a session you are
@@ -383,23 +383,43 @@ func looking(target string) bool {
 	if err != nil || !strings.HasPrefix(st, "11") || st == "110" {
 		return false
 	}
-	return ghosttyInFront()
+	return terminalInFront()
 }
 
 // lookingAtBorrowed: the window is on screen as a tab borrowed into your session.
 func lookingAtBorrowed(windowID string) bool {
 	for _, l := range tmux.Borrowed() {
 		if l.WindowID == windowID && l.Viewed {
-			return ghosttyInFront()
+			return terminalInFront()
 		}
 	}
 	return false
 }
 
-func ghosttyInFront() bool {
+// terminal is a var so tests don't depend on the terminal they run in.
+var terminal = tmux.Terminal
+
+// terminalInFront matches the front app by name, or by bundle for apps whose
+// process name differs from it (iTerm.app runs as "iTerm2").
+func terminalInFront() bool {
+	app := terminal().App
 	asn, _ := execCommand("lsappinfo", "front").Output()
 	front, _ := execCommand("lsappinfo", "info", "-only", "name", strings.TrimSpace(string(asn))).Output()
-	return strings.HasPrefix(string(front), `"Ghostty"`)
+	if strings.HasPrefix(string(front), `"`+app+`"`) {
+		return true
+	}
+	bundle, _ := execCommand("lsappinfo", "info", "-only", "bundlepath", strings.TrimSpace(string(asn))).Output()
+	return strings.Contains(string(bundle), "/"+app+`.app"`)
+}
+
+// shellQuote leaves plain names bare, so the Ghostty command reads as before.
+func shellQuote(s string) string {
+	if strings.IndexFunc(s, func(r rune) bool {
+		return !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '.' || r == '-' || r == '_')
+	}) < 0 {
+		return s
+	}
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 // notify is a var so tests can catch notifications instead of posting them.

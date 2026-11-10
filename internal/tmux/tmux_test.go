@@ -308,3 +308,27 @@ func TestSplitKeepsKindIcons(t *testing.T) {
 		t.Errorf("labels %q, want %q", got, want)
 	}
 }
+
+func TestLatestClient(t *testing.T) {
+	pid, tt := latestClient("10\t100\tghostty 1.4.0\n20\t300\tiTerm2 3.5.0\n30\t200\t\n")
+	if pid != 20 || tt != "iTerm2 3.5.0" {
+		t.Errorf("got %d %q", pid, tt)
+	}
+	if pid, _ := latestClient(""); pid != 0 {
+		t.Errorf("no clients gave %d", pid)
+	}
+}
+
+func TestTermKitty(t *testing.T) {
+	for term, want := range map[Term]bool{
+		{App: "Ghostty"}: true,
+		{App: "kitty"}:   true,
+		{App: "Something", Termtype: "WezTerm 20240203"}: true,
+		{App: "iTerm", Termtype: "iTerm2 3.5.0"}:         false,
+		{App: "Terminal"}:                                false,
+	} {
+		if term.Kitty() != want {
+			t.Errorf("%+v: kitty %v", term, !want)
+		}
+	}
+}

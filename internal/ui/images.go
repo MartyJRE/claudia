@@ -6,9 +6,16 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/MartyJRE/claudia/internal/tmux"
 )
+
+// imagesShown: the viewer draws with the kitty graphics protocol, so other
+// terminals don't get the images key.
+var imagesShown = sync.OnceValue(func() bool { return tmux.Terminal().Kitty() })
 
 type imagesMsg struct {
 	key   string

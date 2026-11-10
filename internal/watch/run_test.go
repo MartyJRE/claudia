@@ -15,6 +15,7 @@ import (
 	"github.com/MartyJRE/claudia/internal/brief"
 	"github.com/MartyJRE/claudia/internal/claude"
 	"github.com/MartyJRE/claudia/internal/state"
+	"github.com/MartyJRE/claudia/internal/tmux"
 )
 
 // fakeGlab answers `glab api … user` with script's user and every list with [].
@@ -221,17 +222,53 @@ func frontApp(t *testing.T, app string) *[]string {
 	return &ran
 }
 
-func TestGhosttyInFront(t *testing.T) {
+func TestTerminalInFront(t *testing.T) {
 	ran := frontApp(t, "Ghostty")
-	if !ghosttyInFront() {
+	if !terminalInFront() {
 		t.Error("Ghostty in front")
 	}
 	if want := []string{"lsappinfo front", "lsappinfo info -only name ASN:0x0-0x1d01d:"}; strings.Join(*ran, "|") != strings.Join(want, "|") {
 		t.Errorf("ran %q", *ran)
 	}
 	frontApp(t, "Safari")
-	if ghosttyInFront() {
+	if terminalInFront() {
 		t.Error("Safari isn't Ghostty")
+	}
+}
+
+func TestOtherTerminal(t *testing.T) {
+	old := terminal
+	terminal = func() tmux.Term { return tmux.Term{App: "iTerm"} }
+	t.Cleanup(func() { terminal = old })
+	if got := clickCommand(note{target: "pay:1.0"}); !strings.HasSuffix(got, `"pay:1.0"; open -a iTerm`) {
+		t.Errorf("click %q", got)
+	}
+	terminal = func() tmux.Term { return tmux.Term{App: "Visual Studio Code"} }
+	if got := clickCommand(note{target: "pay:1.0"}); !strings.HasSuffix(got, `; open -a 'Visual Studio Code'`) {
+		t.Errorf("click %q", got)
+	}
+
+	terminal = func() tmux.Term { return tmux.Term{App: "iTerm"} }
+	ran := frontApp(t, "iTerm2")
+	if terminalInFront() {
+		t.Error(`"iTerm2" isn't iTerm without its bundle path`)
+	}
+	if len(*ran) != 3 || !strings.Contains((*ran)[2], "-only bundlepath") {
+		t.Errorf("ran %q", *ran)
+	}
+	old2 := execCommand
+	execCommand = func(name string, args ...string) *exec.Cmd {
+		if args[0] == "front" {
+			return exec.Command("echo", "ASN:0x0-0x1d01d:")
+		}
+		if args[2] == "bundlepath" {
+			return exec.Command("echo", `bundle path="/Applications/iTerm.app"`)
+		}
+		return exec.Command("echo", `"iTerm2"`)
+	}
+	t.Cleanup(func() { execCommand = old2 })
+	if !terminalInFront() {
+		t.Error("iTerm.app in front isn't iTerm")
 	}
 }
 

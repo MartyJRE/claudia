@@ -376,7 +376,9 @@ func (m *Model) keyJira(k string) (tea.Model, tea.Cmd) {
 			return copyText(string(b), is.Key+" brief (with image paths)")()
 		})
 	case "jira.images":
-		return m, m.showImages(is.Key)
+		if imagesShown() {
+			return m, m.showImages(is.Key)
+		}
 	}
 	return m, nil
 }

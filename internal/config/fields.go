@@ -84,6 +84,8 @@ var Fields = []Field{
 		Default: "2h", Help: "how often the inbox brief is rewritten, e.g. 30m; off leaves only the on-demand refresh"},
 	{Key: "rounded_pills", Group: "UI", Label: "rounded pills", Kind: KindBool,
 		Default: "on", Help: "off draws pills square, for fonts without the Nerd Font half circles"},
+	{Key: "terminal", Group: "UI", Label: "terminal", Kind: KindString,
+		Default: "auto", Help: "the terminal app claudia runs in, e.g. iTerm2; auto detects it, falling back to Ghostty"},
 	{Key: "animations", Group: "UI", Label: "animations", Kind: KindBool,
 		Default: "on", Help: "off keeps the session status glyphs and loading spinners still"},
 	{Key: "workers", Group: "UI", Label: "workers", Kind: KindString, Env: "CLAUDIA_WORKERS",
