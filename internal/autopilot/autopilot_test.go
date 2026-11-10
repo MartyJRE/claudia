@@ -100,7 +100,7 @@ func issue(key, status string) atlassian.Issue {
 
 func mr(iid int, edit func(*gitlab.MR)) gitlab.MR {
 	m := gitlab.MR{IID: iid, ProjectID: 1, State: "opened", Title: "feat: x", SourceBranch: "feat/x", SHA: "head",
-		WebURL: "https://gitlab.example.com/g/pay/-/merge_requests/" + string(rune('0'+iid)), CreatedAt: now.Add(-time.Duration(iid) * time.Hour)}
+		WebURL: "https://gitlab.example.com/g/pay/-/merge_requests/" + string(rune('0'+iid)), CreatedAt: now.Add(-time.Duration(iid) * time.Hour), UpdatedAt: now.Add(-time.Duration(iid) * time.Hour)}
 	m.Author.Username = "alice"
 	if edit != nil {
 		edit(&m)
@@ -268,13 +268,13 @@ func TestReviewPacingAndClones(t *testing.T) {
 	three := 3
 	r.cfg.Autopilot.MaxRunningRaw = &three
 	r.tick()
-	// The older MR goes first, and only one review per hour.
-	if len(r.started) != 1 || !strings.Contains(r.started[0].Name, "review") || r.db.For(r.in.GL.Review[1].WebURL) == nil {
+	// The MR with the most recent activity goes first, and only one review per hour.
+	if len(r.started) != 1 || !strings.Contains(r.started[0].Name, "review") || r.db.For(r.in.GL.Review[0].WebURL) == nil {
 		t.Fatalf("one review: %v", r.steps())
 	}
 	r.in.Repos = []repos.Repo{{Dir: "/c/1", Project: "g/pay", Branch: "devel"}, {Dir: "/c/2", Project: "g/pay", Branch: "main"}}
 	r.p.Tick(now.Add(2*time.Hour), r.cfg, r.in)
-	if len(r.started) != 1 || r.db.Prefixed(KeyBlocked)[r.in.GL.Review[0].WebURL] != "pick a repo" {
+	if len(r.started) != 1 || r.db.Prefixed(KeyBlocked)[r.in.GL.Review[1].WebURL] != "pick a repo" {
 		t.Errorf("two clones on other branches: %v", r.db.Prefixed(KeyBlocked))
 	}
 }
@@ -421,5 +421,21 @@ func TestWorkingHoursDontNotify(t *testing.T) {
 	want := []string{"Autopilot paused: 5h window 64%"}
 	if !slices.Equal(got, want) {
 		t.Errorf("notes %q, want %q", got, want)
+	}
+}
+
+func TestStaleReviewsSkipped(t *testing.T) {
+	r := newRig(t)
+	old := mr(2, func(m *gitlab.MR) { m.UpdatedAt = now.Add(-31 * 24 * time.Hour) })
+	r.in.GL.Review = []gitlab.MR{old}
+	r.in.Repos = []repos.Repo{pay}
+	r.tick()
+	if len(r.started) != 0 || r.db.Prefixed(KeyBlocked)[old.WebURL] != "stale review request" {
+		t.Fatalf("a month-old request: %v %v", r.steps(), r.db.Prefixed(KeyBlocked))
+	}
+	r.cfg.Autopilot.ReviewStaleAfterRaw = "off"
+	r.tick()
+	if len(r.started) != 1 {
+		t.Errorf("stale off reviews it: %v", r.steps())
 	}
 }

@@ -36,6 +36,9 @@ type Autopilot struct {
 	MaxDayUSDRaw    *float64 `json:"max_day_usd"`
 	// ReviewEveryRaw paces reviews: at most one started per period; default 1h.
 	ReviewEveryRaw string `json:"review_every"`
+	// ReviewStaleAfterRaw: a review request with no MR activity for this long
+	// isn't reviewed on its own; default 720h (30 days).
+	ReviewStaleAfterRaw string `json:"review_stale_after"`
 	// PermissionModeRaw is the --permission-mode of the runs it starts:
 	// default (your usual), acceptEdits, auto (the default) or bypassPermissions.
 	PermissionModeRaw string `json:"permission_mode"`
@@ -133,6 +136,17 @@ func (a Autopilot) ReviewEvery() time.Duration {
 	return time.Hour
 }
 
+// ReviewStaleAfter is 0 for off: every review request counts as live.
+func (a Autopilot) ReviewStaleAfter() time.Duration {
+	if a.ReviewStaleAfterRaw == "off" {
+		return 0
+	}
+	if d, err := time.ParseDuration(a.ReviewStaleAfterRaw); err == nil && d >= 0 {
+		return d
+	}
+	return 30 * 24 * time.Hour
+}
+
 const defaultHours = "09:00-18:00"
 
 // WorkHours are the minutes after midnight new runs may start between.
@@ -205,5 +219,8 @@ func CheckAutopilot(a Autopilot) error {
 	if v := a.PermissionModeRaw; v != "" && !slices.Contains(PermissionModes, v) {
 		return fmt.Errorf("autopilot.permission_mode: %q isn't one of %s", v, strings.Join(PermissionModes, ", "))
 	}
-	return CheckDuration("autopilot.review_every", a.ReviewEveryRaw)
+	if err := CheckDuration("autopilot.review_every", a.ReviewEveryRaw); err != nil {
+		return err
+	}
+	return CheckDuration("autopilot.review_stale_after", a.ReviewStaleAfterRaw)
 }

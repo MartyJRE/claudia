@@ -144,6 +144,10 @@ func (p *Pilot) Tick(now time.Time, cfg config.Config, in Inputs) Status {
 		if GateOf(a, over[c.ID()], c, next, planOK[c.Issue.Key] != "") != Queued {
 			continue
 		}
+		if stale := a.ReviewStaleAfter(); c.IsReview() && stale > 0 && now.Sub(c.MR.UpdatedAt) > stale {
+			blocked[c.ID()] = "stale review request"
+			continue
+		}
 		if !c.IsReview() && in.Ledger != nil {
 			if usd := in.Ledger.Ticket(c.Issue.Key).USD; usd >= a.MaxTicketUSD() {
 				blocked[c.ID()] = fmt.Sprintf("spent $%.0f of $%.0f", usd, a.MaxTicketUSD())
@@ -163,7 +167,7 @@ func (p *Pilot) Tick(now time.Time, cfg config.Config, in Inputs) Status {
 			return c
 		}
 		if x.card.IsReview() && y.card.IsReview() {
-			return x.card.MR.CreatedAt.Compare(y.card.MR.CreatedAt)
+			return y.card.MR.UpdatedAt.Compare(x.card.MR.UpdatedAt)
 		}
 		return cmp.Compare(x.rank, y.rank)
 	})

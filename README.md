@@ -126,7 +126,9 @@ on the card. Before anything starts the limits apply: `autopilot.hours` and
 included, and never two on one card), plan usage under `max_five_hour` (60%,
 90% for a window that resets after hours) and `max_seven_day` (80%), at most
 `max_ticket_usd` ($50) per ticket and `max_day_usd` ($30) a day of the
-autopilot's runs, and one review per `review_every` (1h). When the status line
+autopilot's runs, and one review per `review_every` (1h), most recently active MR first; a
+review request whose MR saw no activity for `review_stale_after` (720h, 30 days)
+isn't reviewed on its own. When the status line
 hasn't saved the plan usage lately it's unknown, and only one run goes at a
 time. A step that failed twice on its own waits for `s`. When a limit hits,
 nothing running is stopped; the header pill says why (`⏸ autopilot: 5h window
