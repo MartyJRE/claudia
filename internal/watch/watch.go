@@ -122,6 +122,10 @@ type watcher struct {
 
 	runs      *runs.Store
 	settledAt time.Time
+
+	gl    gitlab.Snapshot // the latest fetches, for the autopilot
+	js    atlassian.JiraSnapshot
+	pilot *pilot
 }
 
 var summarize = summary.Generate
@@ -185,6 +189,9 @@ func Run(makeBrief func()) error {
 	w.atl, _ = atlassian.New()
 	if w.runs, err = openRuns(); err == nil {
 		defer w.runs.Close()
+		w.startPilot(claude.DefaultProfiles())
+		state.Load("cache-gitlab.json", &w.gl)
+		state.Load("cache-jira.json", &w.js)
 	} else {
 		fmt.Fprintln(os.Stderr, time.Now().Format(time.TimeOnly), "runs:", err)
 	}
@@ -210,6 +217,7 @@ func Run(makeBrief func()) error {
 			}()
 		}
 		w.sessions()
+		w.autopilot(time.Now())
 		if time.Since(lastGL) >= time.Minute {
 			lastGL = time.Now()
 			if s, err := gitlab.Fetch(); err == nil {
@@ -246,7 +254,8 @@ func (w *watcher) sessions() {
 	waiting := map[string]bool{} // window ids with a waiting Claude
 	var ran []runs.Seen
 	stopped := first
-	for _, s := range w.store.Sessions() {
+	all := w.store.Sessions()
+	for _, s := range all {
 		w.summaryMu.Lock()
 		sum := w.summaries[s.ID]
 		w.summaryMu.Unlock()
@@ -288,6 +297,7 @@ func (w *watcher) sessions() {
 		}
 	}
 	w.settle(ran, stopped)
+	w.contextNotes(all, loc)
 	for _, l := range tmux.Borrowed() {
 		if !waiting[l.WindowID] && !l.Viewed {
 			_ = tmux.Unborrow(l)
@@ -330,6 +340,7 @@ func borrow(p tmux.Pane) string {
 }
 
 func (w *watcher) gitlab(s gitlab.Snapshot) {
+	w.gl = s
 	first := !w.baseline[1]
 	w.baseline[1] = true
 	for _, m := range s.Review {
@@ -363,6 +374,7 @@ func (w *watcher) gitlab(s gitlab.Snapshot) {
 }
 
 func (w *watcher) jira(s atlassian.JiraSnapshot) {
+	w.js = s
 	first := !w.baseline[2]
 	w.baseline[2] = true
 	for _, m := range s.Mentions {

@@ -36,6 +36,19 @@ type Autopilot struct {
 	MaxDayUSDRaw    *float64 `json:"max_day_usd"`
 	// ReviewEveryRaw paces reviews: at most one started per period; default 1h.
 	ReviewEveryRaw string `json:"review_every"`
+	// PermissionModeRaw is the --permission-mode of the runs it starts:
+	// default (your usual), acceptEdits, auto (the default) or bypassPermissions.
+	PermissionModeRaw string `json:"permission_mode"`
+}
+
+var PermissionModes = []string{"default", "acceptEdits", "auto", "bypassPermissions"}
+
+// PermissionMode is the mode autopilot runs start in; "default" passes no flag.
+func (a Autopilot) PermissionMode() string {
+	if slices.Contains(PermissionModes, a.PermissionModeRaw) {
+		return a.PermissionModeRaw
+	}
+	return "auto"
 }
 
 // The modes a step can be in.
@@ -188,6 +201,9 @@ func CheckAutopilot(a Autopilot) error {
 		if dayIndex(d) < 0 {
 			return fmt.Errorf("autopilot.days: %q isn't a day like mon or tuesday", d)
 		}
+	}
+	if v := a.PermissionModeRaw; v != "" && !slices.Contains(PermissionModes, v) {
+		return fmt.Errorf("autopilot.permission_mode: %q isn't one of %s", v, strings.Join(PermissionModes, ", "))
 	}
 	return CheckDuration("autopilot.review_every", a.ReviewEveryRaw)
 }

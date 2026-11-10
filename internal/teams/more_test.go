@@ -481,3 +481,10 @@ func TestImagesWithFiles(t *testing.T) {
 		t.Errorf("images need no file permission: %v", err)
 	}
 }
+
+func TestMeID(t *testing.T) {
+	c, _ := graphClient(t, nil)
+	if id, err := c.MeID(); err != nil || id != "me-id" {
+		t.Errorf("%q %v", id, err)
+	}
+}

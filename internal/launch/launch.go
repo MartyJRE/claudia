@@ -88,7 +88,7 @@ func New(dir string, p claude.Profile, name, prompt string) (Spec, string) {
 // appended system prompt, since a second --append-system-prompt replaces the first.
 func (sp Spec) AsRun(id, step, subject string) Spec {
 	note := fmt.Sprintf("This is claudia run %s, step %s for %s. When you're done, or stuck, end your last message with exactly one line "+
-		"`CLAUDIA_RESULT: ok|needs-you|failed — <short reason>`.", id, step, subject)
+		"`CLAUDIA_RESULT: ok|needs-you|failed — <short reason>`. Keep your own context lean: push broad searches and big reads into subagents, since this session doesn't compact on its own.", id, step, subject)
 	switch step {
 	case "plan":
 		note += " The reason says how big the change is: `size: simple`, `size: medium` or `size: large`; simple is a small change with no open questions."
@@ -102,6 +102,16 @@ func (sp Spec) AsRun(id, step, subject string) Spec {
 		sp.Args = append(sp.Args, "--append-system-prompt", note)
 	}
 	sp.Env = append(slices.Clone(sp.Env), "CLAUDIA_RUN="+id)
+	return sp
+}
+
+// WithPermissionMode starts the session in that --permission-mode; "default"
+// or "" leaves the user's own.
+func (sp Spec) WithPermissionMode(mode string) Spec {
+	if mode == "" || mode == "default" {
+		return sp
+	}
+	sp.Args = append([]string{"--permission-mode", mode}, sp.Args...)
 	return sp
 }
 
