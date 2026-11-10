@@ -28,6 +28,7 @@ var actions = []action{
 	{"global.assistant", []string{"@"}, "assistant"},
 	{"global.update", []string{"ctrl+u"}, "update claudia"},
 	{"global.releases", []string{"W"}, "what's new"},
+	{"global.settings", []string{","}, "settings"},
 	{"global.open_link", []string{"u"}, "open link"},
 	{"global.ticket_notes", []string{"N"}, "ticket's notes"},
 	{"global.write_note", []string{"w"}, "write note"},

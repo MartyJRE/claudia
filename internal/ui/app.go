@@ -173,6 +173,7 @@ type Model struct {
 	frame         int
 	width, height int
 	plan          *planReview
+	settings      *settingsPage
 	flash         string
 	flashErr      bool
 	flashAt       time.Time
@@ -366,6 +367,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.releasesLoaded(msg)
 		}
 		return m, nil
+	case settingEditedMsg:
+		return m, m.settingEdited(msg)
 	case mrLoadedMsg:
 		if msg.err != nil {
 			m.setFlash(msg.err.Error(), true)
@@ -383,6 +386,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateReader(msg)
 		case m.plan != nil:
 			return m.updatePlan(msg)
+		case m.settings != nil:
+			return m.updateSettings(msg)
 		case m.prompt != nil:
 			return m.updatePrompt(msg)
 		case m.chooser != nil:
@@ -475,6 +480,8 @@ func (m *Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.startUpdate()
 	case "global.releases":
 		return m, m.openReleases()
+	case "global.settings":
+		return m, m.openSettings()
 	case "global.open_link":
 		return m, m.askLink()
 	case "global.ticket_notes":
@@ -551,6 +558,9 @@ func (m *Model) View() string {
 	}
 	if m.plan != nil {
 		return m.viewPlan()
+	}
+	if m.settings != nil {
+		return m.viewSettings()
 	}
 	header := m.viewHeader()
 	footer := m.viewFooter()
