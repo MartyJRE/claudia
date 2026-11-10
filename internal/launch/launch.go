@@ -27,6 +27,7 @@ type Spec struct {
 	ID      string // the Claude session id, when known
 	Kind    string // what it was started for; picks the window's icon
 	Color   string // a /color name to give the session, if any
+	Env     []string
 }
 
 // Colors are the names Claude's /color accepts.
@@ -79,6 +80,22 @@ func New(dir string, p claude.Profile, name, prompt string) (Spec, string) {
 	return Spec{Dir: dir, Profile: p, Name: name, Args: args, ID: id}, id
 }
 
+// AsRun makes the session claudia run id of step on subject: it gets
+// CLAUDIA_RUN and is told to end with a result line. The note joins the
+// appended system prompt, since a second --append-system-prompt replaces the first.
+func (sp Spec) AsRun(id, step, subject string) Spec {
+	note := fmt.Sprintf("This is claudia run %s, step %s for %s. When you're done, or stuck, end your last message with exactly one line "+
+		"`CLAUDIA_RESULT: ok|needs-you|failed — <short reason>`.", id, step, subject)
+	sp.Args = slices.Clone(sp.Args)
+	if i := slices.Index(sp.Args, "--append-system-prompt"); i >= 0 && i+1 < len(sp.Args) {
+		sp.Args[i+1] += " " + note
+	} else {
+		sp.Args = append(sp.Args, "--append-system-prompt", note)
+	}
+	sp.Env = append(slices.Clone(sp.Env), "CLAUDIA_RUN="+id)
+	return sp
+}
+
 func uuid() string {
 	var b [16]byte
 	_, _ = rand.Read(b[:])
@@ -116,7 +133,7 @@ func Start(sp Spec) (string, error) {
 	if sp.Color != "" && sp.ID != "" {
 		argv = withColor(bin, sp, argv)
 	}
-	env := []string{"CLAUDE_CONFIG_DIR=" + sp.Profile.Dir}
+	env := append([]string{"CLAUDE_CONFIG_DIR=" + sp.Profile.Dir}, sp.Env...)
 	session := sp.Session
 	if session == "" {
 		session = SessionName(sp.Dir)
