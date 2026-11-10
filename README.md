@@ -75,7 +75,11 @@ named on it, so there's no header to scroll past:
 `u` opens any link in Claude (also `claudia open <link>` from a shell): an MR
 link gets reviewed in your local clone even if it isn't assigned to you, a Jira
 link gets what the ticket needs, anything else lands in a repo you pick. `n`
-starts a plain session in any repo.
+starts a plain session in any repo, or in a new one: its last row, `+ new repo`,
+creates the folder, `git init`s it and adds an empty remote as origin. Under
+`personal_dir` (default `Personal`) the remote goes on GitHub via `gh`, private
+unless you pick otherwise. Next to your clones under `work_dir` it goes in their
+GitLab group via `glab`, internal unless you pick otherwise.
 
 The Inbox opens with a short brief in plain English, written by a headless
 `claude -p` over claudia's own data (no tools): who's waited longest, what's
@@ -293,6 +297,7 @@ by an environment variable are shown but can't be changed there.
 - `work_dir` is the folder under `code_root` whose repos are listed first and
   started with the `work` profile (`work_profile` to pick another); other repos
   use `personal` if it exists.
+- `personal_dir` is the folder under `code_root` where `n`'s new GitHub repos go.
 - `vault`: an Obsidian vault, e.g. `"~/Documents/Notes"`; `vault_projects` is its
   folder with one subfolder per ticket (default `01 - Projects`).
 - `remote_control`: profiles whose sessions start with Remote Control, e.g. `["work"]`.

@@ -37,6 +37,7 @@ func stubOS() {
 	unapproveMR = func(gitlab.MR) error { panic("gitlab.Unapprove not faked") }
 	rebaseMR = func(gitlab.MR) error { panic("gitlab.Rebase not faked") }
 	findRepos = func(string) []repos.Repo { panic("repos.Find not faked") }
+	createRepo = func(repos.New) error { panic("repos.Create not faked") }
 
 	fetchJira = func(*atlassian.Client) (atlassian.JiraSnapshot, error) { panic("FetchJira not faked") }
 	fetchConfluence = func(*atlassian.Client) (atlassian.ConfluenceSnapshot, error) { panic("FetchConfluence not faked") }

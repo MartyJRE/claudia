@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"cmp"
 	"fmt"
 	"os/exec"
 	"slices"
@@ -358,6 +359,8 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case flashMsg:
 		m.setFlash(msg.text, msg.err)
 		return m, nil
+	case repoCreatedMsg:
+		return m.repoCreated(msg)
 	case refreshMsg:
 		m.fetchedAt[source(msg)] = time.Time{}
 		return m, m.refreshStale()
@@ -826,11 +829,13 @@ func (m *Model) subtitle() string {
 func (m *Model) viewFooter() string {
 	var keys [][2]string
 	if m.prompt != nil {
-		keys = [][2]string{{"enter", "open"}, {"esc", "back"}}
+		keys = [][2]string{{"enter", cmp.Or(m.prompt.verb, "open")}, {"esc", "back"}}
 	} else if m.chooser != nil {
 		keys = [][2]string{{"enter", "choose"}, {"esc", "back"}}
 		if it, ok := m.chooser.selected(); ok && m.chooser.status != nil {
-			keys = append(keys, [2]string{"tab", m.chooser.status(m, it)})
+			if st := m.chooser.status(m, it); st != "" {
+				keys = append(keys, [2]string{"tab", st})
+			}
 		}
 	} else if lo, hi, ok := m.visualRange(); ok {
 		keys = [][2]string{{"j/k", "extend"}, m.hint("visual.claude", fmt.Sprintf("claude on these %d", hi-lo+1)),
@@ -1045,9 +1050,16 @@ func (m *Model) pickRepo(title, query string, preferred func(repos.Repo) (bool, 
 		dir := ch.value.(string)
 		return then(m, dir, m.profileFor(dir, shift[dir]))
 	})
-	c.tab = func(_ *Model, ch choice) { shift[ch.value.(string)]++ }
+	c.tab = func(_ *Model, ch choice) {
+		if dir, ok := ch.value.(string); ok {
+			shift[dir]++
+		}
+	}
 	c.status = func(m *Model, ch choice) string {
-		dir := ch.value.(string)
+		dir, ok := ch.value.(string)
+		if !ok {
+			return ""
+		}
 		return "profile: " + m.profileFor(dir, shift[dir]).Name
 	}
 	c.setQuery(query)

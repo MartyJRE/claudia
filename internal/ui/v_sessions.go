@@ -577,8 +577,8 @@ func tokens(n int) string {
 	return fmt.Sprint(n)
 }
 
-// newSession starts a plain claude in a picked repo, nothing linked. From the
-// Sessions tab the current session's repo is preselected.
+// newSession starts a plain claude in a picked repo, nothing linked, or in a
+// new one. From the Sessions tab the current session's repo is preselected.
 func (m *Model) newSession() {
 	dir := ""
 	if r, ok := m.currentSession(); ok && m.view == vSessions {
@@ -590,4 +590,5 @@ func (m *Model) newSession() {
 		sp, _ := launch.New(dir, p, filepath.Base(dir), "")
 		return m.start(sp)
 	})
+	m.offerNewRepo()
 }

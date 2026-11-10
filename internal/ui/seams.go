@@ -49,6 +49,7 @@ var (
 	unapproveMR = gitlab.Unapprove
 	rebaseMR    = gitlab.Rebase
 	findRepos   = repos.Find
+	createRepo  = repos.Create
 
 	fetchJira       = (*atlassian.Client).FetchJira
 	fetchConfluence = (*atlassian.Client).FetchConfluence
