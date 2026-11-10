@@ -336,7 +336,7 @@ func (p *Pilot) start(now time.Time, cfg config.Config, in Inputs, ix board.Inde
 	sp.Color = steps.Color(colours(in.Sessions))
 	// NOTE: auto mode is a first try for unattended runs; if it blocks too much or stalls runs,
 	// we might switch to bypassPermissions plus a guard hook, or another mode.
-	sp = sp.WithPermissionMode(cfg.Autopilot.PermissionMode()).AsRun(run.ID, run.Step, run.Subject)
+	sp = sp.WithPermissionMode(cfg.Autopilot.PermissionMode()).AsRun(run.ID, run.Step, run.Subject, cfg.Autopilot.CommentNote())
 	if err := p.DB.Start(run); err != nil {
 		return err
 	}

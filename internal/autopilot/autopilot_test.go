@@ -125,7 +125,8 @@ func TestQueueOrderAndMaxRunning(t *testing.T) {
 	if len(got) != 1 || got[0].StartedBy != runs.ByAutopilot || got[0].SHA != "head" || got[0].Session != sp.ID || sp.Dir != "/c/pay" {
 		t.Errorf("run %+v in %s", got, sp.Dir)
 	}
-	if !slices.Contains(sp.Args, "--permission-mode") || !slices.Contains(sp.Env, "CLAUDIA_RUN="+got[0].ID) || sp.Color == "" {
+	if !slices.Contains(sp.Args, "--permission-mode") || !slices.Contains(sp.Env, "CLAUDIA_RUN="+got[0].ID) || sp.Color == "" ||
+		!slices.ContainsFunc(sp.Args, func(a string) bool { return strings.Contains(a, "> "+r.cfg.Autopilot.CommentNote()) }) {
 		t.Errorf("spec %q %q", sp.Args, sp.Env)
 	}
 	if n := r.notes[0]; n.Title != "Autopilot started review" || n.Target != "repo:3.0" || !strings.HasPrefix(n.Subtitle, "!1") {

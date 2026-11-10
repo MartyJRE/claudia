@@ -93,7 +93,11 @@ session instead. A ticket's step runs in the repo on the ticket's branch, the
 one you picked for it before, or the only clone of its MR, and asks only when
 that's unclear. Readiness checks the ticket is specified well enough and, if
 not, posts its questions on the ticket (or its Confluence page) through the
-Atlassian MCP, marked "(claudia)", and the card waits for answers. Plan and
+Atlassian MCP, mentioning whoever last wrote the description (or a colleague it
+credits, while their account is active), and the card waits for answers.
+Whatever a run posts to Jira or Confluence starts with an info panel saying
+Claude wrote it, and on GitLab with a quote of the same sentence
+(`autopilot.comment_note`). Plan and
 implement are the analysis and implementation sessions, open MR pushes and runs
 `glab mr create`, feedback addresses the threads on your MR, QA notes comments
 for the tester, and review is the review session. Merge is the one step without

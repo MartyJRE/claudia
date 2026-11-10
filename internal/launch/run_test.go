@@ -11,7 +11,7 @@ import (
 
 func TestAsRun(t *testing.T) {
 	sp, id := New("/code/x", work, "plan: Card form", "plan it")
-	run := sp.AsRun("run-1", "plan", "ABC-2")
+	run := sp.AsRun("run-1", "plan", "ABC-2", "By Claude \"for\" me.")
 	if !slices.Equal(run.Env, []string{"CLAUDIA_RUN=run-1"}) || len(sp.Env) != 0 {
 		t.Errorf("env %q, original %q", run.Env, sp.Env)
 	}
@@ -19,7 +19,9 @@ func TestAsRun(t *testing.T) {
 		t.Fatalf("args %q", run.Args)
 	}
 	note := run.Args[5]
-	for _, want := range []string{"ctl here", "This is claudia run run-1, step plan for ABC-2.", "`CLAUDIA_RESULT: ok|needs-you|waiting|failed — <short reason>`", "waiting means you asked someone else", "`size: simple`", "push broad searches and big reads into subagents"} {
+	for _, want := range []string{"ctl here", "This is claudia run run-1, step plan for ABC-2.", "`CLAUDIA_RESULT: ok|needs-you|waiting|failed — <short reason>`", "waiting means you asked someone else", "`size: simple`", "push broad searches and big reads into subagents",
+		`{"type":"panel","attrs":{"panelType":"info"},"content":[{"type":"paragraph","content":[{"type":"text","text":"By Claude \"for\" me."}]}]}`,
+		"`> By Claude \"for\" me.`", `"adf"`, `Never prefix anything with "(claudia)"`} {
 		if !strings.Contains(note, want) {
 			t.Errorf("note misses %q: %s", want, note)
 		}
@@ -27,7 +29,7 @@ func TestAsRun(t *testing.T) {
 	if strings.Contains(sp.Args[5], "claudia run") {
 		t.Error("the original spec changed")
 	}
-	bare := Spec{Args: []string{"--resume", "s1"}, Env: []string{"A=1"}}.AsRun("run-2", "review", "!5")
+	bare := Spec{Args: []string{"--resume", "s1"}, Env: []string{"A=1"}}.AsRun("run-2", "review", "!5", "n")
 	if !slices.Equal(bare.Args[:3], []string{"--resume", "s1", "--append-system-prompt"}) || !strings.Contains(bare.Args[3], "run-2") || !strings.Contains(bare.Args[3], "ok — no findings") || strings.Contains(bare.Args[3], "size:") {
 		t.Errorf("args without a hint %q", bare.Args)
 	}
@@ -45,7 +47,7 @@ func TestStartEnv(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", bin+":"+os.Getenv("PATH"))
-	sp := Spec{Dir: t.TempDir(), Profile: personal, Name: "n", Session: "s"}.AsRun("run-7", "plan", "ABC-1")
+	sp := Spec{Dir: t.TempDir(), Profile: personal, Name: "n", Session: "s"}.AsRun("run-7", "plan", "ABC-1", "n")
 	if _, err := Start(sp); err != nil {
 		t.Fatal(err)
 	}
