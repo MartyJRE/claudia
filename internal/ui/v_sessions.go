@@ -66,9 +66,13 @@ func (m *Model) listSessionsTable(h int) string {
 			return m.sessionHeaderCells(rows[i])
 		}
 		r := rows[i].sess
+		name := sessionIndent(rows[i]) + sessionTitle(r, sel)
+		if g := rows[i].group; g != "" && (g != project(r.Dir()) || m.width < sessionCols[2].min) {
+			name += sDim.Render("  " + g)
+		}
 		return []string{
 			m.status(r),
-			sessionIndent(rows[i]) + sessionTitle(r, sel),
+			name,
 			sText.Render(project(r.Dir())),
 			sBranch.Render(branch(r)),
 			sTicket.Render(m.ix.sessionTicket[r.ID]),

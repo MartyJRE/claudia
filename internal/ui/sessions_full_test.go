@@ -248,7 +248,7 @@ func TestSessionGroupsFull(t *testing.T) {
 		row{Session: claude.Session{ID: "ffffffff-older", Transcript: &claude.Transcript{Cwd: "/code/eta", Updated: now.Add(-9 * time.Hour)}}},
 	)
 	m.reindex()
-	if got := sessionIDsShell(m); !strings.HasSuffix(got, "#zeta eeee #eta ffff") {
+	if got := sessionIDsShell(m); !strings.HasSuffix(got, "cccc eeee ffff") {
 		t.Errorf("closed-only repos after live ones, newest first: %s", got)
 	}
 
@@ -260,14 +260,13 @@ func TestSessionGroupsFull(t *testing.T) {
 	m.links.SetTicket("eeeeeeee-old", "ABC-5")
 	m.links.SetTicket("ffffffff-older", "ABC-6")
 	m.reindex()
-	got := sessionIDsShell(m)
-	if !strings.Contains(got, "#Epic five eeee") || !strings.Contains(got, "#Far epic #Child ffff") {
-		t.Errorf("an epic holds its own sessions; an unknown epic takes its title from the child: %s", got)
+	if s := screenShell(m); !strings.Contains(s, "eeeeeeee  Epic five") || !strings.Contains(s, "ffffffff  Far epic › Child") {
+		t.Errorf("an epic holds its own sessions; an unknown epic takes its title from the child:\n%s", s)
 	}
 
-	m.sessPrefs.Collapsed = []string{"ticket:ABC-5"}
+	m.sessPrefs.Collapsed = []string{"ticket:-"}
 	m.refilter()
-	if s := screenShell(m); !strings.Contains(s, "▸ ABC-5 Epic five") {
+	if s := screenShell(m); !strings.Contains(s, "▸ No ticket") {
 		t.Errorf("a folded group shows ▸:\n%s", s)
 	}
 

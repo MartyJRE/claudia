@@ -65,11 +65,11 @@ func TestSessionsListStatesShell(t *testing.T) {
 
 func TestSessionsShowClosedShell(t *testing.T) {
 	m := sessionsModelShell(t)
-	if got, want := sessionIDsShell(m), "#payments aaaa #billing bbbb #ledger cccc #Recently closed dddd"; got != want {
+	if got, want := sessionIDsShell(m), "aaaa bbbb cccc #Recently closed dddd"; got != want {
 		t.Fatalf("live tree:\n got %s\nwant %s", got, want)
 	}
 	pressShell(m, "a")
-	if got, want := sessionIDsShell(m), "#payments aaaa dddd #billing bbbb #ledger cccc"; got != want {
+	if got, want := sessionIDsShell(m), "#payments aaaa dddd bbbb cccc"; got != want {
 		t.Errorf("a puts closed sessions in their repo:\n got %s\nwant %s", got, want)
 	}
 	if !strings.Contains(screenShell(m), "all sessions, last 7 days") {
@@ -87,11 +87,11 @@ func TestSessionsGroupCycleShell(t *testing.T) {
 	if m.sessPrefs.Group != sessByTicket || m.flash != "sessions by epic › ticket" {
 		t.Fatalf("v cycles grouping: %d %q", m.sessPrefs.Group, m.flash)
 	}
-	if got, want := sessionIDsShell(m), "#Payments export aaaa #Invoices bbbb #No ticket cccc #Recently closed dddd"; got != want {
+	if got, want := sessionIDsShell(m), "aaaa bbbb cccc #Recently closed dddd"; got != want {
 		t.Errorf("by ticket:\n got %s\nwant %s", got, want)
 	}
-	if s := screenShell(m); !strings.Contains(s, "ABC-1 Payments export") {
-		t.Errorf("ticket headers show the key")
+	if s := screenShell(m); !strings.Contains(s, "export csv  Payments export") {
+		t.Errorf("a ticket of one session is named on its row:\n%s", s)
 	}
 	var saved sessionPrefs
 	saved = loadSessionPrefs()
@@ -110,9 +110,18 @@ func TestSessionsGroupCycleShell(t *testing.T) {
 
 func TestSessionsFoldShell(t *testing.T) {
 	m := sessionsModelShell(t)
+	for _, id := range []string{"gggggggg-pay", "hhhhhhhh-bill"} {
+		dir := "/code/payments"
+		if strings.HasSuffix(id, "bill") {
+			dir = "/code/billing"
+		}
+		m.sessions = append(m.sessions, row{Session: claude.Session{ID: id, Transcript: &claude.Transcript{Cwd: dir},
+			Live: &claude.Live{Status: claude.StatusIdle}}})
+	}
+	m.reindex()
 	cursorOnShell(t, m, "bbbbbbbb-busy")
 	pressShell(m, " ")
-	if got, want := sessionIDsShell(m), "#payments aaaa #billing+ #ledger cccc #Recently closed dddd"; got != want {
+	if got, want := sessionIDsShell(m), "#payments aaaa gggg #billing+ cccc #Recently closed dddd"; got != want {
 		t.Fatalf("space on a session folds its group:\n got %s\nwant %s", got, want)
 	}
 	if r := m.vis.sessions[m.cur[vSessions].pos]; r.isSess || r.title != "billing" {
@@ -126,7 +135,7 @@ func TestSessionsFoldShell(t *testing.T) {
 		t.Errorf("unfold is saved")
 	}
 	pressShell(m, "-")
-	if got, want := sessionIDsShell(m), "#payments+ #billing+ #ledger+ #Recently closed+"; got != want {
+	if got, want := sessionIDsShell(m), "#payments+ #billing+ cccc #Recently closed+"; got != want {
 		t.Errorf("- folds all:\n got %s\nwant %s", got, want)
 	}
 	pressShell(m, "/")
@@ -154,6 +163,7 @@ func TestSessionsCursorFollowsRowShell(t *testing.T) {
 
 func TestSessionsDetailShell(t *testing.T) {
 	m := sessionsModelShell(t)
+	m.cur[vSessions].pos = slices.IndexFunc(m.vis.sessions, func(r srow) bool { return !r.isSess })
 	if s := plainShell(m.detailSession()); !strings.Contains(s, "—") {
 		t.Errorf("a header has no detail: %q", s)
 	}
@@ -593,6 +603,8 @@ func TestSessionsDoneFromSummaryShell(t *testing.T) {
 	if !strings.Contains(h, "1 done") {
 		t.Errorf("the header counts it: %s", h)
 	}
+	m.allSessions = true
+	m.refilter()
 	if s := plainShell(m.listSessions(40)); !strings.Contains(s, "1 done") {
 		t.Errorf("its group counts it:\n%s", s)
 	}
@@ -615,4 +627,22 @@ func TestSessionsDoneFromSummaryShell(t *testing.T) {
 		*r = saved
 		*r.Live = live
 	}
+}
+
+func TestSingleGroupLabelShell(t *testing.T) {
+	m := sessionsModelShell(t)
+	lacksShell(t, "wide", screenShell(m), "export csv  payments")
+	m.width = 90
+	m.refilter()
+	containsAllShell(t, "narrow, without the REPO column", screenShell(m), "export csv  payments")
+}
+
+func TestOneTicketEpicHeaderShell(t *testing.T) {
+	m := sessionsModelShell(t)
+	m.sessPrefs.Group = sessByTicket
+	m.jira.Sprint[0].Parent, m.jira.Sprint[0].ParentSummary = "ABC-9", "Money"
+	m.sessions = append(m.sessions, row{Session: claude.Session{ID: "gggggggg-pay", Transcript: &claude.Transcript{Cwd: "/code/payments", Branch: "feat/ABC-1/more"},
+		Live: &claude.Live{Status: claude.StatusIdle}}})
+	m.reindex()
+	containsAllShell(t, "by ticket", screenShell(m), "▾ Money › ABC-1 Payments export  2 session(s)")
 }

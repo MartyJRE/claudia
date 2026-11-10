@@ -763,11 +763,12 @@ func (m *Model) subtitle() string {
 		}
 		return sDim.Render(s) + "  " + sKey.Render(m.key("inbox.snooze")) + sDim.Render(" snooze until it changes  ") + sKey.Render(m.key("inbox.all")) + sDim.Render(" show snoozed")
 	case vSessions:
+		layout := "  " + sKey.Render(m.key("sessions.group")) + sDim.Render(" layout")
 		g := " · " + sessGroupNames[m.sessPrefs.Group]
 		if m.allSessions {
-			return sDim.Render("all sessions, last 7 days"+g) + "  " + sKey.Render(m.key("sessions.all")) + sDim.Render(" live only")
+			return sDim.Render("all sessions, last 7 days"+g) + layout + "  " + sKey.Render(m.key("sessions.all")) + sDim.Render(" live only")
 		}
-		return sDim.Render("live sessions"+g) + "  " + sKey.Render(m.key("sessions.all")) + sDim.Render(" show closed too")
+		return sDim.Render("live sessions"+g) + layout + "  " + sKey.Render(m.key("sessions.all")) + sDim.Render(" show closed too")
 	case vReview:
 		if m.showAll {
 			return sDim.Render("all review requests") + "  " + sKey.Render(m.key("mrs.all")) + sDim.Render(" hide approved")

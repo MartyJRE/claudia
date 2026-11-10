@@ -29,7 +29,7 @@ func TestViewsRenderShell(t *testing.T) {
 			"billing !21", "payments !11", "1 open: rename this", "Eve Smith", "waiting since"}, []string{"!12", "!13"}},
 		{vSessions, []string{"live sessions · by repo", "◆ needs you", "working", "● your turn", "○ closed",
 			"Recently closed", "export csv", "invoice pdf ·personal", "Opus 5.5", "Sonnet 4.5", "tmux work:3", "ghostty", "external",
-			"1 session(s) · 1 live · 1 needs you"}, nil},
+			"v layout"}, nil},
 		{vReview, []string{"review requests not yet approved by you", "!11 payments", "Draft: wip billing", "✓ passed", "1 needed",
 			"feat/ABC-1/export → devel", "ABC-1 Payments export · Dev in progress"}, []string{"!13", "REVIEWERS"}},
 		{vMine, []string{"open, then merged in the last 5 days", "REVIEWERS", "carol, ✓ dave", "✗ failed", "1, 1 left",
@@ -438,8 +438,8 @@ func TestSubtitleShell(t *testing.T) {
 		want string
 	}{
 		{vInbox, func() { m.showAll = true }, "everyone waiting on you, oldest first · incl. snoozed"},
-		{vSessions, func() { m.allSessions = true }, "all sessions, last 7 days · by repo  a live only"},
-		{vSessions, func() { m.allSessions, m.sessPrefs.Group = false, sessFlat }, "live sessions · flat  a show closed too"},
+		{vSessions, func() { m.allSessions = true }, "all sessions, last 7 days · by repo  v layout  a live only"},
+		{vSessions, func() { m.allSessions, m.sessPrefs.Group = false, sessFlat }, "live sessions · flat  v layout  a show closed too"},
 		{vReview, func() { m.showAll = true }, "all review requests  a hide approved"},
 		{vReview, func() { m.showAll = false }, "review requests not yet approved by you  a show all"},
 		{vMine, func() {}, "open, then merged in the last 5 days"},
@@ -484,7 +484,7 @@ func TestCountShell(t *testing.T) {
 	m.Update(usageMsg{{Day: "2026-11-01"}, {Day: "2026-11-02"}})
 	m.conf.Mine = []atlassian.Page{{Title: "a"}}
 	m.refilter()
-	for v, want := range map[view]int{vInbox: 4, vSessions: 8, vReview: 2, vMine: 2, vMentions: 1, vConfluence: 1, vUsage: 2, vNotes: 0} {
+	for v, want := range map[view]int{vInbox: 4, vSessions: 5, vReview: 2, vMine: 2, vMentions: 1, vConfluence: 1, vUsage: 2, vNotes: 0} {
 		m.switchView(v)
 		if got := m.count(); got != want {
 			t.Errorf("%s: %d rows, want %d", viewNames[v], got, want)
@@ -496,7 +496,6 @@ func TestNewSessionPicksRepoShell(t *testing.T) {
 	m := newModelShell(t)
 	m.repos = []repos.Repo{{Dir: "/code/billing", Branch: "devel"}, {Dir: "/code/payments", Branch: "feat/ABC-1/export"}}
 	m.switchView(vSessions)
-	pressShell(m, "j")
 	pressShell(m, "n")
 	if m.chooser == nil || m.chooser.title != "new session in" {
 		t.Fatal("n opens the repo chooser")

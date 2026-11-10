@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"cmp"
 	"fmt"
 	"path/filepath"
 	"slices"
@@ -29,6 +30,9 @@ type srow struct {
 	key       string // fold key for headers
 	title     string // header: repo name or ticket summary
 	ticket    string // header: ticket key, when grouped by ticket
+	via       string // header: the epic whose only ticket this is, its own header left out
+	single    bool   // a session standing in for its one-session group
+	group     string // single: the group's name, shown on the row instead of a header
 	depth     int
 	collapsed bool
 	n, live   int
@@ -84,6 +88,29 @@ type sgroup struct {
 type gstats struct {
 	n, live, waiting, done int
 	last                   time.Time
+}
+
+// name labels the group on a row that stands in for it; "No ticket" says
+// nothing the empty TICKET column doesn't.
+func (g *sgroup) name() string {
+	if g.key == "ticket:-" {
+		return ""
+	}
+	return cmp.Or(g.title, g.ticket)
+}
+
+// only is the session of a group that holds just one, and the names of the
+// groups down to it.
+func (g *sgroup) only() (row, string) {
+	if len(g.sessions) > 0 {
+		return g.sessions[0], g.name()
+	}
+	r, below := g.subs[0].only()
+	return r, path(g.name(), below)
+}
+
+func path(names ...string) string {
+	return strings.Join(slices.DeleteFunc(names, func(s string) bool { return s == "" }), " › ")
 }
 
 func (g *sgroup) stats() gstats {
@@ -163,9 +190,12 @@ const recentClosed = 8
 // sessionRows is the Sessions tab: the tree, and unless closed sessions are
 // shown anyway, the few closed most recently, to revive with enter.
 func (m *Model) sessionRows(match func(...string) bool, filtering bool) []srow {
-	out := m.buildSessions(m.filterSessions(match), filtering)
+	return append(m.buildSessions(m.filterSessions(match), filtering), m.recentClosed(match, filtering)...)
+}
+
+func (m *Model) recentClosed(match func(...string) bool, filtering bool) []srow {
 	if m.allSessions {
-		return out
+		return nil
 	}
 	var closed []row
 	for _, r := range m.sessions {
@@ -174,13 +204,13 @@ func (m *Model) sessionRows(match func(...string) bool, filtering bool) []srow {
 		}
 	}
 	if len(closed) == 0 {
-		return out
+		return nil
 	}
 	slices.SortStableFunc(closed, func(a, b row) int { return b.LastActive().Compare(a.LastActive()) })
 	closed = closed[:min(len(closed), recentClosed)]
 	h := srow{key: "recent", title: "Recently closed", n: len(closed)}
 	h.collapsed = !filtering && slices.Contains(m.sessPrefs.Collapsed, h.key)
-	out = append(out, h)
+	out := []srow{h}
 	if !h.collapsed {
 		for _, r := range closed {
 			out = append(out, srow{isSess: true, sess: r, depth: 1})
@@ -242,24 +272,36 @@ func (m *Model) buildSessions(sessions []row, filtering bool) []srow {
 	}
 	sortGroups(roots)
 
+	// A group of one session is that session's row, with the group named on
+	// it; an epic with one ticket leaves its header out and names itself on
+	// the ticket's.
 	var out []srow
-	var walk func(gs []*sgroup, depth int)
-	walk = func(gs []*sgroup, depth int) {
+	var walk func(gs []*sgroup, depth int, via string)
+	walk = func(gs []*sgroup, depth int, via string) {
 		for _, g := range gs {
 			st := g.stats()
-			h := srow{key: g.key, title: g.title, ticket: g.ticket, depth: depth, n: st.n, live: st.live, waiting: st.waiting, done: st.done}
+			switch {
+			case st.n == 1:
+				r, name := g.only()
+				out = append(out, srow{isSess: true, sess: r, depth: depth, single: true, group: path(via, name)})
+				continue
+			case len(g.sessions) == 0 && len(g.subs) == 1:
+				walk(g.subs, depth, path(via, g.name()))
+				continue
+			}
+			h := srow{key: g.key, title: g.title, ticket: g.ticket, via: via, depth: depth, n: st.n, live: st.live, waiting: st.waiting, done: st.done}
 			h.collapsed = !filtering && slices.Contains(m.sessPrefs.Collapsed, g.key)
 			out = append(out, h)
 			if h.collapsed {
 				continue
 			}
-			walk(g.subs, depth+1)
+			walk(g.subs, depth+1, "")
 			for _, r := range g.sessions {
 				out = append(out, srow{isSess: true, sess: r, depth: depth + 1})
 			}
 		}
 	}
-	walk(roots, 0)
+	walk(roots, 0, "")
 	return out
 }
 
@@ -272,6 +314,9 @@ func (m *Model) sessionHeaderCells(r srow) []string {
 	title := sBold.Render(r.title)
 	if r.ticket != "" {
 		title = sTicket.Render(r.ticket) + " " + sBold.Render(r.title)
+	}
+	if r.via != "" {
+		title = sDim.Render(r.via+" › ") + title
 	}
 	counts := sDim.Render(fmt.Sprintf("  %d session(s)", r.n))
 	if r.live > 0 {
@@ -328,9 +373,10 @@ func (m *Model) foldAllSessions(fold bool) {
 	m.refilter()
 }
 
-// sessionIndent lines a session up under its group's name, one level deeper.
+// sessionIndent lines a session up under its group's name, one level deeper;
+// one standing in for its group lines up with the group names beside it.
 func sessionIndent(r srow) string {
-	if r.depth == 0 {
+	if r.depth == 0 && !r.single {
 		return ""
 	}
 	return strings.Repeat("  ", r.depth) + "  "
