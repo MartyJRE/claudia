@@ -143,6 +143,9 @@ func Check(f File) error {
 	if err := CheckBriefEvery(c.BriefEveryRaw); err != nil {
 		return err
 	}
+	if err := CheckAutopilot(c.Autopilot); err != nil {
+		return err
+	}
 	return CheckWorkers(c.WorkersRaw)
 }
 
@@ -153,12 +156,15 @@ func CheckWorkers(v string) error {
 	return fmt.Errorf("workers: %q isn't one of %s", v, strings.Join(WorkerPlaces, ", "))
 }
 
-func CheckBriefEvery(v string) error {
+func CheckBriefEvery(v string) error { return CheckDuration("brief_every", v) }
+
+// CheckDuration reads a duration field: like 2h or 30m, or off.
+func CheckDuration(key, v string) error {
 	if v == "" || v == "off" || v == "0" {
 		return nil
 	}
 	if d, err := time.ParseDuration(v); err != nil || d <= 0 {
-		return fmt.Errorf("brief_every: %q isn't a duration like 2h or 30m, or off", v)
+		return fmt.Errorf("%s: %q isn't a duration like 2h or 30m, or off", key, v)
 	}
 	return nil
 }

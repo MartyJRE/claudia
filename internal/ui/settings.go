@@ -217,7 +217,7 @@ func (m *Model) updateSettingInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			s.unset(f.Key)
 		default:
 			if f.Kind == config.KindDuration {
-				if err := config.CheckBriefEvery(v); err != nil {
+				if err := config.CheckDuration(f.Key, v); err != nil {
 					m.setFlash(err.Error(), true)
 					return m, nil
 				}
