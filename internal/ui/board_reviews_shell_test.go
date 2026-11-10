@@ -114,7 +114,7 @@ func TestBoardViewsShell(t *testing.T) {
 	// Tickets, the default: no review cards, and a review request is the
 	// ticket's turn.
 	s := screenSizedShell(t, m, "tickets-160x40")
-	containsAllShell(t, "tickets", s, "2 Board 3", "[Tickets] · Reviews 1 · All", "my tickets by stage", "r view", "Review 2")
+	containsAllShell(t, "tickets", s, "2 Board 3", "[Tickets]· Reviews 1 · All ", "my tickets by stage", "r view", "Review 2")
 	lacksShell(t, "tickets", s, "!31", "Check findings")
 	if c := m.vis.board[3][1]; c.issue.Key != "ABC-2" || c.next != "review !32" {
 		t.Errorf("ABC-2 in Tickets: %q", c.next)
@@ -126,7 +126,7 @@ func TestBoardViewsShell(t *testing.T) {
 		t.Errorf("the view is saved: %+v", p)
 	}
 	s = screenSizedShell(t, m, "reviews-160x40")
-	containsAllShell(t, "reviews", s, "Tickets · [Reviews 1] · All", "MRs waiting on your review by stage",
+	containsAllShell(t, "reviews", s, " Tickets ·[Reviews 1]· All ", "MRs waiting on your review by stage",
 		"Requested 1", "Reviewing 1", "Check findings 1", "Waiting on author 1",
 		"!11 payments", "!31 search", "reviewing", "!32 ledger  ◆ needs you", "two blockers…", "!33 billing  ⧗ waiting", "waits on dave",
 		"✗ failed", "✓ passed", "… running")
@@ -148,7 +148,7 @@ func TestBoardViewsShell(t *testing.T) {
 	m.width, m.height = 160, 40
 	pressShell(m, "r")
 	s = screenSizedShell(t, m, "all-160x40")
-	containsAllShell(t, "all", s, "Tickets · Reviews 1 · [All]", "my tickets and your reviews by stage",
+	containsAllShell(t, "all", s, " Tickets · Reviews 1 ·[All]", "my tickets and your reviews by stage",
 		"Up next 1", "Building 1", "Review 3", "Merge 1", "!11 payments", "!33 billing")
 	if c := m.vis.board[3][1]; c.issue.Key != "ABC-2" || c.next == "review !32" {
 		t.Errorf("ABC-2 on All: %q", c.next)
@@ -304,5 +304,17 @@ func TestReviewBadgeShell(t *testing.T) {
 	l := plainShell(m.reviewCardLines(boardCard{mr: &m.gl.Review[0], turn: turnNeedsYou}, 12, false)[0])
 	if !strings.Contains(l, "◆ check") {
 		t.Errorf("narrow: %q", l)
+	}
+}
+
+func TestBoardViewsStayPutShell(t *testing.T) {
+	m := boardModelShell(t)
+	at := map[int]bool{}
+	for range nBoardViews {
+		at[strings.Index(plainShell(m.boardViews()), "Reviews")] = true
+		pressShell(m, "r")
+	}
+	if len(at) != 1 {
+		t.Errorf("the labels move as r cycles: %v", at)
 	}
 }
