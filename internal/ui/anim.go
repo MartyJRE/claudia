@@ -2,6 +2,7 @@ package ui
 
 import (
 	"cmp"
+	"slices"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -98,6 +99,15 @@ func (m *Model) animates() bool {
 		}
 	case vInbox:
 		return !m.briefPending.IsZero()
+	case vBoard:
+		if m.jira.FetchedAt.IsZero() && m.atlErr == nil {
+			return true
+		}
+		for _, col := range m.vis.board {
+			if slices.ContainsFunc(col, func(c boardCard) bool { return c.turn == turnAgent }) {
+				return true
+			}
+		}
 	case vReview, vMine:
 		return m.gl.FetchedAt.IsZero() && m.errs[srcGitlab] == nil
 	case vJira:

@@ -129,7 +129,7 @@ func summaryText(r row, underStatus bool) string {
 			s = strings.TrimSpace(strings.TrimPrefix(s, needsYouPrefix))
 		}
 		return lipgloss.NewStyle().Foreground(yellow).Render(s)
-	case strings.HasPrefix(s, "Waiting:"):
+	case strings.HasPrefix(s, waitingPrefix):
 		return lipgloss.NewStyle().Foreground(blue).Render(s)
 	case underStatus && r.done():
 		s = strings.TrimSpace(strings.TrimPrefix(s, donePrefix))

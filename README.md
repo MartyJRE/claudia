@@ -35,14 +35,33 @@ switches between those sessions.
 | Key | View | What it shows |
 |---|---|---|
 | 1 | Inbox | Everyone waiting on you, oldest first |
-| 2 | Sessions | Live and recent Claude sessions with status, branch, ticket, model, and a line on where each stands |
-| 3 | Review | MRs where you are a reviewer and haven't approved yet |
-| 4 | My MRs | Your open MRs (reviewers, pipelines, review threads) and recently merged ones |
-| 5 | Jira | Your sprint, or the team's |
-| 6 | Mentions | Jira comments and Confluence pages that mention you |
-| 7 | Confluence | Pages you edited recently |
-| 8 | Notes | Your Obsidian vault as a folder tree, or recently edited first |
-| 9 | Usage | Tokens and API-equivalent cost per day, plan limits |
+| 2 | Board | Your tickets as a kanban, by stage, with whose turn it is and what each cost |
+| 3 | Sessions | Live and recent Claude sessions with status, branch, ticket, model, and a line on where each stands |
+| 4 | Review | MRs where you are a reviewer and haven't approved yet |
+| 5 | My MRs | Your open MRs (reviewers, pipelines, review threads) and recently merged ones |
+| 6 | Jira | Your sprint, or the team's |
+| 7 | Mentions | Jira comments and Confluence pages that mention you |
+| 8 | Confluence | Pages you edited recently |
+| 9 | Notes | Your Obsidian vault as a folder tree, or recently edited first |
+| `tab` | Usage | Tokens and API-equivalent cost per day or per ticket, plan limits |
+
+**Board**, your sprint's tickets in columns: Up next, Plan, Building, Review,
+Merge and QA. No stage is stored; each refresh works it out from Jira, your MRs
+and sessions, first match from the right: a merged MR (and no open one) is QA,
+an approved MR with a green pipeline and no open threads is Merge, an open MR is
+Review, a draft MR or an implementation, fix or test session (or Claude working
+on the ticket's branch) is Building, an analysis session or a plan is Plan.
+Done tickets join as a last column with `d`, and `board.statuses` can pin a Jira
+status to a column. Each card says whose turn it is: `◆ needs you` (a session
+asks, or the Inbox has something for the ticket; these go first), Claude at
+work with its activity, `⧗ waiting` on reviewers or someone a session named,
+else `● you` with the next step. Its last line has the ticket's cost so far,
+sessions, MRs and that step. `h`/`l` move between columns (tab and the digits
+still switch views), `enter` lists the ticket's sessions or starts one, `c`/`C`
+start Claude on it, `o` opens it in Jira, `M` its MR, `t` the MR's threads, `m`
+moves it in Jira, `a` shows the team's sprint:
+
+<img src="assets/board.svg" width="860" alt="Board: tickets in columns by stage, each saying whose turn it is">
 
 **Sessions**, grouped by repo, each with its `/color` dot. Under each one, a
 line says where it stands ("OK to merge?", "Waiting: Michal to approve",
@@ -71,6 +90,14 @@ named on it, so there's no header to scroll past:
 **Usage**, cost per day split by model, and plan limits:
 
 <img src="assets/usage.svg" width="860" alt="Usage: tokens and cost per day, bars split by model">
+
+`v` switches Usage to cost per ticket, grouped under epics, with sessions on no
+ticket last. It comes from a cost ledger in the state dir: every session's
+tokens and cost (its subagents included) are added as transcripts are read, and
+kept after Claude Code deletes old transcripts. The first scan reads every
+transcript on disk. A session counts toward the ticket claudia knows it by (set
+by hand, from its MR or branch), else the last ticket branch in its transcript.
+claudia's own headless runs (brief, summaries) aren't counted.
 
 `u` opens any link in Claude (also `claudia open <link>` from a shell): an MR
 link gets reviewed in your local clone even if it isn't assigned to you, a Jira
@@ -311,6 +338,8 @@ by an environment variable are shown but can't be changed there.
   (`hidden`) claudia leaves them out everywhere; `top` or `bottom` lists them
   dim in a folded group at that end of the Sessions tab, with nothing to jump
   to or kill. `CLAUDIA_WORKERS` overrides it.
+- `board.statuses` pins tickets in a Jira status to a Board column, e.g.
+  `{"Ready for QA": "QA", "Blocked": "Up next"}`, over the column claudia works out.
 - `keys` rebinds any key outside text input: an action name to a key or a list
   of keys. `claudia keys` lists every action with its current keys and points out
   clashes. claudia also flags clashes when it starts.

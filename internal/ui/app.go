@@ -42,6 +42,7 @@ type view int
 
 const (
 	vInbox view = iota
+	vBoard
 	vSessions
 	vReview
 	vMine
@@ -53,7 +54,7 @@ const (
 	nViews
 )
 
-var viewNames = [nViews]string{"Inbox", "Sessions", "Review", "My MRs", "Jira", "Mentions", "Confluence", "Notes", "Usage"}
+var viewNames = [nViews]string{"Inbox", "Board", "Sessions", "Review", "My MRs", "Jira", "Mentions", "Confluence", "Notes", "Usage"}
 
 const detailHeight = 8
 
@@ -86,6 +87,7 @@ func splitWorkers(rows []row) (sessions, workers []row) {
 const (
 	needsYouPrefix = "Needs you:"
 	donePrefix     = "Done:"
+	waitingPrefix  = "Waiting:"
 )
 
 // summarized: the summary was written from the session's latest turn.
@@ -132,7 +134,14 @@ type Model struct {
 	usageLoaded  bool
 	usageLoading bool
 	usageAt      time.Time
+	ledger       *claude.Ledger
+	costs        map[string]claude.TicketCost
 	jiraPrefs    jiraPrefs
+	boardPrefs   boardPrefs
+	boardCol     int             // the Board column the cursor is in
+	boardOff     int             // the first column shown when they don't all fit
+	boardCur     [nStages]cursor // each column's cursor while another has it
+	boardNeeds   int
 	sessLoaded   bool
 	sessLoading  bool
 	gl           gitlab.Snapshot
@@ -205,6 +214,8 @@ func New(opts Options) *Model {
 		opts:       opts,
 		store:      claude.NewStore(claude.DefaultProfiles(), 7*24*time.Hour),
 		jiraPrefs:  loadJiraPrefs(),
+		boardPrefs: loadBoardPrefs(),
+		ledger:     claude.OpenLedger(),
 		vault:      newVault(),
 		notesPrefs: loadNotesPrefs(),
 		sessPrefs:  loadSessionPrefs(),
@@ -222,6 +233,7 @@ func New(opts Options) *Model {
 	m.loadCaches()
 	m.restore = pendingRestore()
 	m.usageScanner = claude.NewUsageScanner(m.store.Profiles, 31)
+	m.costs = ticketCosts(m.ledger)
 	m.reloadBrief()
 	if watch.Notifier() == "" {
 		m.setFlash("notifications open Script Editor when clicked: run `claudia setup` once to install the notification helper", true)
@@ -364,6 +376,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case usageMsg:
 		m.usage, m.usageLoaded, m.usageLoading = msg, true, false
 		m.usageAt = time.Now()
+		m.updateLedger()
 		m.refilter()
 		return m, nil
 	case imagesMsg:
@@ -524,7 +537,7 @@ func (m *Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.setFlash("refreshing…", false)
 		return m, m.refreshAll()
 	}
-	if len(k) == 1 && k[0] >= '1' && k[0] < '1'+byte(nViews) {
+	if len(k) == 1 && k[0] >= '1' && k[0] <= '9' && int(k[0]-'1') < int(nViews) {
 		m.switchView(view(k[0] - '1'))
 		return m, nil
 	}
@@ -533,6 +546,10 @@ func (m *Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.keyNotes(k)
 	case vInbox:
 		return m.keyInbox(k)
+	case vBoard:
+		return m.keyBoard(k)
+	case vUsage:
+		return m.keyUsage(k)
 	case vSessions:
 		return m.keySessions(k)
 	case vReview, vMine:
@@ -541,10 +558,8 @@ func (m *Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.keyJira(k)
 	case vMentions:
 		return m.keyMentions(k)
-	case vConfluence:
-		return m.keyConfluence(k)
 	}
-	return m, nil
+	return m.keyConfluence(k)
 }
 
 func (m *Model) switchView(v view) {
@@ -607,6 +622,8 @@ func (m *Model) viewList(h int) string {
 		return m.listNotes(h)
 	case vInbox:
 		return m.listInbox(h)
+	case vBoard:
+		return m.listBoard(h)
 	case vSessions:
 		return m.listSessions(h)
 	case vReview, vMine:
@@ -629,6 +646,8 @@ func (m *Model) viewDetail() string {
 		return m.detailNote()
 	case vInbox:
 		return m.detailInbox()
+	case vBoard:
+		return m.detailBoard()
 	case vSessions:
 		return m.detailSession()
 	case vReview, vMine:
@@ -701,7 +720,11 @@ func (m *Model) viewHeader() string {
 
 	var tabs []string
 	for v := view(0); v < nViews; v++ {
-		label := fmt.Sprintf("%d %s", v+1, viewNames[v])
+		// Only nine views have a digit; the rest are a tab away.
+		label := viewNames[v]
+		if v < 9 {
+			label = fmt.Sprintf("%d %s", v+1, label)
+		}
 		if b := m.badge(v); b != "" {
 			label += " " + b
 		}
@@ -726,6 +749,8 @@ func (m *Model) badge(v view) string {
 	switch v {
 	case vInbox:
 		n = m.inboxCount()
+	case vBoard:
+		n = m.boardNeeds
 	case vSessions:
 		n = m.countLive()
 	case vReview:
@@ -747,7 +772,7 @@ func (m *Model) viewSourceOf() (source, bool) {
 	switch m.view {
 	case vReview, vMine, vInbox:
 		return srcGitlab, true
-	case vJira, vMentions:
+	case vJira, vMentions, vBoard:
 		return srcJira, true
 	case vConfluence:
 		return srcConfluence, true
@@ -817,8 +842,22 @@ func (m *Model) subtitle() string {
 		return sDim.Render("Jira and Confluence mentions, last 30 days"+m.listMode(vMentions)) + "  " + hint
 	case vConfluence:
 		return sDim.Render("pages you edited recently" + m.listMode(vConfluence))
+	case vBoard:
+		s := "my tickets"
+		if m.boardPrefs.Team {
+			s = "team sprint"
+		}
+		if m.boardPrefs.Done {
+			s += " incl. done"
+		}
+		hint := sKey.Render(m.key("board.team")) + sDim.Render(" mine/team  ") + sKey.Render(m.key("board.done")) + sDim.Render(" done")
+		return sDim.Render(s+" by stage, worked out from Jira, MRs and sessions") + "  " + hint
 	case vUsage:
-		return sDim.Render("tokens from local transcripts incl. subagents, last 31 days, priced at API list rates")
+		layout := "  " + sKey.Render(m.key("usage.layout")) + sDim.Render(" layout")
+		if m.usageByTicket() {
+			return sDim.Render("cost per ticket under its epic, kept in a ledger that outlives transcript cleanup") + layout
+		}
+		return sDim.Render("tokens from local transcripts incl. subagents, last 31 days, priced at API list rates") + layout
 	}
 	return ""
 }
@@ -887,6 +926,11 @@ func (m *Model) help() [][2]string {
 		return m.hints("mentions.open", "mentions.dismiss", "mentions.ticket", "mentions.reply", "mentions.reply_bg")
 	case vConfluence:
 		return m.hints("confluence.open", "confluence.copy")
+	case vBoard:
+		return append([][2]string{{m.key("board.left") + "/" + m.key("board.right"), "columns"}},
+			m.hints("board.sessions", "board.claude", "board.claude_bg", "board.open", "board.mr", "board.threads", "board.move", "board.copy")...)
+	case vUsage:
+		return m.hints("usage.layout")
 	}
 	return nil
 }
@@ -908,12 +952,21 @@ func (m *Model) count() int {
 	case vConfluence:
 		return len(m.vis.pageRows)
 	case vUsage:
+		if m.usageByTicket() {
+			return len(m.vis.costRows)
+		}
 		return len(m.vis.usage)
+	case vBoard:
+		if m.boardCol < len(m.vis.board) {
+			return len(m.vis.board[m.boardCol])
+		}
 	}
 	return 0
 }
 
 type visible struct {
+	board    [][]boardCard // per shown column
+	costRows []costRow
 	inbox    []inboxItem
 	notes    []nrow
 	sessions []srow
@@ -956,6 +1009,8 @@ func (m *Model) refilter() {
 	m.vis.mentionRows = m.groupRows(vMentions, len(m.vis.mentions), len(terms) > 0)
 	m.vis.pageRows = m.groupRows(vConfluence, len(m.vis.pages), len(terms) > 0)
 	m.vis.usage = m.usageRows()
+	m.vis.costRows = m.costRows()
+	m.refilterBoard(match)
 	for v := view(0); v < nViews; v++ {
 		saved := m.view
 		m.view = v

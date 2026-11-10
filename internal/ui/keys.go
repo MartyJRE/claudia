@@ -66,6 +66,21 @@ var actions = []action{
 	{"inbox.fold_all", []string{"-"}, "fold all"},
 	{"inbox.unfold_all", []string{"+", "="}, "unfold all"},
 
+	{"board.left", []string{"h", "left"}, "column left"},
+	{"board.right", []string{"l", "right"}, "column right"},
+	{"board.sessions", []string{"enter"}, "sessions"},
+	{"board.claude", []string{"c"}, "claude"},
+	{"board.claude_bg", []string{"C"}, "claude in the background"},
+	{"board.open", []string{"o"}, "open in Jira"},
+	{"board.mr", []string{"M"}, "open MR"},
+	{"board.threads", []string{"t"}, "threads"},
+	{"board.move", []string{"m"}, "move"},
+	{"board.copy", []string{"y"}, "copy key"},
+	{"board.team", []string{"a"}, "mine/team"},
+	{"board.done", []string{"d"}, "show done"},
+
+	{"usage.layout", []string{"v"}, "layout"},
+
 	{"sessions.jump", []string{"enter"}, "jump"},
 	{"sessions.fold", []string{" "}, "fold"},
 	{"sessions.fold_all", []string{"-"}, "fold all"},
@@ -143,6 +158,13 @@ var actions = []action{
 	{"confluence.unfold_all", []string{"+", "="}, "unfold all"},
 }
 
+// mayShadow lists the global actions a view's action may take keys from on
+// purpose: on the Board h/l move between columns, and tab still switches views.
+var mayShadow = map[string][]string{
+	"board.left":  {"global.prev_view"},
+	"board.right": {"global.next_view"},
+}
+
 type keymap struct {
 	byScope map[string]map[string]string // scope → key → action id
 	keys    map[string][]string          // action id → keys
@@ -181,7 +203,7 @@ func newKeymap(over map[string]config.KeyList) (keymap, []string) {
 			continue
 		}
 		for k, id := range m {
-			if g := km.byScope["global"][k]; g != "" {
+			if g := km.byScope["global"][k]; g != "" && !slices.Contains(mayShadow[id], g) {
 				problems = append(problems, fmt.Sprintf("%s is bound to both %s and %s", keyName(k), g, id))
 			}
 		}
@@ -201,6 +223,10 @@ func viewScope(v view) string {
 		return "notes"
 	case vInbox:
 		return "inbox"
+	case vBoard:
+		return "board"
+	case vUsage:
+		return "usage"
 	case vSessions:
 		return "sessions"
 	case vReview, vMine:
