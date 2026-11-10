@@ -332,6 +332,24 @@ func TestMaybeUsageScansFull(t *testing.T) {
 	}
 }
 
+func TestTicketPickerStartsOnWorkFull(t *testing.T) {
+	m := newModelShell(t)
+	work, personal := claude.Profile{Name: "work", Dir: "/h/.claude"}, claude.Profile{Name: "personal", Dir: "/h/.claude-personal"}
+	m.store.Profiles = []claude.Profile{personal, work}
+	m.repos = []repos.Repo{{Dir: "/code/Personal/tool", Branch: "main"}}
+	m.ticketSession("ABC-9", "x", "analysis", "analyse", "ABC-9 in", func(string, error) string { return "go" })
+	if m.chooser == nil || m.pickWork {
+		t.Fatal("the picker opens and takes the work default")
+	}
+	if s := m.chooser.status(m, choice{value: "/code/Personal/tool"}); s != "profile: work" {
+		t.Errorf("a ticket in a personal repo: %q", s)
+	}
+	m.chooser.tab(m, choice{value: "/code/Personal/tool"})
+	if s := m.chooser.status(m, choice{value: "/code/Personal/tool"}); s != "profile: personal" {
+		t.Errorf("tab still switches: %q", s)
+	}
+}
+
 func TestProfileForUnknownFull(t *testing.T) {
 	m := newModelShell(t)
 	m.store.Profiles = nil

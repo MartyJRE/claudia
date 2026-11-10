@@ -30,14 +30,19 @@ func startOfDay(now time.Time) time.Time {
 	return time.Date(y, mo, d, 0, 0, 0, 0, now.Location())
 }
 
+// limitsFresh is how old the saved plan usage may be: the status line only
+// writes it while a session of that profile is open, so older data may be far
+// behind.
+const limitsFresh = 15 * time.Minute
+
 // usage reads the plan windows the status line saved: why they stop new runs,
-// and whether they're known at all. Data older than a window, or a window
-// that has reset since, says nothing about now.
+// and whether they're known at all. Old data, or a window that has reset
+// since, says nothing about now.
 func usage(a config.Autopilot, l claude.Limits, ok bool, now time.Time) (reason string, known bool) {
-	fresh := func(w *claude.Window, span time.Duration) bool {
-		return ok && w != nil && now.Sub(l.At) < span && w.Resets().After(now)
+	fresh := func(w *claude.Window) bool {
+		return ok && w != nil && now.Sub(l.At) < limitsFresh && w.Resets().After(now)
 	}
-	five, seven := fresh(l.FiveHour, 5*time.Hour), fresh(l.SevenDay, 7*24*time.Hour)
+	five, seven := fresh(l.FiveHour), fresh(l.SevenDay)
 	if five {
 		max := a.MaxFiveHour()
 		// What's left of a window that resets after hours would go unused.
@@ -54,19 +59,13 @@ func usage(a config.Autopilot, l claude.Limits, ok bool, now time.Time) (reason 
 	return "", five && seven
 }
 
-// limit is why nothing new may start now, how many runs may go at once, and
-// whether the plan usage is known; unknown allows one.
-func limit(a config.Autopilot, now time.Time, l claude.Limits, ok bool, dayUSD float64) (string, int, bool) {
-	reason, known := usage(a, l, ok, now)
-	max := a.MaxRunning()
-	if !known {
-		max = 1
-	}
+// limit is why nothing new may start now, whatever profile it would run on.
+func limit(a config.Autopilot, now time.Time, dayUSD float64) string {
 	switch {
 	case !InHours(a, now):
-		reason = offHours
+		return offHours
 	case dayUSD >= a.MaxDayUSD():
-		reason = fmt.Sprintf("spent $%.0f of $%.0f today", dayUSD, a.MaxDayUSD())
+		return fmt.Sprintf("spent $%.0f of $%.0f today", dayUSD, a.MaxDayUSD())
 	}
-	return reason, max, known
+	return ""
 }

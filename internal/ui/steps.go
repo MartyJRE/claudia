@@ -264,7 +264,7 @@ func (m *Model) runNext(c boardCard) (tea.Model, tea.Cmd) {
 		start := m.ticketLaunch(key, c.issue.Summary, s.Intent, s.Verb, func(path string, err error) string {
 			return fillBrief(s.Prompt(getConfig()), key, path, err)
 		})
-		return start(m, dir, launch.ProfileFor(dir, m.store.Profiles))
+		return start(m, dir, launch.WorkProfile(m.store.Profiles))
 	}
 	return m.stepSession(next, c.issue.Key, c.issue.Summary)
 }
