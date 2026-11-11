@@ -16,7 +16,7 @@ import (
 // that's unclear; the pick is kept for the ticket's later steps.
 func TestStepRepoShell(t *testing.T) {
 	m, db := autoBoardShell(t, nil)
-	plan := boardCard{stage: stPlan, issue: atlassian.Issue{Key: "ABC-4", Summary: "Fresh idea"}}
+	plan := boardCard{stage: stPlan, issue: atlassian.Issue{Key: "ABC-4", Summary: "Fresh idea"}, runs: []runs.Run{{Step: "plan", Outcome: runs.OK}}}
 	m.repos = []repos.Repo{{Dir: "/code/a", Branch: "devel"}, {Dir: "/code/b", Branch: "main"}}
 	if _, cmd := m.runNext(plan); cmd != nil || m.chooser == nil || m.chooser.title != "implement ABC-4 in" {
 		t.Fatalf("unclear: the picker %+v", m.chooser)

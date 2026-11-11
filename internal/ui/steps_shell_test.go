@@ -60,7 +60,8 @@ func TestNextStepShell(t *testing.T) {
 		{"readiness failed: again", boardCard{stage: stUpNext, runs: []runs.Run{runShell("readiness", runs.Failed, nil)}}, "readiness", "", ""},
 		{"readiness asked", boardCard{stage: stUpNext, runs: []runs.Run{runShell("readiness", runs.NeedsYou, nil)}}, "readiness", "readiness", runs.NeedsYou},
 		{"both done", boardCard{stage: stUpNext, runs: []runs.Run{runShell("plan", runs.OK, nil), runShell("readiness", runs.OK, nil)}}, "", "", ""},
-		{"plan: implement", boardCard{stage: stPlan}, "implement", "", ""},
+		{"in Plan with no plan: plan it", boardCard{stage: stPlan}, "plan", "", ""},
+		{"planned: implement", boardCard{stage: stPlan, runs: []runs.Run{runShell("plan", runs.OK, nil)}}, "implement", "", ""},
 		{"anything running holds", boardCard{stage: stPlan, runs: []runs.Run{runShell("plan", runs.Running, nil)}}, "plan", "plan", runs.Running},
 		{"building without an MR: open one", boardCard{stage: stBuilding}, "mr", "", ""},
 		{"building with a draft", boardCard{stage: stBuilding, mrs: []gitlab.MR{boardMR(4, "opened", func(mr *gitlab.MR) { mr.Draft = true })}}, "", "", ""},
@@ -509,7 +510,7 @@ func TestStepStripTurnShell(t *testing.T) {
 	m := newModelShell(t)
 	const yellowFG, blueFG, dimFG, nextFG = "38;2;229;192;123", "38;2;97;175;239", "38;2;92;99;112", "1;38;2;198;120;221"
 	for tn, want := range map[turn]string{turnYou: nextFG, turnNeedsYou: yellowFG, turnAgent: blueFG, turnColleague: dimFG} {
-		c := boardCard{stage: stPlan, issue: atlassian.Issue{Key: "ABC-9"}, turn: tn}
+		c := boardCard{stage: stPlan, issue: atlassian.Issue{Key: "ABC-9"}, turn: tn, runs: []runs.Run{runShell("plan", runs.OK, nil)}}
 		strip := m.stepStrip(c)
 		if seg := strings.Split(strip, " ")[2]; !strings.Contains(seg, want) {
 			t.Errorf("turn %d: segment %q, want %s", tn, seg, want)

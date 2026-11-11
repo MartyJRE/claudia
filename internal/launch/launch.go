@@ -98,7 +98,11 @@ func (sp Spec) AsRun(id, step, subject, commentNote string) Spec {
 		" When you post to GitLab (MR notes or threads), start with the same sentence as a markdown quote: `> %s`. Never prefix anything with \"(claudia)\".", text, commentNote)
 	switch step {
 	case "plan":
-		note += " The reason says how big the change is: `size: simple`, `size: medium` or `size: large`; simple is a small change with no open questions."
+		note += fmt.Sprintf(" Write the plan as markdown to %s, replacing what's there: what changes where, the steps in order, and the open questions. "+
+			"I'll read it and may iterate on it with you in this session before I OK it; keep that file up to date with every change we agree on, since implementation follows it. "+
+			"The reason says how big the change is: `size: simple`, `size: medium` or `size: large`; simple is a small change with no open questions.", PlanFile(subject))
+	case "implement":
+		note += fmt.Sprintf(" If %s exists, it's the plan I OK'd for this ticket: follow it.", PlanFile(subject))
 	case "review":
 		note += " End with `CLAUDIA_RESULT: ok — no findings` when there's nothing the author should change, else `CLAUDIA_RESULT: needs-you — <n> findings`."
 	}
@@ -111,6 +115,9 @@ func (sp Spec) AsRun(id, step, subject, commentNote string) Spec {
 	sp.Env = append(slices.Clone(sp.Env), "CLAUDIA_RUN="+id)
 	return sp
 }
+
+// PlanFile is where a ticket's plan step writes its plan.
+func PlanFile(key string) string { return state.Path(filepath.Join("plans", key+".md")) }
 
 // WithPermissionMode starts the session in that --permission-mode; "default"
 // or "" leaves the user's own.

@@ -19,7 +19,7 @@ func TestAsRun(t *testing.T) {
 		t.Fatalf("args %q", run.Args)
 	}
 	note := run.Args[5]
-	for _, want := range []string{"ctl here", "This is claudia run run-1, step plan for ABC-2.", "`CLAUDIA_RESULT: ok|needs-you|waiting|failed — <short reason>`", "waiting means you asked someone else", "`size: simple`", "push broad searches and big reads into subagents",
+	for _, want := range []string{"ctl here", "This is claudia run run-1, step plan for ABC-2.", "`CLAUDIA_RESULT: ok|needs-you|waiting|failed — <short reason>`", "waiting means you asked someone else", "`size: simple`", "Write the plan as markdown to " + PlanFile("ABC-2"), "push broad searches and big reads into subagents",
 		`{"type":"panel","attrs":{"panelType":"info"},"content":[{"type":"paragraph","content":[{"type":"text","text":"By Claude \"for\" me."}]}]}`,
 		"`> By Claude \"for\" me.`", `"adf"`, `Never prefix anything with "(claudia)"`} {
 		if !strings.Contains(note, want) {
@@ -32,6 +32,9 @@ func TestAsRun(t *testing.T) {
 	bare := Spec{Args: []string{"--resume", "s1"}, Env: []string{"A=1"}}.AsRun("run-2", "review", "!5", "n")
 	if !slices.Equal(bare.Args[:3], []string{"--resume", "s1", "--append-system-prompt"}) || !strings.Contains(bare.Args[3], "run-2") || !strings.Contains(bare.Args[3], "ok — no findings") || strings.Contains(bare.Args[3], "size:") {
 		t.Errorf("args without a hint %q", bare.Args)
+	}
+	if impl := bare.AsRun("run-3", "implement", "ABC-2", "n"); !strings.Contains(impl.Args[3], PlanFile("ABC-2")+" exists, it's the plan I OK'd") {
+		t.Errorf("implement isn't pointed at the plan: %s", impl.Args[3])
 	}
 	if !slices.Equal(bare.Env, []string{"A=1", "CLAUDIA_RUN=run-2"}) {
 		t.Errorf("env %q", bare.Env)

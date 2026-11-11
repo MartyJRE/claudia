@@ -159,7 +159,7 @@ func (p *Pilot) Tick(now time.Time, cfg config.Config, in Inputs) Status {
 		if hold != nil && !ok || next == "" || !c.IsReview() && board.OnHold(c.Issue.Status) || handsOn(c, now) {
 			continue
 		}
-		if GateOf(a, over[c.ID()], c, next, planOK[c.Issue.Key] != "") != Queued {
+		if GateOf(a, over[c.ID()], c, next, PlanOKed(c, planOK[c.Issue.Key])) != Queued {
 			continue
 		}
 		if stale := a.ReviewStaleAfter(); c.IsReview() && stale > 0 && now.Sub(c.MR.UpdatedAt) > stale {

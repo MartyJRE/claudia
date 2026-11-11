@@ -21,6 +21,7 @@ import (
 // them to the session's plan prompt as feedback.
 type planReview struct {
 	sess     row
+	title    string
 	key      string // where the comments are saved: the plan file, else the session
 	lines    []string
 	comments []plan.Comment
@@ -39,14 +40,19 @@ func (m *Model) openPlan(r row) {
 		m.setFlash("no plan in this session", true)
 		return
 	}
-	lines := plan.Lines(plan.Text(r.PlanPath, r.Plan))
-	if len(lines) == 0 {
-		m.setFlash("no plan in this session", true)
-		return
-	}
 	k := r.PlanPath
 	if k == "" {
 		k = "session:" + r.ID
+	}
+	m.openPlanText(r, k, plan.Text(r.PlanPath, r.Plan), r.Name())
+}
+
+// openPlanText shows text as the plan of r, with the comments saved under k.
+func (m *Model) openPlanText(r row, k, text, title string) {
+	lines := plan.Lines(text)
+	if len(lines) == 0 {
+		m.setFlash("no plan in this session", true)
+		return
 	}
 	in := textarea.New()
 	in.ShowLineNumbers = false
@@ -54,7 +60,7 @@ func (m *Model) openPlan(r row) {
 	in.Placeholder = "your comment"
 	in.SetHeight(3)
 	in.KeyMap.InsertNewline = key.NewBinding(key.WithKeys("alt+enter", "ctrl+j"))
-	m.plan = &planReview{sess: r, key: k, lines: lines, comments: plan.Load(k, lines), anchor: -1, editing: -1, input: in}
+	m.plan = &planReview{sess: r, title: title, key: k, lines: lines, comments: plan.Load(k, lines), anchor: -1, editing: -1, input: in}
 }
 
 func (p *planReview) save() { _ = plan.Save(p.key, p.comments) }
@@ -338,7 +344,7 @@ func (m *Model) planInputBox(w int) string {
 func (m *Model) viewPlan() string {
 	p := m.plan
 	w, h := m.width, m.planHeight()
-	head := planYou.Render("plan") + sDim.Render(" · ") + sBold.Render(p.sess.Name())
+	head := planYou.Render("plan") + sDim.Render(" · ") + sBold.Render(p.title)
 	if t := m.ix.SessionTicket[p.sess.ID]; t != "" {
 		head += sDim.Render(" · ") + sTicket.Render(t)
 	}

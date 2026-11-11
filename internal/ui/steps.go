@@ -240,6 +240,10 @@ func (m *Model) runNext(c boardCard) (tea.Model, tea.Cmd) {
 		m.setFlash("nothing for "+m.key("board.run")+" to run on "+c.ref(), false)
 		return m, nil
 	}
+	if w := c.card().WaitsOn(next); len(w) > 0 {
+		m.setFlash(c.ref()+" "+waitsOnText(w)+": "+stepLabel(next)+" starts once they're done", true)
+		return m, nil
+	}
 	run := runs.Run{Kind: "ticket", Subject: c.id(), Step: next}
 	if c.review() {
 		run.Kind = "review"

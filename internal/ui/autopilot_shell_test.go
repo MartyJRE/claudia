@@ -11,7 +11,10 @@ import (
 	"github.com/MartyJRE/claudia/internal/claude"
 	"github.com/MartyJRE/claudia/internal/config"
 	"github.com/MartyJRE/claudia/internal/gitlab"
+	"github.com/MartyJRE/claudia/internal/launch"
 	"github.com/MartyJRE/claudia/internal/runs"
+	"os"
+	"path/filepath"
 )
 
 // autoBoardShell is the Board with the autopilot on and a run log.
@@ -72,6 +75,7 @@ func TestStripHintsShell(t *testing.T) {
 	hold := func(outcome, reason string) []runs.Run {
 		return []runs.Run{{Step: "implement", Outcome: outcome, Reason: reason}}
 	}
+	planned := []runs.Run{{Step: "plan", Outcome: runs.OK}}
 	for _, c := range []struct {
 		name string
 		card boardCard
@@ -83,11 +87,12 @@ func TestStripHintsShell(t *testing.T) {
 		{"waiting, no reason", boardCard{stage: stPlan, runs: hold(runs.Waiting, "")}, "⧗ waiting"},
 		{"running", boardCard{stage: stPlan, runs: hold(runs.Running, "")}, ""},
 		{"findings", boardCard{mr: &review, rstage: rsFindings}, "◆ check findings · enter"},
-		{"autopilot off", boardCard{stage: stPlan}, ""},
-		{"plan OK", boardCard{stage: stPlan, auto: true, gate: autopilot.PlanOK}, "◆ plan OK? · p"},
-		{"backed off", boardCard{stage: stPlan, auto: true, gate: autopilot.Backoff}, "◆ implement failed twice · s"},
-		{"dirty", boardCard{stage: stPlan, auto: true, gate: autopilot.Queued, block: "commit or stash in pay"}, "◆ commit or stash in pay · s"},
-		{"off", boardCard{stage: stPlan, auto: true, gate: autopilot.Off}, ""},
+		{"autopilot off", boardCard{stage: stPlan, runs: planned}, ""},
+		{"blocked", boardCard{stage: stPlan, runs: planned, issue: atlassian.Issue{BlockedBy: []string{"ABC-1", "ABC-2"}}, auto: true, gate: autopilot.Blocked}, "⧗ waits on ABC-1, ABC-2"},
+		{"plan OK", boardCard{stage: stPlan, runs: planned, auto: true, gate: autopilot.PlanOK}, "◆ plan OK? · p"},
+		{"backed off", boardCard{stage: stPlan, runs: planned, auto: true, gate: autopilot.Backoff}, "◆ implement failed twice · s"},
+		{"dirty", boardCard{stage: stPlan, runs: planned, auto: true, gate: autopilot.Queued, block: "commit or stash in pay"}, "◆ commit or stash in pay · s"},
+		{"off", boardCard{stage: stPlan, runs: planned, auto: true, gate: autopilot.Off}, ""},
 	} {
 		next, h := nextStep(c.card)
 		got, ok := m.stripHint(c.card, next, h)
@@ -100,8 +105,8 @@ func TestStripHintsShell(t *testing.T) {
 		turn turn
 		next string
 	}{
-		{boardCard{stage: stPlan, auto: true, gate: autopilot.PlanOK}, turnNeedsYou, "plan OK?"},
-		{boardCard{stage: stPlan, auto: true, gate: autopilot.Backoff}, turnNeedsYou, "implement failed twice"},
+		{boardCard{stage: stPlan, runs: planned, auto: true, gate: autopilot.PlanOK}, turnNeedsYou, "plan OK?"},
+		{boardCard{stage: stPlan, runs: planned, auto: true, gate: autopilot.Backoff}, turnNeedsYou, "implement failed twice"},
 		{boardCard{stage: stPlan, runs: hold(runs.NeedsYou, runs.ContextFull)}, turnNeedsYou, "context full"},
 		{boardCard{stage: stPlan, runs: hold(runs.Waiting, "asked 2 questions")}, turnColleague, "asked 2 questions"},
 		{boardCard{stage: stPlan, runs: hold(runs.Waiting, "")}, turnColleague, "waiting"},
@@ -174,6 +179,13 @@ func TestAutopilotPillShell(t *testing.T) {
 
 func TestPlanOKShell(t *testing.T) {
 	m, db := autoBoardShell(t, nil)
+	pressShell(m, "p")
+	if _, ok := db.Get(autopilot.KeyPlanOK + "ABC-4"); ok || !strings.Contains(m.flash, "no plan to OK yet: s runs the plan step") {
+		t.Errorf("no plan: %q", m.flash)
+	}
+	_ = db.Start(runs.Run{ID: "p", Subject: "ABC-4", Step: "plan", Session: "p", Started: time.Now(), Outcome: runs.OK})
+	m.runCache = nil
+	m.refilter()
 	pressShell(m, "p")
 	if _, ok := db.Get(autopilot.KeyPlanOK + "ABC-4"); !ok || !strings.Contains(m.flash, "plan of ABC-4 OK") {
 		t.Errorf("ok: %q", m.flash)
@@ -264,4 +276,40 @@ func TestReviewQueuedShell(t *testing.T) {
 func wideCard(t *testing.T, m *Model, id string) string {
 	t.Helper()
 	return plainShell(strings.Join(m.cardLines(cardShell(t, m, id), 90, false), "\n"))
+}
+
+func TestShowPlanShell(t *testing.T) {
+	m, db := autoBoardShell(t, nil)
+	pressShell(m, "v")
+	if m.plan != nil || !strings.Contains(m.flash, "no plan yet: s runs the plan step") {
+		t.Errorf("no plan: %q", m.flash)
+	}
+	// Only the file left: it's shown.
+	file := launch.PlanFile("ABC-4")
+	_ = os.MkdirAll(filepath.Dir(file), 0o755)
+	if err := os.WriteFile(file, []byte("# Plan\n- step one\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	pressShell(m, "v")
+	if m.plan == nil || m.plan.title != "plan for ABC-4" || m.plan.lines[1] != "- step one" {
+		t.Fatalf("plan file: %+v", m.plan)
+	}
+	containsAllShell(t, "viewer", plainShell(m.viewPlan()), "plan · plan for ABC-4", "- step one")
+	m.plan = nil
+	// The session that planned it: v goes there.
+	_ = db.Start(runs.Run{ID: "p", Subject: "ABC-4", Step: "plan", Session: "aaaaaaaa-wait", Started: time.Now(), Outcome: runs.OK})
+	m.runCache = nil
+	m.refilter()
+	if cmd := pressShell(m, "v"); cmd == nil || m.plan != nil || !strings.Contains(m.flash, "the plan is in export csv: iterate there, then p OKs it") {
+		t.Errorf("plan session: %q", m.flash)
+	}
+	review := mrShell("payments", 11, "x", "alice", "feat/x", time.Hour)
+	if m.showPlan(boardCard{mr: &review}); !strings.Contains(m.flash, "a review has no plan") {
+		t.Errorf("review: %q", m.flash)
+	}
+
+	blocked := boardCard{stage: stPlan, issue: atlassian.Issue{Key: "ABC-9", BlockedBy: []string{"ABC-1"}}, runs: []runs.Run{{Step: "plan", Outcome: runs.OK}}}
+	if _, cmd := m.runNext(blocked); cmd != nil || m.chooser != nil || !strings.Contains(m.flash, "ABC-9 waits on ABC-1: implement starts once they're done") {
+		t.Errorf("blocked: %q", m.flash)
+	}
 }

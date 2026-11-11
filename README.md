@@ -112,6 +112,12 @@ since nothing compacts it on its own; its card shows `ctx 82%` while it runs and
 the watcher pings you once at 90%. The detail panel shows the run now under
 way, the one before, what's next and each step's mode.
 
+`v` on a card goes to the session that planned it (resumed if its window was
+closed), to read the plan and iterate on it there before `p` OKs it; `p` with no
+plan yet says so. The plan step keeps its plan in `plans/<KEY>.md` in claudia's
+state directory as you iterate, and implement follows that file. A ticket in
+Plan by its Jira status alone gets planned first.
+
 **The autopilot** starts steps without you, from the watcher, so it works with
 claudia closed. Each step has a mode, set per step in `autopilot.steps`:
 
@@ -119,6 +125,7 @@ claudia closed. Each step has a mode, set per step in `autopilot.steps`:
 |---|---|---|
 | `auto` | the autopilot starts it when the limits allow | `◷ plan queued` |
 | `after-plan-ok` (implement) | auto once `p` OKs the plan, or right away when the plan run called the change simple | `◆ plan OK? · p` |
+| any step after plan, on a ticket Jira says "is blocked by" one not done | waits until the blocker is done; readiness and plan still run | `⧗ waits on ABC-1` |
 | `ask` | waits for `s` | `◆ go ahead with merge? · s` |
 | `off` | never offered | nothing |
 

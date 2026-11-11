@@ -71,8 +71,10 @@ func NextStep(c Card) (string, *runs.Run) {
 		}
 	case c.Stage == UpNext:
 		walk = []string{"readiness", "plan"}
-	case c.Stage == Plan:
+	case c.Stage == Plan && c.Latest("implement") != nil:
 		walk = []string{"implement"}
+	case c.Stage == Plan:
+		walk = []string{"plan", "implement"}
 	case c.Stage == Building:
 		if !slices.ContainsFunc(c.MRs, OpenMR) {
 			walk = []string{"mr"}
@@ -89,6 +91,8 @@ func NextStep(c Card) (string, *runs.Run) {
 	for _, id := range walk {
 		r := c.Latest(id)
 		switch {
+		case id == "plan" && r == nil && c.Planned():
+			continue
 		case r == nil || r.Outcome == runs.Failed || c.Stale(r):
 			return id, nil
 		case r.Outcome == runs.NeedsYou || r.Outcome == runs.Waiting:
@@ -96,6 +100,27 @@ func NextStep(c Card) (string, *runs.Run) {
 		}
 	}
 	return "", nil
+}
+
+// Planned: there's a plan to OK, from a plan run that ended ok or from one of
+// the card's sessions in plan mode. A ticket can sit in Plan by its Jira
+// status alone, with no plan anywhere.
+func (c Card) Planned() bool {
+	if r := c.Latest("plan"); r != nil && r.Outcome == runs.OK {
+		return true
+	}
+	return slices.ContainsFunc(c.Sessions, func(s Session) bool {
+		return s.Transcript != nil && (s.Transcript.PlanPath != "" || s.Transcript.Plan != "")
+	})
+}
+
+// WaitsOn is the unfinished tickets this one is blocked by, when step is one
+// they hold back: readiness and plan go ahead regardless.
+func (c Card) WaitsOn(step string) []string {
+	if c.IsReview() || step == "" || step == "readiness" || step == "plan" {
+		return nil
+	}
+	return c.Issue.BlockedBy
 }
 
 // WaitingForAnswers: the readiness run asked questions on the ticket. Runs
@@ -115,6 +140,9 @@ var StageStep = [NStages]int{UpNext: 0, Plan: 2, Building: 3, Review: 4, Merge: 
 func (c Card) Passed(id string) bool {
 	if c.IsReview() {
 		return id == "review" && c.RStage != Requested && c.RStage != Reviewing
+	}
+	if id == "plan" && c.Stage == Plan {
+		return c.Planned()
 	}
 	i := slices.IndexFunc(TicketSteps, func(s Step) bool { return s.ID == id })
 	return i < StageStep[c.Stage]

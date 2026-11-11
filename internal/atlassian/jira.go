@@ -26,6 +26,8 @@ type Issue struct {
 	Sprint         *Sprint   `json:"sprint,omitempty"`
 	Mine           bool      `json:"mine"`
 	Updated        time.Time `json:"updated"`
+	// BlockedBy is the issues this one "is blocked by" that aren't done yet.
+	BlockedBy []string `json:"blocked_by,omitempty"`
 }
 
 type JiraSnapshot struct {
@@ -82,7 +84,8 @@ type rawIssue struct {
 			AccountID   string `json:"accountId"`
 			DisplayName string `json:"displayName"`
 		} `json:"assignee"`
-		Parent *struct {
+		IssueLinks []issueLink `json:"issuelinks"`
+		Parent     *struct {
 			Key    string `json:"key"`
 			Fields struct {
 				Summary string `json:"summary"`
@@ -144,7 +147,7 @@ func (c *Client) search(jql string, me string) ([]Issue, error) {
 	for {
 		q := url.Values{
 			"jql":        {jql},
-			"fields":     {strings.TrimSuffix("summary,status,issuetype,priority,assignee,parent,updated,"+sf, ",")},
+			"fields":     {strings.TrimSuffix("summary,status,issuetype,priority,assignee,parent,updated,issuelinks,"+sf, ",")},
 			"maxResults": {"100"},
 		}
 		if next != "" {
@@ -159,13 +162,14 @@ func (c *Client) search(jql string, me string) ([]Issue, error) {
 		}
 		for _, r := range res.Issues {
 			i := Issue{
-				Key:      r.Key,
-				Summary:  r.Fields.Summary,
-				Status:   r.Fields.Status.Name,
-				Category: r.Fields.Status.Category.Key,
-				Type:     r.Fields.IssueType.Name,
-				Priority: r.Fields.Priority.Name,
-				Level:    r.Fields.IssueType.Level,
+				Key:       r.Key,
+				Summary:   r.Fields.Summary,
+				Status:    r.Fields.Status.Name,
+				Category:  r.Fields.Status.Category.Key,
+				Type:      r.Fields.IssueType.Name,
+				Priority:  r.Fields.Priority.Name,
+				Level:     r.Fields.IssueType.Level,
+				BlockedBy: blockers(r.Fields.IssueLinks),
 			}
 			if raw, ok := r.Raw[sf]; ok && sf != "" {
 				var ss []Sprint
@@ -275,14 +279,7 @@ type fullIssue struct {
 				Summary string `json:"summary"`
 			} `json:"fields"`
 		} `json:"parent"`
-		IssueLinks []struct {
-			Type struct {
-				Inward  string `json:"inward"`
-				Outward string `json:"outward"`
-			} `json:"type"`
-			InwardIssue  *linked `json:"inwardIssue"`
-			OutwardIssue *linked `json:"outwardIssue"`
-		} `json:"issuelinks"`
+		IssueLinks []issueLink `json:"issuelinks"`
 		Attachment []struct {
 			Filename string `json:"filename"`
 			MimeType string `json:"mimeType"`
@@ -301,14 +298,37 @@ type fullIssue struct {
 	} `json:"fields"`
 }
 
+type issueLink struct {
+	Type struct {
+		Inward  string `json:"inward"`
+		Outward string `json:"outward"`
+	} `json:"type"`
+	InwardIssue  *linked `json:"inwardIssue"`
+	OutwardIssue *linked `json:"outwardIssue"`
+}
+
 type linked struct {
 	Key    string `json:"key"`
 	Fields struct {
 		Summary string `json:"summary"`
 		Status  struct {
-			Name string `json:"name"`
+			Name     string `json:"name"`
+			Category struct {
+				Key string `json:"key"`
+			} `json:"statusCategory"`
 		} `json:"status"`
 	} `json:"fields"`
+}
+
+// blockers are the linked issues this one is blocked by and that aren't done.
+func blockers(links []issueLink) []string {
+	var keys []string
+	for _, l := range links {
+		if l.InwardIssue != nil && strings.Contains(strings.ToLower(l.Type.Inward), "blocked by") && l.InwardIssue.Fields.Status.Category.Key != "done" {
+			keys = append(keys, l.InwardIssue.Key)
+		}
+	}
+	return keys
 }
 
 func trimDate(s string) string {

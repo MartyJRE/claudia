@@ -147,7 +147,10 @@ func TestNextStep(t *testing.T) {
 		{"up next", "readiness", "", Card{Stage: UpNext}},
 		{"readiness ok", "plan", "", Card{Stage: UpNext, Runs: []runs.Run{run("readiness", runs.OK, nil)}}},
 		{"readiness asked", "readiness", "readiness", Card{Stage: UpNext, Runs: []runs.Run{run("readiness", runs.NeedsYou, nil)}}},
-		{"plan", "implement", "", Card{Stage: Plan}},
+		{"in Plan by status alone", "plan", "", Card{Stage: Plan}},
+		{"planned", "implement", "", Card{Stage: Plan, Runs: []runs.Run{run("plan", runs.OK, nil)}}},
+		{"implement started", "implement", "", Card{Stage: Plan, Runs: []runs.Run{run("implement", runs.Failed, nil)}}},
+		{"planned in plan mode", "implement", "", Card{Stage: Plan, Sessions: []Session{{Session: claude.Session{Transcript: &claude.Transcript{PlanPath: "/p.md"}}}}}},
 		{"running holds", "plan", "plan", Card{Stage: Plan, Runs: []runs.Run{run("plan", runs.Running, nil)}}},
 		{"building", "mr", "", Card{Stage: Building}},
 		{"building with a draft", "", "", Card{Stage: Building, MRs: []gitlab.MR{mr(4, "opened", nil)}}},
@@ -187,6 +190,13 @@ func TestNextStep(t *testing.T) {
 	}
 	if StepLabel("mr") != "open MR" || StepLabel("findings") != "findings" || StepLabel("x") != "x" {
 		t.Error("labels")
+	}
+	if (Card{Stage: Plan}).Passed("plan") || !(Card{Stage: Plan, Runs: []runs.Run{run("plan", runs.OK, nil)}}).Passed("plan") {
+		t.Error("plan passed only with a plan")
+	}
+	blocked := Card{Issue: atlassian.Issue{BlockedBy: []string{"ABC-1"}}}
+	if blocked.WaitsOn("plan") != nil || len(blocked.WaitsOn("implement")) != 1 || (Card{MR: &review}).WaitsOn("review") != nil {
+		t.Error("waits on")
 	}
 	if !(Card{Stage: Review}).Passed("mr") || (Card{Stage: Review}).Passed("feedback") {
 		t.Error("ticket passed")

@@ -212,6 +212,9 @@ func cardTurn(c boardCard, waiting []inboxItem) (turn, string, string) {
 		return turnColleague, "on hold: " + c.issue.Status, ""
 	}
 	id, _ := nextStep(c)
+	if w := c.card().WaitsOn(id); len(w) > 0 {
+		return turnColleague, waitsOnText(w), ""
+	}
 	if t, next, verb, ok := autoTurn(c, id); ok && c.gate != autopilot.Off {
 		return t, next, verb
 	}

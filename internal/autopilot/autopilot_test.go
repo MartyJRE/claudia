@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -82,6 +83,13 @@ func newRig(t *testing.T) *rig {
 	fake(t, &readLimits, func(string) (claude.Limits, bool) { return fresh(10), true })
 	fake(t, &newTeams, func() (*teams.Client, error) { return nil, teams.ErrUnconfigured })
 	return r
+}
+
+// planned gives the tickets a plan run that ended ok, as their implement needs.
+func (r *rig) planned(keys ...string) {
+	for _, k := range keys {
+		_ = r.db.Start(runs.Run{ID: "plan-" + k, Subject: k, Step: "plan", Session: "plan-" + k, Started: now.Add(-time.Hour), Outcome: runs.OK, Reason: "size: medium"})
+	}
 }
 
 func (r *rig) tick() Status { return r.p.Tick(now, r.cfg, r.in) }
@@ -238,6 +246,7 @@ func TestPausedAndNotes(t *testing.T) {
 func TestBlocked(t *testing.T) {
 	r := newRig(t)
 	r.in.Jira.Sprint = []atlassian.Issue{issue("ABC-1", "Analysis"), issue("ABC-2", "Analysis"), issue("ABC-3", "Analysis")}
+	r.planned("ABC-1", "ABC-2", "ABC-3")
 	r.cfg.Autopilot.Steps = map[string]string{"implement": "auto"}
 	r.in.Repos = []repos.Repo{{Dir: "/c/a", Branch: "feat/ABC-1/a"}, {Dir: "/c/b", Branch: "feat/ABC-1/b"}, {Dir: "/c/dirty", Branch: "feat/ABC-2/x"}, {Dir: "/c/three", Branch: "feat/ABC-3/x"}}
 	fake(t, &dirty, func(dir string) bool { return dir == "/c/dirty" })
@@ -284,16 +293,23 @@ func TestModesAndBackoff(t *testing.T) {
 	r := newRig(t)
 	r.in.Jira.Sprint = []atlassian.Issue{issue("ABC-1", "Analysis")}
 	r.in.Repos = []repos.Repo{{Dir: "/c/a", Branch: "feat/ABC-1/a"}}
+	// A ticket in Plan by its status alone gets planned first.
+	if r.tick(); len(r.started) != 1 || r.started[0].Kind != "analysis" {
+		t.Fatalf("no plan yet: %v", r.steps())
+	}
+	_ = r.db.Settle(r.db.For("ABC-1")[0].Session, runs.OK, "size: medium", now)
+	r.started = nil
 	// implement waits for the plan OK by default.
 	if r.tick(); len(r.started) != 0 {
 		t.Fatal("started without a plan OK")
 	}
-	_ = r.db.Set(KeyPlanOK+"ABC-1", "1")
+	_ = r.db.Set(KeyPlanOK+"ABC-1", strconv.FormatInt(now.UnixMilli(), 10))
 	_ = r.db.Set(KeyPaused, "")
 	if r.tick(); len(r.started) != 1 || r.started[0].Kind != "implementation" {
 		t.Fatalf("after p: %v", r.steps())
 	}
-	run := r.db.For("ABC-1")[0]
+	rs := r.db.For("ABC-1")
+	run := rs[slices.IndexFunc(rs, func(r runs.Run) bool { return r.Step == "implement" })]
 	_ = r.db.Settle(run.Session, runs.Failed, "x", now)
 	_ = r.db.Start(runs.Run{ID: "f2", Subject: "ABC-1", Step: "implement", Session: "s2", Started: now.Add(time.Minute), Outcome: runs.Failed, StartedBy: runs.ByAutopilot})
 	r.started = nil
@@ -335,6 +351,11 @@ func TestGate(t *testing.T) {
 		if got := GateOf(a, c.over, c.card, c.step, c.planOK); got != c.want {
 			t.Errorf("%s: %d, want %d", c.name, got, c.want)
 		}
+	}
+	planned := board.Card{Runs: []runs.Run{{Step: "plan", Outcome: runs.OK, Finished: now}}}
+	before, after := strconv.FormatInt(now.Add(-time.Hour).UnixMilli(), 10), strconv.FormatInt(now.UnixMilli(), 10)
+	if PlanOKed(planned, before) || !PlanOKed(planned, after) || PlanOKed(planned, "") || !PlanOKed(board.Card{}, before) {
+		t.Error("an OK counts only after the plan it OKs")
 	}
 	a.AllowAutoMerge = true
 	if m, own := Mode(a, map[string]string{"merge": "auto"}, "merge"); m != "auto" || !own {
@@ -476,5 +497,29 @@ func TestProfilesAndTheirUsage(t *testing.T) {
 	r.in.Jira.Sprint = []atlassian.Issue{issue("ABC-2", "To Do")}
 	if st := r.tick(); len(r.started) != 1 || !st.Unknown {
 		t.Errorf("unknown with a run going: %v %+v", r.steps(), st)
+	}
+}
+
+func TestBlockedBy(t *testing.T) {
+	r := newRig(t)
+	two := issue("ABC-2", "Analysis")
+	two.BlockedBy = []string{"ABC-1"}
+	three := issue("ABC-3", "To Do")
+	three.BlockedBy = []string{"ABC-1"}
+	r.in.Jira.Sprint = []atlassian.Issue{two, three}
+	r.planned("ABC-2")
+	_ = r.db.Set(KeyPlanOK+"ABC-2", "1")
+	r.in.Repos = []repos.Repo{{Dir: "/c/a", Branch: "feat/ABC-2/a"}, {Dir: "/c/b", Branch: "feat/ABC-3/b"}}
+	// A blocked ticket still gets ready and planned, but isn't implemented.
+	if r.tick(); len(r.started) != 1 || r.started[0].Kind != "readiness" {
+		t.Errorf("blocked: %v", r.steps())
+	}
+	_ = r.db.Settle(r.db.For("ABC-3")[0].Session, runs.OK, "ready", now)
+	r.in.Jira.Sprint[0].BlockedBy = nil
+	r.started = nil
+	most := 2
+	r.cfg.Autopilot.MaxRunningRaw = &most
+	if r.tick(); !slices.ContainsFunc(r.started, func(sp launch.Spec) bool { return sp.Kind == "implementation" }) {
+		t.Errorf("unblocked: %v", r.steps())
 	}
 }

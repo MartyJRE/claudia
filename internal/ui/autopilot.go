@@ -13,6 +13,8 @@ import (
 
 	"github.com/MartyJRE/claudia/internal/autopilot"
 	"github.com/MartyJRE/claudia/internal/config"
+	"github.com/MartyJRE/claudia/internal/launch"
+	"github.com/MartyJRE/claudia/internal/plan"
 	"github.com/MartyJRE/claudia/internal/runs"
 )
 
@@ -48,7 +50,7 @@ func (m *Model) applyAutopilot(c *boardCard) {
 	c.auto = a.Enabled
 	c.over = m.ap.over[c.id()]
 	if !c.review() {
-		c.planOK = m.ap.planOK[c.issue.Key] != ""
+		c.planOK = autopilot.PlanOKed(c.card(), m.ap.planOK[c.issue.Key])
 	}
 	c.block = m.ap.blocked[c.id()]
 	next, hold := nextStep(*c)
@@ -72,6 +74,8 @@ func autoTurn(c boardCard, next string) (turn, string, string, bool) {
 	switch {
 	case c.gate == autopilot.Off:
 		return turnYou, "", "", true
+	case c.gate == autopilot.Blocked:
+		return turnColleague, waitsOnText(c.card().WaitsOn(next)), "", true
 	case c.block != "":
 		return turnNeedsYou, c.block, "", true
 	case c.gate == autopilot.Ask:
@@ -110,6 +114,8 @@ func (m *Model) stripHint(c boardCard, next string, hold *runs.Run) (string, boo
 	}
 	run := m.key("board.run")
 	switch {
+	case c.gate == autopilot.Blocked:
+		return sDim.Render("⧗ " + waitsOnText(c.card().WaitsOn(next))), true
 	case c.block != "":
 		return ask(c.block, run)
 	case c.gate == autopilot.Ask:
@@ -224,6 +230,10 @@ func (m *Model) planOK(c boardCard) {
 		m.setFlash("only a ticket's plan gets an OK", true)
 		return
 	}
+	if !c.planOK && !c.card().Planned() {
+		m.setFlash("no plan to OK yet: "+m.key("board.run")+" runs the plan step", true)
+		return
+	}
 	key := autopilot.KeyPlanOK + c.issue.Key
 	v, msg := strconv.FormatInt(clockNow().UnixMilli(), 10), "plan of "+c.issue.Key+" OK: implement goes ahead"
 	if c.planOK {
@@ -236,6 +246,43 @@ func (m *Model) planOK(c boardCard) {
 	m.setFlash(msg, false)
 	m.refilter()
 }
+
+// showPlan is v: the session that planned the ticket, to read the plan and
+// iterate on it there; resumed when its window was closed. Without one, the
+// plan file it left.
+func (m *Model) showPlan(c boardCard) (tea.Model, tea.Cmd) {
+	if c.review() {
+		m.setFlash("a review has no plan", true)
+		return m, nil
+	}
+	key := c.issue.Key
+	if r := c.card().Latest("plan"); r != nil {
+		if sess, ok := m.sessionRow(r.Session); ok {
+			return m.planSession(sess)
+		}
+	}
+	for _, r := range c.sessions {
+		if r.Transcript != nil && (r.PlanPath != "" || r.Plan != "") {
+			return m.planSession(r)
+		}
+	}
+	if file := launch.PlanFile(key); plan.Text(file, "") != "" {
+		m.openPlanText(row{}, file, plan.Text(file, ""), "plan for "+key)
+		return m, nil
+	}
+	m.setFlash("no plan yet: "+m.key("board.run")+" runs the plan step", false)
+	return m, nil
+}
+
+func (m *Model) planSession(r row) (tea.Model, tea.Cmd) {
+	md, cmd := m.jumpTo(r)
+	if !m.flashErr {
+		m.setFlash("the plan is in "+r.Name()+": iterate there, then "+m.key("board.plan_ok")+" OKs it", false)
+	}
+	return md, cmd
+}
+
+func waitsOnText(keys []string) string { return "waits on " + strings.Join(keys, ", ") }
 
 // overrideChooser is A: the card's own autopilot settings.
 func (m *Model) overrideChooser(c boardCard) {

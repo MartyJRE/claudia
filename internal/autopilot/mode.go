@@ -2,6 +2,7 @@ package autopilot
 
 import (
 	"regexp"
+	"strconv"
 
 	"github.com/MartyJRE/claudia/internal/board"
 	"github.com/MartyJRE/claudia/internal/config"
@@ -33,6 +34,7 @@ const (
 	Ask                 // it waits for s
 	PlanOK              // implement waits for p on the plan
 	Backoff             // it failed twice on its own; s starts it again
+	Blocked             // the ticket is blocked by others that aren't done
 )
 
 // GateOf reads the gate of the card's next step. planOK: p was pressed on the card.
@@ -41,6 +43,8 @@ func GateOf(a config.Autopilot, over map[string]string, c board.Card, step strin
 	switch {
 	case mode == config.ModeOff:
 		return Off
+	case len(c.WaitsOn(step)) > 0:
+		return Blocked
 	case mode == config.ModeAsk:
 		return Ask
 	case BackedOff(c, step):
@@ -49,6 +53,18 @@ func GateOf(a config.Autopilot, over map[string]string, c board.Card, step strin
 		return PlanOK
 	}
 	return Queued
+}
+
+// PlanOKed reads the stored OK of the card's plan: it counts only when given
+// after the latest plan run finished, so an OK pressed before there was a plan
+// doesn't wave through the one written later.
+func PlanOKed(c board.Card, v string) bool {
+	at, err := strconv.ParseInt(v, 10, 64)
+	if v == "" || err != nil {
+		return v != ""
+	}
+	r := c.Latest("plan")
+	return r == nil || r.Finished.IsZero() || at >= r.Finished.UnixMilli()
 }
 
 // BackedOff: the step's last two runs both failed and both were the

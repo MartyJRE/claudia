@@ -1006,7 +1006,7 @@ func (m *Model) help() [][2]string {
 			return m.reviewHints(c)
 		}
 		return append([][2]string{{m.key("board.left") + "/" + m.key("board.right"), "columns"}, m.hint("board.run", runHint(c)), m.hint("board.run_bg", "in the background")},
-			m.hints("board.plan_ok", "board.override", "board.sessions", "board.claude", "board.claude_bg", "board.open", "board.mr", "board.threads", "board.move", "board.copy")...)
+			m.hints("board.plan_view", "board.plan_ok", "board.override", "board.sessions", "board.claude", "board.claude_bg", "board.open", "board.mr", "board.threads", "board.move", "board.copy")...)
 	case vUsage:
 		return m.hints("usage.layout")
 	}

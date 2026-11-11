@@ -449,6 +449,8 @@ func (m *Model) keyBoard(k string) (tea.Model, tea.Cmd) {
 	case "board.plan_ok":
 		m.planOK(c)
 		return m, nil
+	case "board.plan_view":
+		return m.showPlan(c)
 	case "board.override":
 		m.overrideChooser(c)
 		return m, nil
