@@ -409,7 +409,7 @@ func tui(t *testing.T, res ui.Result, ctx context.Context) {
 func TestTUI(t *testing.T) {
 	isolate(t)
 	// A watcher counts as running, so none is spawned.
-	state.Save("watch.pid", os.Getpid())
+	holdWatchLock(t)
 	swap(t, &executable, func() (string, error) { return "/opt/claudia", nil })
 	swap(t, &lookPath, func(string) (string, error) { return "/bin/tmux", nil })
 	ctx := context.Background()
@@ -604,5 +604,19 @@ func TestCtlTodo(t *testing.T) {
 	json.Unmarshal([]byte(claudia(t, "ctl", "todo", "list").out), &list)
 	if len(list) != 1 || list[0].Ticket != "ABC-7" || list[0].Done.IsZero() {
 		t.Errorf("list %+v", list)
+	}
+}
+
+// holdWatchLock takes the watcher's lock, as a running watcher holds it.
+func holdWatchLock(t *testing.T) {
+	t.Helper()
+	os.MkdirAll(state.Dir(), 0o755)
+	f, err := os.OpenFile(state.Path("watch.lock"), os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { f.Close() })
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		t.Fatal(err)
 	}
 }
