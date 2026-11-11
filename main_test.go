@@ -9,6 +9,11 @@ import (
 
 // Tests must not read the real ~/.config/claudia.
 func TestMain(m *testing.M) {
+	// A test that starts claudia can spawn its watcher as os.Executable() watch,
+	// which here is this test binary: it would rerun every test, spawning more.
+	if len(os.Args) > 1 && os.Args[1] == "watch" {
+		os.Exit(0)
+	}
 	dir, _ := os.MkdirTemp("", "claudia-test")
 	os.Setenv("XDG_CONFIG_HOME", dir)
 	os.Setenv("XDG_STATE_HOME", dir)
