@@ -83,6 +83,11 @@ func (m *Model) claudeForTicket(key, summary string) (tea.Model, tea.Cmd) {
 		intents = append(intents, intent{"fix", fmt.Sprintf("Fix threads on !%d %s", mr.IID, mr.Repo()), func(m *Model) (tea.Model, tea.Cmd) { return m.addressThreads(mr) }})
 	}
 
+	ask, asking := m.askingSession(key)
+	if asking {
+		intents = append([]intent{{"answer", "Answer " + ask.Name(), func(m *Model) (tea.Model, tea.Cmd) { return m.jumpTo(ask) }}}, intents...)
+	}
+
 	fits := "general"
 	pending := false
 	for _, mr := range m.gl.Review {
@@ -91,6 +96,8 @@ func (m *Model) claudeForTicket(key, summary string) (tea.Model, tea.Cmd) {
 		}
 	}
 	switch {
+	case asking:
+		fits = "answer"
 	case pending:
 		fits = "review"
 	case threads != nil:
@@ -106,7 +113,10 @@ func (m *Model) claudeForTicket(key, summary string) (tea.Model, tea.Cmd) {
 	var items []choice
 	for _, it := range intents {
 		hint := ""
-		if it.id == fits {
+		switch {
+		case it.id == "answer":
+			hint = "needs you"
+		case it.id == fits:
 			hint = "fits the ticket's state"
 		}
 		items = append(items, choice{label: it.label, hint: hint, search: it.label, value: it})
@@ -119,6 +129,19 @@ func (m *Model) claudeForTicket(key, summary string) (tea.Model, tea.Cmd) {
 }
 
 var fillBrief = steps.FillBrief
+
+// askingSession is the ticket's session that waits on you, so going back to it
+// beats starting another.
+func (m *Model) askingSession(key string) (row, bool) { return m.askingAmong(m.ix.TicketSess[key]) }
+
+func (m *Model) askingAmong(ids []string) (row, bool) {
+	for _, r := range m.sessions {
+		if r.needsYou() && slices.Contains(ids, r.ID) {
+			return r, true
+		}
+	}
+	return row{}, false
+}
 
 // briefSession is the plain "what is this ticket about" session.
 func (m *Model) briefSession(key, summary string) (tea.Model, tea.Cmd) {

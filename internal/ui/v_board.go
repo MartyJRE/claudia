@@ -465,6 +465,9 @@ func (m *Model) keyBoard(k string) (tea.Model, tea.Cmd) {
 	key := c.issue.Key
 	switch act {
 	case "board.sessions":
+		if r, ok := m.askingSession(key); ok {
+			return m.jumpTo(r)
+		}
 		if ids := m.ix.TicketSess[key]; len(ids) > 0 {
 			m.chooseSessions(ids, "sessions for "+key)
 			return m, nil

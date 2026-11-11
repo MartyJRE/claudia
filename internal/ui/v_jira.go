@@ -358,6 +358,9 @@ func (m *Model) keyJira(k string) (tea.Model, tea.Cmd) {
 	case "jira.copy":
 		return m, copyText(is.Key, is.Key)
 	case "jira.sessions":
+		if r, ok := m.askingSession(is.Key); ok {
+			return m.jumpTo(r)
+		}
 		if len(m.ix.TicketSess[is.Key]) > 0 {
 			m.chooseSessions(m.ix.TicketSess[is.Key], "sessions for "+is.Key)
 			return m, nil

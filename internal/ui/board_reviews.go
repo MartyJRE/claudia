@@ -215,13 +215,17 @@ func (m *Model) keyReviewCard(act string, c boardCard) (tea.Model, tea.Cmd) {
 	mr := *c.mr
 	ref := fmt.Sprintf("!%d", mr.IID)
 	switch act {
-	case "board.sessions":
-		if ids := m.ix.MRSessions[mr.WebURL]; len(ids) > 0 {
+	case "board.sessions", "board.claude":
+		ids := m.ix.MRSessions[mr.WebURL]
+		if r, ok := m.askingAmong(ids); ok {
+			return m.jumpTo(r)
+		}
+		if act == "board.sessions" && len(ids) > 0 {
 			m.chooseSessions(ids, "sessions for "+ref)
 			return m, nil
 		}
 		return m.reviewWithClaude(mr)
-	case "board.claude", "board.claude_bg":
+	case "board.claude_bg":
 		return m.reviewWithClaude(mr)
 	case "board.open", "board.mr":
 		return m, openURL(mr.WebURL)

@@ -223,6 +223,24 @@ func TestReviewCardKeysShell(t *testing.T) {
 		}
 	}
 	m.chooser = nil
+
+	// A review session that waits on you: enter and c go back to it, C still starts another.
+	c, _ := m.currentCard()
+	if err := m.links.AddMRs("aaaaaaaa-wait", []string{c.mr.WebURL}); err != nil {
+		t.Fatal(err)
+	}
+	m.reindex()
+	for _, k := range []string{"enter", "c"} {
+		if pressShell(m, k) == nil || m.chooser != nil {
+			t.Errorf("%s with a session asking: chooser %v", k, m.chooser != nil)
+		}
+	}
+	pressShell(m, "C")
+	if m.chooser == nil || m.chooser.title != "review payments in" {
+		t.Error("C starts a fresh review")
+	}
+	m.chooser = nil
+	m.background = false
 	for _, k := range []string{"o", "M", "y"} {
 		if pressShell(m, k) == nil {
 			t.Errorf("%s: no command", k)

@@ -292,15 +292,22 @@ func TestBoardKeysShell(t *testing.T) {
 		t.Fatalf("enter without sessions: %v", m.chooser != nil)
 	}
 	m.chooser = nil
-	pressShell(m, "l", "k", "enter")
-	if m.chooser == nil || m.chooser.title != "sessions for ABC-1" {
+	pressShell(m, "l", "j", "enter")
+	if m.chooser == nil || m.chooser.title != "sessions for ABC-2" {
 		t.Fatalf("enter with sessions: %v", m.chooser != nil)
 	}
 	m.chooser = nil
+	// ABC-1's session waits on you: enter goes back to it, c offers it first.
+	if pressShell(m, "k", "enter") == nil || m.chooser != nil {
+		t.Fatalf("enter on a card that needs you: chooser %v", m.chooser != nil)
+	}
 	for _, k := range []string{"c", "C"} {
 		pressShell(m, k)
 		if m.chooser == nil || m.background != (k == "C") {
-			t.Errorf("%s: chooser %v background %v", k, m.chooser, m.background)
+			t.Fatalf("%s: chooser %v background %v", k, m.chooser, m.background)
+		}
+		if it, _ := m.chooser.selected(); it.label != "Answer export csv" || it.hint != "needs you" {
+			t.Errorf("%s: cursor on %q %q", k, it.label, it.hint)
 		}
 		m.chooser = nil
 	}
