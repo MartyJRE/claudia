@@ -45,87 +45,147 @@ switches between those sessions.
 | 9 | Notes | Your Obsidian vault as a folder tree, or recently edited first |
 | `tab` | Usage | Tokens and API-equivalent cost per day or per ticket, plan limits |
 
-**Board**, your sprint's tickets in columns: Up next, Plan, Building, Review,
-Merge and QA. No stage is stored; each refresh works it out from Jira, your MRs
-and sessions, first match from the right: a merged MR (and no open one) is QA,
-an approved MR with a green pipeline and no open threads is Merge, an open MR is
-Review, a draft MR or an implementation, fix or test session (or Claude working
-on the ticket's branch) is Building, an analysis session or a plan is Plan.
+Every view lists its keys in the footer, and every key can be rebound (see
+`keys` under [Configuration](#configuration)).
+
+## Board
+
+<img src="assets/board.svg" width="860" alt="Board: tickets in columns by stage, each saying whose turn it is">
+
+Your sprint's tickets in columns: Up next, Plan, Building, Review, Merge and QA.
+Each card says whose turn it is: `◆ needs you` (a session asks, or the Inbox has
+something for the ticket; these go first), Claude at work with its activity, or
+`⧗ waiting` on reviewers, someone a session named, a ticket it's blocked by, or
+a status on hold. Otherwise it's yours and the card shows the next step. Its
+last line has the ticket's cost so far, its sessions, MRs and that step.
+
+On arrival `←`/`→` switch tabs as anywhere else; `↓` steps into the board, and
+`↑` on a column's top card (or `esc`) steps back out.
+
+| Key | On a ticket card |
+|---|---|
+| `h`/`l`, `←`/`→` | move between columns |
+| `enter` | the session that waits on you, else the ticket's sessions, else start one |
+| `c` / `C` | start Claude on it (in the background with `C`); a session that waits on you comes first |
+| `s` / `S` | start the next step (in the background with `S`), see [Steps](#steps) |
+| `v` / `p` | go to the session that planned it / OK the plan, see [Plans and blockers](#plans-and-blockers) |
+| `A` / `P` | this card's autopilot modes / pause the autopilot, see [The autopilot](#the-autopilot) |
+| `o` / `M` / `t` | open it in Jira / its MR / the MR's review threads |
+| `m` / `y` | move it in Jira / copy its key |
+| `a` / `d` / `f` / `r` | the team's sprint / show Done / step through the coming sprints / tickets, reviews or all |
+
+### Stages
+
+No stage is stored; each refresh works it out from Jira, your MRs and sessions,
+first match from the right:
+
+- **QA**: a merged MR and no open one.
+- **Merge**: an approved MR with a green pipeline and no open threads.
+- **Review**: an open MR.
+- **Building**: a draft MR, an implementation, fix or test session, or Claude
+  working on the ticket's branch.
+- **Plan**: an analysis session or a plan.
+
 The Jira status counts too, since merged MRs drop out of GitLab's list after a
 few days: a ticket goes to the further of the two, so one in testing sits in QA.
-Done tickets join as a last column with `d`, tickets planned for a future sprint
-are folded under Up next, and `f` steps the board through the coming sprints and
-back (the subtitle names the sprint shown), and `board.statuses` can pin a Jira status
-to a column. Each card says whose turn it is: `◆ needs you` (a session asks, or
-the Inbox has something for the ticket; these go first), Claude at work with its
-activity, or `⧗ waiting` on reviewers, someone a session named, or a status on
-hold; otherwise it's yours and the card shows the next step. Its last line has
-the ticket's cost so far, sessions, MRs and that step. On arrival
-←/→ switch tabs as anywhere else; `↓` steps into the board, where `h`/`l` and
-←/→ move between columns, and `↑` on a column's top card (or `esc`) steps back
-out. Inside, `enter` lists the ticket's
-sessions or starts one, `c`/`C` start Claude on it, `o` opens it in Jira, `M`
-its MR, `t` the MR's threads, `m` moves it in Jira, `a` shows the team's sprint.
+`board.statuses` can pin a Jira status to a column. Done tickets join as a last
+column with `d`. Tickets planned for a future sprint are folded under Up next,
+and `f` steps the board through the coming sprints and back (the subtitle names
+the sprint shown).
+
+### Review cards
 
 Reviews are a second kind of card, tinted apart: one per open, non-draft MR
-where you're a reviewer, with stages of their own. Requested (no review yet, or
-a push since Claude reviewed it; for a review `s` didn't start, any change to
-the MR counts), Reviewing (a review session is at
-work), Check findings (the session stopped; the card shows the first line of
-what it found and needs you), Waiting on author (you reviewed without
-approving), and Done once you approve, shown with `d`. `r` cycles the board
-between Tickets, Reviews (those four columns) and All (review cards in the
-ticket columns: Requested under Up next, Reviewing under Building, Check
-findings under Review, Waiting on author under Merge), and remembers the choice.
-On Tickets a ticket whose MR waits on your review needs you; on Reviews and All
-the review card says so instead. On a review card `enter` lists its review
-sessions or starts one, `c`/`C` review it with Claude, `o` opens the MR, `t` its
-threads and `y` copies its link. `f` steps through sprints for tickets only.
-Mentions, Teams posts and mail stay in the Inbox and never make cards.
+where you're a reviewer, with stages of their own:
+
+- **Requested**: no review yet, or a push since Claude reviewed it (for a review
+  `s` didn't start, any change to the MR counts).
+- **Reviewing**: a review session is at work.
+- **Check findings**: the session stopped; the card shows the first line of what
+  it found and needs you.
+- **Waiting on author**: you reviewed without approving.
+- **Done** once you approve, shown with `d`.
+
+`r` cycles the board between Tickets, Reviews (those columns) and All (review
+cards in the ticket columns: Requested under Up next, Reviewing under Building,
+Check findings under Review, Waiting on author under Merge), and remembers the
+choice. On Tickets a ticket whose MR waits on your review needs you; on Reviews
+and All the review card says so instead. On a review card `enter` and `c` go to
+the review session that waits on you, else `enter` lists its review sessions and
+`c` reviews it with Claude (`C` starts a fresh review in the background); `o`
+opens the MR, `t` its threads and `y` copies its link. `f` steps through sprints
+for tickets only. Mentions, Teams posts and mail stay in the Inbox and never
+make cards.
+
+### Steps
 
 Each card's last line is its step strip, one segment per step: readiness, plan,
 implement, open MR, feedback, merge and QA notes for a ticket; review and
 findings for a review. Green is done, blue running, yellow needs you, red
 failed, dim not run yet, and the end of the strip says what happens next.
+
 `s` starts the card's next step now, skipping steps already done; `S` starts it
 in the background; on a step that's running or waiting on you it jumps to the
 session instead. A ticket's step runs in the repo on the ticket's branch, the
 one you picked for it before, or the only clone of its MR, and asks only when
-that's unclear. Readiness checks the ticket is specified well enough and, if
-not, posts its questions on the ticket (or its Confluence page) through the
-Atlassian MCP, mentioning whoever last wrote the description (or a colleague it
-credits, while their account is active), and the card waits for answers.
-Whatever a run posts to Jira or Confluence starts with an info panel saying
-Claude wrote it, and on GitLab with a quote of the same sentence
-(`autopilot.comment_note`). Plan and
-implement are the analysis and implementation sessions, open MR pushes and runs
-`glab mr create`, feedback addresses the threads on your MR, QA notes comments
-for the tester, and review is the review session. Merge is the one step without
-a session: it merges the ready MR through GitLab, after a second press. The
-prompts are `readiness_prompt`, `mr_prompt` and `qa_prompt` next to the others.
-A run is told to end with a line `CLAUDIA_RESULT: ok|needs-you|waiting|failed — reason`,
-waiting when it asked someone else and can't go on until they answer, which
-shows a dim `⧗` and stays out of the Inbox (a plan adds `size: simple|medium|large`, a review `no findings` when clean);
-without one, the session's summary decides, and a session that exits with
-neither failed. A run whose context fills up waits on you as `context full`,
-since nothing compacts it on its own; its card shows `ctx 82%` while it runs and
-the watcher pings you once at 90%. The detail panel shows the run now under
-way, the one before, what's next and each step's mode.
+that's unclear.
 
-`v` on a card goes to the session that planned it (resumed if its window was
-closed), to read the plan and iterate on it there before `p` OKs it; `p` with no
-plan yet says so. The plan step keeps its plan in `plans/<KEY>.md` in claudia's
-state directory as you iterate, and implement follows that file. A ticket in
-Plan by its Jira status alone gets planned first.
+- **Readiness** checks the ticket is specified well enough and, if not, posts its
+  questions on the ticket (or its Confluence page) through the Atlassian MCP,
+  mentioning whoever last wrote the description (or a colleague it credits,
+  while their account is active). The card then waits for answers; when the
+  ticket changes, the same session is resumed to check again.
+- **Plan** and **implement** are the analysis and implementation sessions.
+- **Open MR** pushes and runs `glab mr create`.
+- **Feedback** addresses the threads on your MR.
+- **Merge** is the one step without a session: it merges the ready MR through
+  GitLab, after a second press.
+- **QA notes** comments for the tester.
+- **Review** is the review session.
 
-**The autopilot** starts steps without you, from the watcher, so it works with
-claudia closed. Each step has a mode, set per step in `autopilot.steps`:
+The prompts are `analysis_prompt`, `implementation_prompt`, `review_prompt`,
+`readiness_prompt`, `mr_prompt` and `qa_prompt`. Whatever a run posts to Jira or
+Confluence starts with an info panel saying Claude wrote it, and on GitLab with
+a quote of the same sentence (`autopilot.comment_note`).
+
+A run is told to end with a line `CLAUDIA_RESULT: ok|needs-you|waiting|failed — reason`
+(a plan adds `size: simple|medium|large`, a review `no findings` when clean).
+Waiting means it asked someone else and can't go on until they answer, which
+shows a dim `⧗` and stays out of the Inbox. Without a result line the session's
+summary decides, and a session that exits with neither failed. A run whose
+context fills up waits on you as `context full`, since nothing compacts it on
+its own; its card shows `ctx 82%` while it runs and the watcher pings you once
+at 90%. The detail panel shows the run now under way, the one before, what's
+next and each step's mode.
+
+Runs, the cost ledger and the autopilot's state are kept in `state.db` in the
+state dir, which the watcher keeps current with claudia closed. A review run
+remembers the commit it read, so only a push sends the card back to Requested.
+
+### Plans and blockers
+
+A ticket in Plan by its Jira status alone gets planned first: `p` with no plan
+yet says so rather than letting implement start. The plan step keeps its plan in
+`plans/<KEY>.md` in the state dir, and implement follows that file. `v` on a
+card goes to the session that planned it (resumed if its window was closed), to
+read the plan and iterate on it there; the file stays up to date as you do. `p`
+then OKs it; an OK given before the latest plan was written doesn't count.
+
+When Jira says a ticket "is blocked by" one that isn't done, readiness and plan
+still run, but implement and everything after it wait: the card shows
+`⧗ waits on ABC-1`, the autopilot leaves it, and `s` says why. It picks up on
+its own once the blocker is done.
+
+### The autopilot
+
+The autopilot starts steps without you, from the watcher, so it works with
+claudia closed. It's off unless `autopilot.enabled` is set. Each step has a
+mode, set per step in `autopilot.steps`:
 
 | Mode | What happens | The card says |
 |---|---|---|
 | `auto` | the autopilot starts it when the limits allow | `◷ plan queued` |
 | `after-plan-ok` (implement) | auto once `p` OKs the plan, or right away when the plan run called the change simple | `◆ plan OK? · p` |
-| any step after plan, on a ticket Jira says "is blocked by" one not done | waits until the blocker is done; readiness and plan still run | `⧗ waits on ABC-1` |
 | `ask` | waits for `s` | `◆ go ahead with merge? · s` |
 | `off` | never offered | nothing |
 
@@ -133,52 +193,78 @@ Readiness, plan, open MR, feedback, QA notes and review are `auto` by default,
 implement `after-plan-ok`, merge `ask`; merge is never `auto` without
 `autopilot.allow_auto_merge`. `A` on a card overrides the modes for that card
 only (all auto, ask before every step, off, or step by step), shown as `⚙ ask`
-on the card. Before anything starts the limits apply: `autopilot.hours` and
-`days` (Monday to Friday, 9 to 6), `max_running` runs at once (1, yours
-included, and never two on one card), plan usage under `max_five_hour` (60%,
-90% for a window that resets after hours) and `max_seven_day` (80%), at most
-`max_ticket_usd` ($50) per ticket and `max_day_usd` ($30) a day of the
-autopilot's runs, and one review per `review_every` (1h), most recently active MR first; a
-review request whose MR saw no activity for `review_stale_after` (720h, 30 days)
-isn't reviewed on its own. When the status line
-hasn't saved the plan usage lately it's unknown, and only one run goes at a
-time. A step that failed twice on its own waits for `s`. When a limit hits,
-nothing running is stopped; the header pill says why (`⏸ autopilot: 5h window
-64%`) and a notification says when it pauses and resumes. `P` pauses it by
-hand. The most blocking step goes first: merge, feedback, review, QA notes,
-readiness, plan, open MR, implement. A clean review on a green pipeline and the
-head it read is approved, and the MR's Teams post gets ✅
-(`autopilot.review_approve`, `autopilot.review_react`); findings ping you. Runs
-the autopilot starts get `--permission-mode` from `autopilot.permission_mode`
-(`auto` by default; `bypassPermissions` has no sandbox behind it), and it stays
-off a card while someone works it in a session of their own. A run it started
-that ended ok or waits on someone closes its window after two idle minutes
-(never one sharing its window, and never one that needs you or failed); the
-transcript stays, so `enter` on the card resumes it. When a ticket changes after
-readiness asked its questions, the autopilot resumes that same session to read
-the answers and check again.
+on the card. The most blocking step goes first: merge, feedback, review, QA
+notes, readiness, plan, open MR, implement.
 
-Runs, the cost ledger and the autopilot's state are kept in `state.db` in the
-state dir, which the watcher keeps current with claudia closed, and a review run remembers the
-commit it read, so only a push sends the card back to Requested:
+Before anything starts, the limits apply:
 
-<img src="assets/board.svg" width="860" alt="Board: tickets in columns by stage, each saying whose turn it is">
+- **Hours**: `autopilot.hours` and `days` (Monday to Friday, 9 to 6).
+- **Runs**: `max_running` at once (1, yours included, and never two on one card).
+- **Plan usage**: under `max_five_hour` (60%, or `max_five_hour_after_hours`,
+  90%, for a window that resets after hours) and `max_seven_day` (80%). When the
+  status line hasn't saved the plan usage lately it's unknown, and only one run
+  goes at a time.
+- **Cost**: at most `max_ticket_usd` ($50) per ticket and `max_day_usd` ($30) a
+  day of the autopilot's runs.
+- **Reviews**: one per `review_every` (1h), most recently active MR first; a
+  review request whose MR saw no activity for `review_stale_after` (720h, 30
+  days) isn't reviewed on its own.
 
-**Sessions**, grouped by repo, each with its `/color` dot. Under each one, a
+When a limit hits, nothing running is stopped; the header pill says why
+(`⏸ autopilot: 5h window 64%`) and a notification says when it pauses and
+resumes. `P` pauses it by hand, and the pause holds across restarts until you
+press `P` again. A step that failed twice on its own waits for `s`.
+
+A clean review on a green pipeline and the head it read is approved, and the
+MR's Teams post gets ✅ (`autopilot.review_approve`, `autopilot.review_react`);
+findings ping you. Runs the autopilot starts get `--permission-mode` from
+`autopilot.permission_mode` (`auto` by default; `bypassPermissions` has no
+sandbox behind it), and it stays off a card while someone works it in a session
+of their own. A run it started that ended ok or waits on someone closes its
+window after two idle minutes (never one sharing its window, and never one that
+needs you or failed); the transcript stays, so `enter` on the card resumes it.
+The autopilot's runs sit apart in Sessions, in a folded **autopilot runs**
+group at the bottom; one that needs you still shows in the Inbox and on the
+Board.
+
+## Sessions
+
+<img src="assets/sessions.svg" width="860" alt="Sessions grouped by repo, with recently closed ones below">
+
+Sessions are grouped by repo, each with its `/color` dot. Under each one, a
 line says where it stands ("OK to merge?", "Waiting: Michal to approve",
 "PR #5 open"). The watcher writes it on Haiku when the session stops, from the
 last few turns, in a separate headless run that leaves the session itself
 alone. When it says Claude is asking you something, the session shows
 `◆ needs you` and joins the Inbox, as if it were waiting on a prompt; when it
 says the work is done, `✓ done`, so finished sessions stand out to close.
+
 While Claude works, the status says what at, from its newest tool call:
 `running` a command, `editing` or `reading` a file, `delegating` to agents,
 `thinking` between calls (`reviewing` in a review session), each with its own
 small looping glyph, and the command or file follows the session's name.
-A group holding a single session is just that session's row, with the group
-named on it, so there's no header to scroll past:
 
-<img src="assets/sessions.svg" width="860" alt="Sessions grouped by repo, with recently closed ones below">
+The live ones stay in the order they started, so activity never reshuffles the
+list. A group holding a single session is just that session's row, with the
+group named on it. Below them, **Recently closed** keeps the last few closed
+sessions a keypress from coming back.
+
+| Key | In Sessions |
+|---|---|
+| `enter` | jump to the session, or resume a closed one |
+| `R` | resume a closed session |
+| `K` | kill a session; the transcript stays, so `R` brings it back |
+| `m` / `S` / `U` | mark sessions, tile the marked ones side by side, send them back |
+| `t` / `J` | set the session's ticket / go to it |
+| `o` / `y` | open its MR / copy its id |
+| `P` | comment inline on its plan, see [Plan comments](#plan-comments) |
+| `v` / `a` / `space` | layout: by repo, by ticket or flat / show every closed one / fold a group |
+
+`S` tiles the marked sessions (plus the one under the cursor) into one window in
+a `splits` tmux session and takes you there; closing one re-tiles the rest. `U`
+sends each back to a window of its own in the session it came from.
+
+## My MRs, Jira and Usage
 
 **My MRs**, with pipelines, approvals and what changed since you last looked:
 
@@ -200,45 +286,50 @@ transcript on disk. A session counts toward the ticket claudia knows it by (set
 by hand, from its MR or branch), else the last ticket branch in its transcript.
 claudia's own headless runs (brief, summaries) aren't counted.
 
-`u` opens any link in Claude (also `claudia open <link>` from a shell): an MR
-link gets reviewed in your local clone even if it isn't assigned to you, a Jira
-link gets what the ticket needs, anything else lands in a repo you pick. `n`
-starts a plain session in any repo, or in a new one: its last row, `+ new repo`,
-creates the folder, `git init`s it and adds an empty remote as origin. Under
-`personal_dir` (default `Personal`) the remote goes on GitHub via `gh`, private
-unless you pick otherwise. Next to your clones under `work_dir` it goes in their
-GitLab group via `glab`, internal unless you pick otherwise. The default branch
-is asked last, prefilled with `master` on GitLab and `main` on GitHub.
+## Everywhere
 
-The Inbox opens with a short brief in plain English, written by a headless
-`claude -p` over claudia's own data (no tools): who's waited longest, what's
-failing, what to do next. It's rewritten every `brief_every` (default `2h`, `off`
-to disable) and on `R`; `claudia brief` prints a fresh one. `@` opens an
-assistant session that knows claudia's commands, for "what should I do first?"
-and small errands. It lasts the day: `@` jumps back to it or resumes it, and the
-next day asks where to start a fresh one (`assistant_dir` is listed first). `!`
-closes it and starts a clean one now.
+**`c` starts the Claude session the item calls for**: a review for a review
+request, a drafted reply for a mention, fixes for review threads. On a ticket it
+asks which kind (analysis, implementation, general, review, …), with the one
+that fits the ticket's state preselected, so `enter` just goes; a session of the
+ticket's that waits on you comes first. `C` does the same in the background: you
+stay in claudia and get a ping when it needs you.
 
-With an Obsidian vault configured, every ticket shows its notes: the ones in
-its project folder and every note that mentions the key (an epic includes its
-stories' notes). `N` lists them, `enter` reads one, `e` edits it in your editor (`$VISUAL`, else `$EDITOR`, else vi),
-`w` writes a new one into the ticket's folder.
+**The brief.** The Inbox opens with a short brief in plain English, written by a
+headless `claude -p` over claudia's own data (no tools): who's waited longest,
+what's failing, what to do next. It's rewritten every `brief_every` (default
+`2h`, `off` to disable) and on `R`; `claudia brief` prints a fresh one.
 
-`c` starts the Claude session the item calls for: a review for a review request,
-a drafted reply for a mention, fixes for review threads. On a ticket it asks
-which kind (analysis, implementation, general, review, …), with the one that
-fits the ticket's state preselected, so `enter` just goes. `C` does the same in
-the background: you stay in claudia and get a ping when it needs you.
+**The assistant.** `@` opens an assistant session that knows claudia's commands,
+for "what should I do first?" and small errands. It lasts the day: `@` jumps
+back to it or resumes it, and the next day asks where to start a fresh one
+(`assistant_dir` is listed first). `!` closes it and starts a clean one now.
 
-`V` selects several rows, like vim's line-wise visual mode: `j`/`k` extend it,
-`c` (or `C` for the background) asks what to do with them, e.g. "close all of
-these", and hands the lot to one Claude session. It lists what it will do and
-waits for your go-ahead before anything that can't be undone. Works in the
-Inbox, Review, My MRs, Jira, Mentions and Confluence. Every view lists its
-keys in the footer.
+**Links and new sessions.** `u` opens any link in Claude (also
+`claudia open <link>` from a shell): an MR link gets reviewed in your local
+clone even if it isn't assigned to you, a Jira link gets what the ticket needs,
+anything else lands in a repo you pick. `n` starts a plain session in any repo,
+or in a new one: its last row, `+ new repo`, creates the folder, `git init`s it
+and adds an empty remote as origin. Under `personal_dir` (default `Personal`)
+the remote goes on GitHub via `gh`, private unless you pick otherwise. Next to
+your clones under `work_dir` it goes in their GitLab group via `glab`, internal
+unless you pick otherwise. The default branch is asked last, prefilled with
+`master` on GitLab and `main` on GitHub.
 
-`v` switches a view's layout, and the subtitle names the one you're in: the
-Inbox by kind, Review and My MRs by repo (My MRs also by state: failed
+**Notes.** With an Obsidian vault configured, every ticket shows its notes: the
+ones in its project folder and every note that mentions the key (an epic
+includes its stories' notes). `N` lists them, `enter` reads one, `e` edits it in
+your editor (`$VISUAL`, else `$EDITOR`, else vi), `w` writes a new one into the
+ticket's folder.
+
+**Several at once.** `V` selects several rows, like vim's line-wise visual mode:
+`j`/`k` extend it, `c` (or `C` for the background) asks what to do with them,
+e.g. "close all of these", and hands the lot to one Claude session. It lists
+what it will do and waits for your go-ahead before anything that can't be
+undone. Works in the Inbox, Review, My MRs, Jira, Mentions and Confluence.
+
+**Layouts.** `v` switches a view's layout, and the subtitle names the one you're
+in: the Inbox by kind, Review and My MRs by repo (My MRs also by state: failed
 pipeline, open threads, needs rebase, …), Mentions by ticket or space,
 Confluence by space, Jira by sprint › epic, by epic or flat, Notes as folders
 or recently edited. `space` folds a group, and outside Notes `-` folds all and
@@ -246,30 +337,7 @@ or recently edited. `space` folds a group, and outside Notes `-` folds all and
 group named beside it. Each view remembers its layout. In the Inbox and the MR
 views, `t` lists an MR's review threads.
 
-In Sessions, the live ones stay in the order they started, so activity never
-reshuffles the list. Below them, **Recently closed** keeps the last few closed
-sessions a keypress from coming back. The autopilot's runs sit apart, in a
-folded **autopilot runs** group at the bottom; one that needs you still shows
-in the Inbox and on the Board.
-
-| Key | In Sessions |
-|---|---|
-| `enter` | jump to the session, or resume a closed one |
-| `R` | resume a closed session |
-| `K` | kill a session; the transcript stays, so `R` brings it back |
-| `m` / `S` / `U` | mark sessions, tile the marked ones side by side, send them back |
-| `t` / `J` | set the session's ticket / go to it |
-| `o` / `y` | open its MR / copy its id |
-| `P` | comment inline on its plan, see [Plans](#plans) |
-| `v` / `a` / `space` | layout: by repo, by ticket or flat / show every closed one / fold a group |
-
-`S` tiles the marked sessions (plus the one under the cursor) into one window in
-a `splits` tmux session and takes you there; closing one re-tiles the rest. `U`
-sends each back to a window of its own in the session it came from.
-
-Every key can be rebound, see `keys` under [Configuration](#configuration).
-
-## Plans
+## Plan comments
 
 When a session in plan mode shows you its plan, `P` on it (in Sessions, or on
 its Inbox item) opens the plan for inline comments, instead of editing the
@@ -428,6 +496,9 @@ by an environment variable are shown but can't be changed there.
 }
 ```
 
+- `atlassian_url` is your Atlassian site; `jira_project` the project whose
+  sprint the team view shows; `ticket_keys` the project keys claudia recognises
+  in branches and titles (default: `jira_project`).
 - `gitlab_host` defaults to glab's configured host.
 - Claude profiles: every `~/.claude` and `~/.claude-<name>` dir with sessions is
   picked up (named `default` and `<name>`). Name them yourself with
@@ -448,6 +519,8 @@ by an environment variable are shown but can't be changed there.
   `general`, `continue`, `test`, `review`, `fix`, `reply`, `readiness`, `mr`,
   `qa`. `{key}`, `{summary}`
   and `{verb}` are filled in. Without it, sessions are named `<verb>: <summary>`.
+- `brief_every` is how often the Inbox brief is rewritten (default `2h`, `off`
+  to disable).
 - `rounded_pills: false` draws pills and tabs square, for fonts without the Nerd
   Font half circles. Ghostty ships those, so the default is rounded.
 - `terminal` pins the terminal app claudia runs in, e.g. `"iTerm2"`, for when
@@ -464,13 +537,17 @@ by an environment variable are shown but can't be changed there.
 - `board.statuses` pins tickets in a Jira status to a Board column, e.g.
   `{"Ready for QA": "QA", "Blocked": "Up next"}`, over the column claudia works out.
 - `autopilot` turns the autopilot on (`enabled`, off by default) and sets its
-  step modes and limits; see the Board above.
+  step modes and limits; see [The autopilot](#the-autopilot).
 - `keys` rebinds any key outside text input: an action name to a key or a list
   of keys. `claudia keys` lists every action with its current keys and points out
   clashes. claudia also flags clashes when it starts.
 
 Credentials stay in the environment: `ATLASSIAN_EMAIL` and `ATLASSIAN_API_TOKEN`
 (an [Atlassian API token](https://id.atlassian.com/manage-profile/security/api-tokens)).
+These variables override their config fields: `ATLASSIAN_BASE_URL`
+(`atlassian_url`), `CLAUDIA_JIRA_PROJECT`, `CLAUDIA_JIRA_KEYS` (comma-separated
+`ticket_keys`), `CLAUDIA_GITLAB_HOST`, `CLAUDIA_CODE_ROOT`, `CLAUDIA_PREFER`
+(`work_dir`) and `CLAUDIA_WORKERS`.
 
 Plan limits come from Claude Code's status line. Add this to your status line
 script to hand them to claudia:
@@ -560,34 +637,10 @@ itself, like a pasted screenshot, and needs no file permission.
 ## Contributing
 
 Found a bug or have an idea? [Open an issue](https://github.com/MartyJRE/claudia/issues/new/choose).
-The forms ask for what you need to be specific: steps, `claudia version`, your
-setup.
+To work on claudia itself, see [CONTRIBUTING.md](CONTRIBUTING.md): the local
+checks, how releases are cut, the tmux tests and the screenshots. Security
+issues go through [SECURITY.md](SECURITY.md).
 
-CI runs on every push to `main` and every PR. To check locally before pushing:
+## License
 
-```sh
-gofmt -l . && go mod tidy -diff && go vet ./... && go test -race ./...
-```
-
-Every green push to `main` is released: CI tags it with the next patch version
-and goreleaser publishes the binaries, with notes grouped by the commit
-subject's `scope:`. A `Release: minor` or `Release: major` trailer in any commit
-since the last release bumps that part instead.
-
-The tmux tests start a private tmux server, so they never touch your sessions.
-`TestPlanReviewInTmux` goes end to end: it builds the binary, runs a stand-in
-Claude plan prompt (`internal/tmux/testdata/fakeplan.py`, needs `python3`) in one
-pane and `claudia plan` in another, types comments through tmux and checks the
-exact bytes the prompt receives. `go test -short` skips it.
-
-The screenshots in `assets/` are rendered from the real UI with demo data:
-
-```sh
-CLAUDIA_PREVIEWS=assets go test ./internal/ui -run TestWritePreviews
-```
-
-The notification helper in `notifier/` is a Swift package: its logic lives in
-`NotifierCore`, with the AppKit and UserNotifications wiring in the thin
-`claudia-notify` executable. `notifier/coverage.sh` runs its tests and prints
-NotifierCore's coverage; `notifier/build.sh /tmp/Claudia.app` builds the app
-somewhere other than `~/Applications`.
+[MIT](LICENSE)

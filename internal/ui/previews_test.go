@@ -61,6 +61,7 @@ func TestWritePreviews(t *testing.T) {
 		// Last: what it adds would show in the other views.
 		{"board.svg", vBoard, func(m *Model) int {
 			demoBoard(m)
+			m.boardFocus = true // stepped in, so a card and its detail show
 			return m.cur[vBoard].pos
 		}},
 	}
