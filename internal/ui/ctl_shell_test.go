@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -169,5 +170,41 @@ func TestBriefDataShell(t *testing.T) {
 	}
 	if len(got.Sessions) != 3 || got.Sessions[0].Status != "waiting" || got.Sessions[0].Ticket != "ABC-1" {
 		t.Errorf("live sessions only: %+v", got.Sessions)
+	}
+}
+
+func TestPrioShell(t *testing.T) {
+	m := newModelShell(t)
+	if len(m.CtlPrio()) != 0 {
+		t.Error("no run log: no order")
+	}
+	if err := m.SetPrio([]string{"abc-1"}, ""); err == nil || !strings.Contains(err.Error(), "run log isn't open") {
+		t.Errorf("no db: %v", err)
+	}
+	withRunsShell(t, m)
+	other := mrShell("search", 11, "feat: search", "bob", "feat/s", time.Hour)
+	m.gl.Review = append(m.gl.Review, other)
+	for ref, want := range map[string]string{
+		"x?":         "can't tell what",
+		"!99":        "no MR !99",
+		"!11":        "!11 is ambiguous: name the repo, e.g. payments!11",
+		"billing!11": "no MR billing!11",
+	} {
+		if err := m.SetPrio([]string{ref}, ""); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: %v", ref, err)
+		}
+	}
+	link := "https://gitlab.example.com/g/x/-/merge_requests/7/"
+	if err := m.SetPrio([]string{"abc-2", "search!11", "!21", link}, "Zdeněk, grooming"); err != nil {
+		t.Fatal(err)
+	}
+	got := m.CtlPrio()
+	if len(got) != 4 || got[0].Ref != "ABC-2" || got[0].Title != "Invoices" || got[0].Note != "Zdeněk, grooming" ||
+		got[1].Ref != "search!11" || got[1].Subject != other.WebURL || got[1].Title != "feat: search" ||
+		got[2].Ref != "billing!21" || got[3].Subject != strings.TrimRight(link, "/") || got[3].Pos != 4 {
+		t.Errorf("order %+v", got)
+	}
+	if err := m.SetPrio(nil, ""); err != nil || len(m.CtlPrio()) != 0 {
+		t.Errorf("cleared: %v", err)
 	}
 }

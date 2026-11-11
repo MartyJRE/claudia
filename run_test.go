@@ -557,3 +557,24 @@ func TestPlanCommand(t *testing.T) {
 		t.Errorf("outside tmux: %+v", r)
 	}
 }
+
+func TestCtlPrio(t *testing.T) {
+	isolate(t)
+	if r := claudia(t, "ctl", "prio"); r.out != "[]\n" {
+		t.Errorf("no order %+v", r)
+	}
+	if r := claudia(t, "ctl", "prio", "ABC-1", "--note"); r.code != 1 || !strings.Contains(r.err, "--note needs a value") {
+		t.Errorf("note without a value %+v", r)
+	}
+	if r := claudia(t, "ctl", "prio", "what?"); r.code != 1 || !strings.Contains(r.err, `can't tell what "what?" is`) {
+		t.Errorf("bad ref %+v", r)
+	}
+	var got []ui.CtlAgreed
+	r := claudia(t, "ctl", "prio", "abc-2", "--note", "Zdeněk, grooming", "ABC-1")
+	if err := json.Unmarshal([]byte(r.out), &got); err != nil || len(got) != 2 || got[0].Subject != "ABC-2" || got[1].Note != "Zdeněk, grooming" {
+		t.Errorf("set %+v %v", r, err)
+	}
+	if r := claudia(t, "ctl", "prio", "--clear"); r.out != "[]\n" {
+		t.Errorf("cleared %+v", r)
+	}
+}

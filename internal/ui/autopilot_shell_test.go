@@ -296,6 +296,16 @@ func TestShowPlanShell(t *testing.T) {
 	}
 	containsAllShell(t, "viewer", plainShell(m.viewPlan()), "plan · plan for ABC-4", "- step one")
 	m.plan = nil
+	// A session of the ticket's in plan mode: v goes there.
+	plan := cardShell(t, m, "ABC-4")
+	r := m.sessions[0]
+	tr := *r.Transcript
+	tr.PlanPath = "/plans/x.md"
+	r.Transcript = &tr
+	plan.sessions = []row{r}
+	if _, cmd := m.showPlan(plan); cmd == nil || !strings.Contains(m.flash, "the plan is in export csv") {
+		t.Errorf("plan-mode session: %q", m.flash)
+	}
 	// The session that planned it: v goes there.
 	_ = db.Start(runs.Run{ID: "p", Subject: "ABC-4", Step: "plan", Session: "aaaaaaaa-wait", Started: time.Now(), Outcome: runs.OK})
 	m.runCache = nil

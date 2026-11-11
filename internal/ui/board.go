@@ -315,6 +315,9 @@ func (m *Model) layoutBoard(cards, reviews []boardCard, match func(...string) bo
 	}
 	for _, col := range out {
 		slices.SortStableFunc(col, func(a, b boardCard) int {
+			if c := m.place(a) - m.place(b); c != 0 {
+				return c
+			}
 			return boolRank(b.turn == turnNeedsYou) - boolRank(a.turn == turnNeedsYou)
 		})
 	}

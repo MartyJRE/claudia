@@ -189,7 +189,7 @@ func (m *Model) cardLines(c boardCard, w int, sel bool) []string {
 	}
 	inner := w - 2
 	lines := []string{
-		fit(sTicket.Render(c.issue.Key)+m.cardBadge(c), inner),
+		fit(m.agreedChip(c)+sTicket.Render(c.issue.Key)+m.cardBadge(c), inner),
 		fit(sText.Render(c.issue.Summary), inner),
 		fit(cardChips(c), inner),
 		fit(m.stepStrip(c), inner),
@@ -310,6 +310,9 @@ func (m *Model) detailBoard() string {
 	}
 	if is.Parent != "" {
 		meta = append(meta, sTicket.Render(is.Parent)+sDim.Render(" "+is.ParentSummary))
+	}
+	if a := m.agreedMeta(c); a != "" {
+		meta = append(meta, a)
 	}
 	lines = append(lines, strings.Join(meta, sDim.Render("  ·  ")))
 	turn := m.turnBadge(c)
@@ -444,6 +447,12 @@ func (m *Model) keyBoard(k string) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	switch act {
+	case "board.pin":
+		m.pinCard(c)
+		return m, nil
+	case "board.up", "board.down":
+		m.moveCard(c, map[string]int{"board.up": -1, "board.down": 1}[act])
+		return m, nil
 	case "board.run", "board.run_bg":
 		return m.runNext(c)
 	case "board.plan_ok":

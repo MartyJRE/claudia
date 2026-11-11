@@ -158,7 +158,8 @@ type Model struct {
 	db            *runs.Store // the run log; nil when it couldn't be opened
 	dbErr         error
 	runCache      map[string][]runs.Run // per subject, until the next refresh
-	step          *runs.Run             // the run s is starting, for the next session launched
+	agreed        map[string]runs.Agreement
+	step          *runs.Run // the run s is starting, for the next session launched
 	ap            apState
 	sessLoaded    bool
 	sessLoading   bool
@@ -1006,7 +1007,7 @@ func (m *Model) help() [][2]string {
 			return m.reviewHints(c)
 		}
 		return append([][2]string{{m.key("board.left") + "/" + m.key("board.right"), "columns"}, m.hint("board.run", runHint(c)), m.hint("board.run_bg", "in the background")},
-			m.hints("board.plan_view", "board.plan_ok", "board.override", "board.sessions", "board.claude", "board.claude_bg", "board.open", "board.mr", "board.threads", "board.move", "board.copy")...)
+			m.hints("board.plan_view", "board.plan_ok", "board.pin", "board.override", "board.sessions", "board.claude", "board.claude_bg", "board.open", "board.mr", "board.threads", "board.move", "board.copy")...)
 	case vUsage:
 		return m.hints("usage.layout")
 	}

@@ -523,3 +523,22 @@ func TestBlockedBy(t *testing.T) {
 		t.Errorf("unblocked: %v", r.steps())
 	}
 }
+
+func TestAgreedOrder(t *testing.T) {
+	r := newRig(t)
+	active := func(is atlassian.Issue) atlassian.Issue {
+		is.Sprint = &atlassian.Sprint{ID: 42, State: "active"}
+		return is
+	}
+	r.in.Jira.Sprint = []atlassian.Issue{active(issue("ABC-1", "To Do")), active(issue("ABC-2", "To Do"))}
+	// ABC-2 was agreed first; ABC-9's agreement is from a sprint that closed.
+	_ = r.db.SetAgreed([]string{"ABC-9", "ABC-2"}, "", 41, now)
+	_ = r.db.MoveAgreed("ABC-2", 0, 42, now)
+	r.tick()
+	if len(r.started) != 1 || !strings.Contains(r.started[0].Name, "ABC-2") {
+		t.Errorf("agreed first: %v", r.steps())
+	}
+	if got := r.db.Agreed(); len(got) != 1 || got[0].Subject != "ABC-2" {
+		t.Errorf("the closed sprint's agreement is pruned: %+v", got)
+	}
+}

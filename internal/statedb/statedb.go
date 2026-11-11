@@ -56,6 +56,14 @@ var Migrations = []string{
 		last    INTEGER NOT NULL DEFAULT 0
 	);
 	CREATE INDEX costs_ticket ON costs (ticket);`,
+
+	`CREATE TABLE agreed (
+		subject TEXT PRIMARY KEY,
+		pos     INTEGER NOT NULL,
+		note    TEXT NOT NULL DEFAULT '',
+		at      INTEGER NOT NULL,
+		sprint  INTEGER NOT NULL DEFAULT 0
+	);`,
 }
 
 // Open opens state.db in the state dir, migrating it as needed. The TUI and

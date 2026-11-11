@@ -204,6 +204,15 @@ func TestNextStep(t *testing.T) {
 	if !(Card{MR: &review, RStage: Findings}).Passed("review") || (Card{MR: &review, RStage: Reviewing}).Passed("review") {
 		t.Error("review passed")
 	}
+	sprint := func(id int, state string) atlassian.Issue {
+		return atlassian.Issue{Sprint: &atlassian.Sprint{ID: id, State: state}}
+	}
+	if got := ActiveSprint([]atlassian.Issue{sprint(9, "future"), {}, sprint(4, "active"), sprint(3, "active"), sprint(4, "active")}); got != 4 {
+		t.Errorf("active sprint %d", got)
+	}
+	if ActiveSprint([]atlassian.Issue{sprint(9, "future")}) != 0 || ActiveSprint([]atlassian.Issue{sprint(5, "active"), sprint(3, "active")}) != 3 {
+		t.Error("no active sprint, or a tie")
+	}
 	if (Card{MR: &review}).ID() != review.WebURL || (Card{Issue: atlassian.Issue{Key: "ABC-1"}}).ID() != "ABC-1" {
 		t.Error("ids")
 	}

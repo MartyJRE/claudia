@@ -41,6 +41,7 @@ func (m *Model) loadAutopilot() {
 	m.ap.over = m.db.Overrides()
 	m.ap.planOK = m.db.Prefixed(autopilot.KeyPlanOK)
 	m.ap.blocked = m.db.Prefixed(autopilot.KeyBlocked)
+	m.loadAgreed()
 }
 
 // applyAutopilot reads how the card's next step starts, and how full the

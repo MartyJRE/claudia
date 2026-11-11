@@ -4,6 +4,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/MartyJRE/claudia/internal/atlassian"
 	"github.com/MartyJRE/claudia/internal/gitlab"
 	"github.com/MartyJRE/claudia/internal/runs"
 )
@@ -146,4 +147,19 @@ func (c Card) Passed(id string) bool {
 	}
 	i := slices.IndexFunc(TicketSteps, func(s Step) bool { return s.ID == id })
 	return i < StageStep[c.Stage]
+}
+
+// ActiveSprint is the active sprint most of issues are in, by id; 0 when none is.
+func ActiveSprint(issues []atlassian.Issue) int {
+	n := map[int]int{}
+	best := 0
+	for _, is := range issues {
+		if s := is.Sprint; s != nil && s.State == "active" {
+			n[s.ID]++
+			if n[s.ID] > n[best] || n[s.ID] == n[best] && s.ID < best {
+				best = s.ID
+			}
+		}
+	}
+	return best
 }
