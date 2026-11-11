@@ -1000,11 +1000,14 @@ func (m *Model) help() [][2]string {
 		return m.hints("confluence.open", "confluence.copy")
 	case vBoard:
 		if !m.boardFocus {
-			return append([][2]string{{"↓", "step in"}}, m.hints("board.reviews", "board.team", "board.done", "board.later")...)
+			return append([][2]string{{"↓", "step in"}}, m.hints("board.reviews", "board.team", "board.done", "board.later", "board.todo")...)
 		}
 		c, _ := m.currentCard()
-		if c.review() {
+		switch {
+		case c.review():
 			return m.reviewHints(c)
+		case c.isTodo():
+			return m.todoHints()
 		}
 		return append([][2]string{{m.key("board.left") + "/" + m.key("board.right"), "columns"}, m.hint("board.run", runHint(c)), m.hint("board.run_bg", "in the background")},
 			m.hints("board.plan_view", "board.plan_ok", "board.pin", "board.override", "board.sessions", "board.claude", "board.claude_bg", "board.open", "board.mr", "board.threads", "board.move", "board.copy")...)

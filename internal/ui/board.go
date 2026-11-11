@@ -49,6 +49,7 @@ type boardCard struct {
 	mrs      []gitlab.MR
 	cost     claude.TicketCost
 	mr       *gitlab.MR // set on a review card, which has no issue
+	todo     *runs.Todo // set on a todo card, which has neither
 	rstage   rstage
 	runs     []runs.Run // newest first
 	// What the autopilot makes of the card's next step.
@@ -101,7 +102,7 @@ func (m *Model) saveBoardPrefs() { _ = state.Save(boardPrefsFile, m.boardPrefs) 
 
 // card is the boardCard as the board package reads it.
 func (c boardCard) card() board.Card {
-	return board.Card{Issue: c.issue, Stage: c.stage, Why: c.why, Sessions: sessionsOf(c.sessions), MRs: c.mrs, MR: c.mr, RStage: c.rstage, Runs: c.runs}
+	return board.Card{Issue: c.issue, Stage: c.stage, Why: c.why, Sessions: sessionsOf(c.sessions), MRs: c.mrs, MR: c.mr, Todo: c.todo, RStage: c.rstage, Runs: c.runs}
 }
 
 // fromBoard takes a board card in with its sessions' rows.
@@ -269,7 +270,7 @@ func (m *Model) boardColumns() []boardCol {
 
 // layoutBoard lays the cards into the shown columns, needs-you cards first and
 // Jira's rank after that.
-func (m *Model) layoutBoard(cards, reviews []boardCard, match func(...string) bool) [][]boardCard {
+func (m *Model) layoutBoard(cards, reviews, todos []boardCard, match func(...string) bool) [][]boardCard {
 	cols := m.boardColumns()
 	m.vis.boardCols = cols
 	out := make([][]boardCard, len(cols))
@@ -312,6 +313,15 @@ func (m *Model) layoutBoard(cards, reviews []boardCard, match func(...string) bo
 			continue
 		}
 		out[i] = append(out[i], c)
+	}
+	if view != bvReviews && shown == "" {
+		if i := slices.IndexFunc(cols, func(col boardCol) bool { return !col.review && col.st == stUpNext }); i >= 0 {
+			for _, c := range todos {
+				if t := c.todo; match(t.Title, t.Note, t.Asked, t.Project, t.Ticket, "todo") {
+					out[i] = append(out[i], c)
+				}
+			}
+		}
 	}
 	for _, col := range out {
 		slices.SortStableFunc(col, func(a, b boardCard) int {

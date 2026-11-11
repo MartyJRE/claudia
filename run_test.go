@@ -578,3 +578,31 @@ func TestCtlPrio(t *testing.T) {
 		t.Errorf("cleared %+v", r)
 	}
 }
+
+func TestCtlTodo(t *testing.T) {
+	isolate(t)
+	if r := claudia(t, "ctl", "todo"); r.out != "[]\n" {
+		t.Errorf("no todos %+v", r)
+	}
+	for _, args := range [][]string{{"add"}, {"add", "x", "--from"}, {"ticket", "1"}, {"done"}, {"nope"}, {"add", "x", "--project", "OPS"}, {"ticket", "x", "ABC-1"}, {"done", "x"}} {
+		if r := claudia(t, append([]string{"ctl", "todo"}, args...)...); r.code != 1 {
+			t.Errorf("%v: %+v", args, r)
+		}
+	}
+	var todo ui.CtlTodo
+	r := claudia(t, "ctl", "todo", "add", "rotate", "the", "certs", "--from", "Zdeněk", "--note", "before Friday")
+	if err := json.Unmarshal([]byte(r.out), &todo); err != nil || todo.ID != 1 || todo.Title != "rotate the certs" || todo.Asked != "Zdeněk" || todo.Note != "before Friday" {
+		t.Fatalf("add %+v %v", r, err)
+	}
+	if r := claudia(t, "ctl", "todo", "ticket", "1", "abc-7"); r.out != "todo 1 is ABC-7 now\n" {
+		t.Errorf("ticket %+v", r)
+	}
+	if r := claudia(t, "ctl", "todo", "done", "todo:1"); r.out != "ticked off todo 1\n" {
+		t.Errorf("done %+v", r)
+	}
+	var list []ui.CtlTodo
+	json.Unmarshal([]byte(claudia(t, "ctl", "todo", "list").out), &list)
+	if len(list) != 1 || list[0].Ticket != "ABC-7" || list[0].Done.IsZero() {
+		t.Errorf("list %+v", list)
+	}
+}

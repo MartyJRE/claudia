@@ -64,6 +64,17 @@ var Migrations = []string{
 		at      INTEGER NOT NULL,
 		sprint  INTEGER NOT NULL DEFAULT 0
 	);`,
+
+	`CREATE TABLE todos (
+		id      INTEGER PRIMARY KEY AUTOINCREMENT,
+		title   TEXT NOT NULL,
+		note    TEXT NOT NULL DEFAULT '',
+		asked   TEXT NOT NULL DEFAULT '',
+		project TEXT NOT NULL DEFAULT '',
+		ticket  TEXT NOT NULL DEFAULT '',
+		created INTEGER NOT NULL,
+		done    INTEGER NOT NULL DEFAULT 0
+	);`,
 }
 
 // Open opens state.db in the state dir, migrating it as needed. The TUI and

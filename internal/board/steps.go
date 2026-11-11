@@ -18,10 +18,12 @@ var (
 		{"feedback", "feedback"}, {"merge", "merge"}, {"qa", "QA notes"}}
 	// findings isn't run: it's me reading what the review found.
 	ReviewSteps = []Step{{"review", "review"}, {"findings", "findings"}}
+	// A todo has one step of its own: becoming a ticket.
+	TodoSteps = []Step{{"ticket", "ticket"}}
 )
 
 func StepLabel(id string) string {
-	for _, s := range append(slices.Clip(TicketSteps), ReviewSteps...) {
+	for _, s := range slices.Concat(TicketSteps, ReviewSteps, TodoSteps) {
 		if s.ID == id {
 			return s.Label
 		}
@@ -66,6 +68,10 @@ func NextStep(c Card) (string, *runs.Run) {
 	}
 	var walk []string
 	switch {
+	case c.IsTodo():
+		if c.Todo.Ticket == "" && c.Todo.Done.IsZero() {
+			walk = []string{"ticket"}
+		}
 	case c.IsReview():
 		if c.RStage == Requested {
 			walk = []string{"review"}
@@ -118,7 +124,7 @@ func (c Card) Planned() bool {
 // WaitsOn is the unfinished tickets this one is blocked by, when step is one
 // they hold back: readiness and plan go ahead regardless.
 func (c Card) WaitsOn(step string) []string {
-	if c.IsReview() || step == "" || step == "readiness" || step == "plan" {
+	if c.IsReview() || c.IsTodo() || step == "" || step == "readiness" || step == "plan" {
 		return nil
 	}
 	return c.Issue.BlockedBy
@@ -139,6 +145,9 @@ var StageStep = [NStages]int{UpNext: 0, Plan: 2, Building: 3, Review: 4, Merge: 
 
 // Passed: the card is beyond this step whether or not it ran here.
 func (c Card) Passed(id string) bool {
+	if c.IsTodo() {
+		return id == "ticket" && c.Todo.Ticket != ""
+	}
 	if c.IsReview() {
 		return id == "review" && c.RStage != Requested && c.RStage != Reviewing
 	}

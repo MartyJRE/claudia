@@ -86,6 +86,7 @@ type Config struct {
 	// Teams links review requests posted in a Teams channel to their MRs.
 	Teams     Teams     `json:"teams"`
 	Board     Board     `json:"board"`
+	Todos     Todos     `json:"todos"`
 	Autopilot Autopilot `json:"autopilot"`
 }
 
@@ -93,6 +94,23 @@ type Board struct {
 	// Statuses puts the tickets in a Jira status into a Board column by name,
 	// e.g. {"Ready for QA": "QA"}, over the column claudia would work out.
 	Statuses map[string]string `json:"statuses"`
+}
+
+type Todos struct {
+	// Projects are the Jira projects a todo can become a ticket in, the
+	// first one preselected.
+	Projects []string `json:"projects"`
+}
+
+// TodoProjects are todos.projects, else the Jira project.
+func (c Config) TodoProjects() []string {
+	if len(c.Todos.Projects) > 0 {
+		return c.Todos.Projects
+	}
+	if c.JiraProject != "" {
+		return []string{c.JiraProject}
+	}
+	return nil
 }
 
 type Teams struct {

@@ -138,8 +138,11 @@ func outcomeStyle(outcome string) lipgloss.Style {
 // stepStrip is a card's last line: a segment per step, then the step x is on.
 func (m *Model) stepStrip(c boardCard) string {
 	steps := ticketSteps
-	if c.review() {
+	switch {
+	case c.review():
 		steps = reviewSteps
+	case c.isTodo():
+		steps = board.TodoSteps
 	}
 	next, hold := nextStep(c)
 	cur := currentStep(c, next)
@@ -249,6 +252,9 @@ func (m *Model) runNext(c boardCard) (tea.Model, tea.Cmd) {
 		run.Kind = "review"
 	}
 	switch next {
+	case "ticket":
+		run.Kind = "todo"
+		return m.ticketTodo(c, run)
 	case "merge":
 		return m.mergeStep(c, run)
 	case "review":
@@ -364,8 +370,11 @@ func (m *Model) merged(msg mergedMsg) tea.Cmd {
 
 // ref names the card in a flash.
 func (c boardCard) ref() string {
-	if c.review() {
+	switch {
+	case c.review():
 		return fmt.Sprintf("!%d", c.mr.IID)
+	case c.isTodo():
+		return fmt.Sprintf("todo %d", c.todo.ID)
 	}
 	return c.issue.Key
 }

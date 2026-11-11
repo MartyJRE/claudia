@@ -27,8 +27,9 @@ func (m *Model) refilterBoard(match func(...string) bool) {
 	}
 	m.loadAutopilot()
 	cards, reviews := m.boardCards(), m.reviewCards()
+	todos := m.todoCards(cards)
 	m.boardNeeds, m.boardRevNeeds = 0, 0
-	for _, c := range append(slices.Clip(cards), reviews...) {
+	for _, c := range slices.Concat(cards, reviews, todos) {
 		if c.turn == turnNeedsYou && c.stage != stDone {
 			m.boardNeeds++
 			if c.review() {
@@ -36,7 +37,7 @@ func (m *Model) refilterBoard(match func(...string) bool) {
 			}
 		}
 	}
-	m.vis.board = m.layoutBoard(cards, reviews, match)
+	m.vis.board = m.layoutBoard(cards, reviews, todos, match)
 	m.boardCol = max(0, min(m.boardCol, len(m.vis.board)-1))
 	if len(m.vis.board[m.boardCol]) == 0 {
 		if i := slices.IndexFunc(m.vis.board, func(col []boardCard) bool { return len(col) > 0 }); i >= 0 {
@@ -184,8 +185,11 @@ func (m *Model) boardColumn(i, w, h int, moreLeft, moreRight bool) string {
 }
 
 func (m *Model) cardLines(c boardCard, w int, sel bool) []string {
-	if c.review() {
+	switch {
+	case c.review():
 		return m.reviewCardLines(c, w, sel)
+	case c.isTodo():
+		return m.todoCardLines(c, w, sel)
 	}
 	inner := w - 2
 	lines := []string{
@@ -293,8 +297,11 @@ func (m *Model) detailBoard() string {
 		}
 		return m.panel([]string{sDim.Render("↓ steps into the board, ↑ on a column's top card steps back out; outside it ←/→ switch tabs")})
 	}
-	if c.review() {
+	switch {
+	case c.review():
 		return m.detailReview(c)
+	case c.isTodo():
+		return m.detailTodo(c)
 	}
 	is := c.issue
 	lines := []string{sTicket.Render(is.Key) + " " + sBold.Render(is.Summary)}
@@ -424,6 +431,8 @@ func (m *Model) keyBoard(k string) (tea.Model, tea.Cmd) {
 	case "board.pause":
 		m.togglePause()
 		return m, nil
+	case "board.todo":
+		return m, m.askTodo()
 	case "board.later":
 		if m.boardPrefs.view() == bvReviews {
 			m.setFlash("sprints are for tickets: "+m.key("board.reviews")+" shows them", false)
@@ -445,6 +454,9 @@ func (m *Model) keyBoard(k string) (tea.Model, tea.Cmd) {
 			m.setFlash("↓ steps into the board to pick a card", false)
 		}
 		return m, nil
+	}
+	if c.isTodo() {
+		return m.keyTodoCard(act, c)
 	}
 	switch act {
 	case "board.pin":

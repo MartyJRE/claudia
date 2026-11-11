@@ -55,8 +55,11 @@ func (c boardCard) review() bool { return c.mr != nil }
 
 // id keeps the cursor on its card across refreshes.
 func (c boardCard) id() string {
-	if c.review() {
+	switch {
+	case c.review():
 		return c.mr.WebURL
+	case c.isTodo():
+		return c.todo.Subject()
 	}
 	return c.issue.Key
 }
