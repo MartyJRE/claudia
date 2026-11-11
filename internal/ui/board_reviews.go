@@ -148,7 +148,7 @@ func tint(s string, bg lipgloss.Color) string {
 
 func (m *Model) reviewCardLines(c boardCard, w int, sel bool) []string {
 	inner := w - 2
-	head := sKey.Render(fmt.Sprintf("!%d", c.mr.IID)) + " " + sBranch.Render(c.mr.Repo())
+	head := m.agreedChip(c) + sKey.Render(fmt.Sprintf("!%d", c.mr.IID)) + " " + sBranch.Render(c.mr.Repo())
 	// The badge says where the review stands, so it keeps its room and the
 	// repo name gives way.
 	badge := m.reviewBadge(c, inner-lipgloss.Width(head))
@@ -177,6 +177,9 @@ func (m *Model) detailReview(c boardCard) string {
 	mr := *c.mr
 	lines := []string{sKey.Render(fmt.Sprintf("!%d", mr.IID)) + " " + sBold.Render(mr.Title)}
 	meta := []string{sAccent.Render(rstageNames[c.rstage]), sBranch.Render(mr.Project()), sDim.Render("by " + mr.Author.Username)}
+	if a := m.agreedMeta(c); a != "" {
+		meta = append(meta, a)
+	}
 	if p := pipelineChip(mr); p != "" {
 		meta = append(meta, p)
 	}
@@ -246,6 +249,7 @@ func (m *Model) reviewHints(c boardCard) [][2]string {
 		m.hint("board.run", runHint(c)),
 		m.hint("board.run_bg", "in the background"),
 		m.hint("board.override", "autopilot"),
+		m.hint("board.pin", "agreed order"),
 		{m.key("board.sessions"), "sessions"},
 		{m.key("board.claude"), "review with claude"},
 		{m.key("board.claude_bg"), "in the background"},

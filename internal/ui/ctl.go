@@ -3,8 +3,12 @@ package ui
 import (
 	"fmt"
 	"os"
+	"regexp"
+	"slices"
+	"strings"
 	"time"
 
+	"github.com/MartyJRE/claudia/internal/board"
 	"github.com/MartyJRE/claudia/internal/gitlab"
 	"github.com/MartyJRE/claudia/internal/state"
 	"github.com/MartyJRE/claudia/internal/tmux"
@@ -232,4 +236,88 @@ func (m *Model) BriefData() any {
 		}
 	}
 	return out
+}
+
+// CtlAgreed is one card in the agreed order.
+type CtlAgreed struct {
+	Pos     int       `json:"pos"`
+	Ref     string    `json:"ref"`
+	Subject string    `json:"subject"`
+	Title   string    `json:"title,omitempty"`
+	Note    string    `json:"note,omitempty"`
+	Agreed  time.Time `json:"agreed"`
+}
+
+// CtlPrio is the agreed order, once agreements from a closed sprint are gone.
+func (m *Model) CtlPrio() []CtlAgreed {
+	m.loadAgreed()
+	out := []CtlAgreed{}
+	if m.db == nil {
+		return out
+	}
+	for _, a := range m.db.Agreed() {
+		c := CtlAgreed{Pos: a.Pos, Ref: a.Subject, Subject: a.Subject, Note: a.Note, Agreed: a.At}
+		if is, ok := m.ix.Issues[a.Subject]; ok {
+			c.Title = is.Summary
+		}
+		if mr, ok := m.mrByURL(a.Subject); ok {
+			c.Ref, c.Title = mr.Repo()+fmt.Sprintf("!%d", mr.IID), mr.Title
+		}
+		out = append(out, c)
+	}
+	return out
+}
+
+// SetPrio replaces the agreed order with refs: ticket keys, MR links, or
+// !IID / repo!IID for an MR claudia knows.
+func (m *Model) SetPrio(refs []string, note string) error {
+	if m.db == nil {
+		return fmt.Errorf("the run log isn't open: %v", m.dbErr)
+	}
+	var subjects []string
+	for _, ref := range refs {
+		s, err := m.prioSubject(ref)
+		if err != nil {
+			return err
+		}
+		subjects = append(subjects, s)
+	}
+	return m.db.SetAgreed(subjects, note, board.ActiveSprint(m.jira.Sprint), clockNow())
+}
+
+var ticketRef = regexp.MustCompile(`^[A-Z][A-Z0-9]+-\d+$`)
+
+func (m *Model) prioSubject(ref string) (string, error) {
+	switch {
+	case ticketRef.MatchString(strings.ToUpper(ref)):
+		return strings.ToUpper(ref), nil
+	case strings.Contains(ref, "/merge_requests/"):
+		return strings.TrimRight(ref, "/"), nil
+	case strings.Contains(ref, "!"):
+		repo, iid, _ := strings.Cut(ref, "!")
+		var found []gitlab.MR
+		for _, mr := range slices.Concat(m.gl.Review, m.gl.Mine) {
+			if fmt.Sprint(mr.IID) == iid && (repo == "" || mr.Repo() == repo || mr.Project() == repo) &&
+				!slices.ContainsFunc(found, func(o gitlab.MR) bool { return o.WebURL == mr.WebURL }) {
+				found = append(found, mr)
+			}
+		}
+		switch len(found) {
+		case 1:
+			return found[0].WebURL, nil
+		case 0:
+			return "", fmt.Errorf("no MR %s among your reviews and MRs", ref)
+		}
+		return "", fmt.Errorf("%s is ambiguous: name the repo, e.g. %s!%s", ref, found[0].Repo(), iid)
+	}
+	return "", fmt.Errorf("can't tell what %q is: give a ticket key, an MR link or !IID", ref)
+}
+
+func (m *Model) mrByURL(url string) (gitlab.MR, bool) {
+	for _, mr := range slices.Concat(m.gl.Review, m.gl.Mine) {
+		if mr.WebURL == url {
+			return mr, true
+		}
+	}
+	return gitlab.MR{}, false
 }

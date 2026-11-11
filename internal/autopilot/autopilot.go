@@ -180,8 +180,23 @@ func (p *Pilot) Tick(now time.Time, cfg config.Config, in Inputs) Status {
 		queue = append(queue, candidate{c, next, dir, rank, wake})
 	}
 	p.block(blocked)
+	_ = p.DB.PruneAgreed(board.ActiveSprint(in.Jira.Sprint))
+	agreed := map[string]int{}
+	for _, a := range p.DB.Agreed() {
+		agreed[a.Subject] = a.Pos
+	}
+	// Within a tier the agreed order goes first, then the rest as before.
+	place := func(c board.Card) int {
+		if pos, ok := agreed[c.ID()]; ok {
+			return pos
+		}
+		return len(agreed) + 1
+	}
 	slices.SortStableFunc(queue, func(x, y candidate) int {
 		if c := cmp.Compare(slices.Index(order, x.step), slices.Index(order, y.step)); c != 0 {
+			return c
+		}
+		if c := cmp.Compare(place(x.card), place(y.card)); c != 0 {
 			return c
 		}
 		if x.card.IsReview() && y.card.IsReview() {

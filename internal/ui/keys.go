@@ -85,6 +85,9 @@ var actions = []action{
 	{"board.run_bg", []string{"S"}, "start it in the background"},
 	{"board.plan_ok", []string{"p"}, "plan OK"},
 	{"board.plan_view", []string{"v"}, "view the plan"},
+	{"board.pin", []string{"*"}, "agreed order"},
+	{"board.up", []string{"K"}, "agreed up"},
+	{"board.down", []string{"J"}, "agreed down"},
 	{"board.pause", []string{"P"}, "pause/resume the autopilot"},
 	{"board.override", []string{"A"}, "this card's autopilot"},
 

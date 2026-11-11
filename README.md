@@ -69,6 +69,7 @@ On arrival `←`/`→` switch tabs as anywhere else; `↓` steps into the board,
 | `c` / `C` | start Claude on it (in the background with `C`); a session that waits on you comes first |
 | `s` / `S` | start the next step (in the background with `S`), see [Steps](#steps) |
 | `v` / `p` | go to the session that planned it / OK the plan, see [Plans and blockers](#plans-and-blockers) |
+| `*` / `K` / `J` | pin it into the agreed order or take it out / move it up / down, see [Agreed order](#agreed-order) |
 | `A` / `P` | this card's autopilot modes / pause the autopilot, see [The autopilot](#the-autopilot) |
 | `o` / `M` / `t` | open it in Jira / its MR / the MR's review threads |
 | `m` / `y` | move it in Jira / copy its key |
@@ -176,6 +177,26 @@ still run, but implement and everything after it wait: the card shows
 `⧗ waits on ABC-1`, the autopilot leaves it, and `s` says why. It picks up on
 its own once the blocker is done.
 
+### Agreed order
+
+Priorities get agreed out loud, at standup or grooming, more often than in Jira.
+`*` pins a card into that agreed order (last), or takes it out; `K`/`J` move it
+up and down. Pinned cards show their place (`①`, `②`, …) and go first in their
+column, and the autopilot takes them first within each tier of its queue. The
+detail panel says when it was agreed (and by whom, when a note was given). It's
+kept in `state.db`, never written to Jira, and an agreement lapses when the
+sprint it was agreed in closes.
+
+A Claude session can set the whole order from meeting notes:
+
+```sh
+claudia ctl prio ABC-12 payments!231 ABC-9 --note "Zdeněk, grooming"
+claudia ctl prio            # the order now, as JSON
+claudia ctl prio --clear
+```
+
+Cards are ticket keys, MR links or `!IID` (`repo!IID` when two repos have it).
+
 ### The autopilot
 
 The autopilot starts steps without you, from the watcher, so it works with
@@ -194,7 +215,8 @@ implement `after-plan-ok`, merge `ask`; merge is never `auto` without
 `autopilot.allow_auto_merge`. `A` on a card overrides the modes for that card
 only (all auto, ask before every step, off, or step by step), shown as `⚙ ask`
 on the card. The most blocking step goes first: merge, feedback, review, QA
-notes, readiness, plan, open MR, implement.
+notes, readiness, plan, open MR, implement; within each, the
+[agreed order](#agreed-order), then Jira's rank.
 
 Before anything starts, the limits apply:
 
@@ -402,6 +424,7 @@ claudia ctl here            # this session's MRs, ticket and inbox items, as JSO
 claudia ctl inbox           # the whole inbox
 claudia ctl dismiss --here  # snooze this session's inbox items until they change
 claudia ctl home [--close]  # back to claudia; --close also ends the session
+claudia ctl prio <ref>...   # set the agreed order, see Agreed order above
 ```
 
 ## Commands
