@@ -85,6 +85,14 @@ func run(args []string) {
 		fmt.Println(b.Text)
 		return
 	}
+	if len(args) > 0 && args[0] == "standup" {
+		p, err := ui.Headless().WriteStandup()
+		if err != nil {
+			fail(err)
+		}
+		fmt.Println(p.Text)
+		return
+	}
 	if len(args) > 0 && args[0] == "update" {
 		p, err := fetchUpdate()
 		switch {

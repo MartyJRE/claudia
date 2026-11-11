@@ -4,6 +4,7 @@
 package config
 
 import (
+	"cmp"
 	"encoding/json"
 	"os"
 	"os/exec"
@@ -87,6 +88,7 @@ type Config struct {
 	Teams     Teams     `json:"teams"`
 	Board     Board     `json:"board"`
 	Todos     Todos     `json:"todos"`
+	Standup   Standup   `json:"standup"`
 	Autopilot Autopilot `json:"autopilot"`
 }
 
@@ -111,6 +113,29 @@ func (c Config) TodoProjects() []string {
 		return []string{c.JiraProject}
 	}
 	return nil
+}
+
+type Standup struct {
+	// Meeting is a word in the title of your standup in the calendar.
+	Meeting string `json:"meeting"`
+	// Time is when standup is, "09:30", for when the calendar can't tell.
+	Time string `json:"time"`
+	// Language the talking points are written in.
+	Language string `json:"language"`
+}
+
+func (s Standup) MeetingWord() string {
+	return strings.ToLower(cmp.Or(strings.TrimSpace(s.Meeting), "standup"))
+}
+
+func (s Standup) Lang() string { return cmp.Or(strings.TrimSpace(s.Language), "English") }
+
+// At is standup's hour and minute, 09:30 unless set.
+func (s Standup) At() (int, int) {
+	if t, err := time.Parse("15:04", strings.TrimSpace(s.Time)); err == nil {
+		return t.Hour(), t.Minute()
+	}
+	return 9, 30
 }
 
 type Teams struct {
