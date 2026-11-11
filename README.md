@@ -74,6 +74,7 @@ On arrival `←`/`→` switch tabs as anywhere else; `↓` steps into the board,
 | `o` / `M` / `t` | open it in Jira / its MR / the MR's review threads |
 | `m` / `y` | move it in Jira / copy its key |
 | `a` / `d` / `f` / `r` | the team's sprint / show Done / step through the coming sprints / tickets, reviews or all |
+| `T` | note a todo that isn't in Jira, see [Todos](#todos) |
 
 ### Stages
 
@@ -176,6 +177,24 @@ When Jira says a ticket "is blocked by" one that isn't done, readiness and plan
 still run, but implement and everything after it wait: the card shows
 `⧗ waits on ABC-1`, the autopilot leaves it, and `s` says why. It picks up on
 its own once the blocker is done.
+
+### Todos
+
+Some work never reaches Jira: someone stops by and asks. `T` notes it as a
+todo, with who asked, and it joins Up next with a tint of its own. On a todo
+card, `s` (or `enter`, `c`) starts a Claude session that drafts a ticket for it
+and creates it in Jira only after your OK in that session; the ticket then
+takes the todo's place, its spot in the agreed order included. The project is
+the todo's own, the only one in `todos.projects` (default: `jira_project`), or
+one you pick with the first preselected. `x` ticks off a todo that needs no
+ticket, and `*` pins it into the agreed order like any card.
+
+```sh
+claudia ctl todo add "rotate the staging certs" --from Zdeněk --project OPS
+claudia ctl todo                  # open todos and the ones done lately, as JSON
+claudia ctl todo ticket 3 OPS-12  # the session does this once the ticket exists
+claudia ctl todo done 3
+```
 
 ### Agreed order
 
@@ -425,6 +444,7 @@ claudia ctl inbox           # the whole inbox
 claudia ctl dismiss --here  # snooze this session's inbox items until they change
 claudia ctl home [--close]  # back to claudia; --close also ends the session
 claudia ctl prio <ref>...   # set the agreed order, see Agreed order above
+claudia ctl todo add <title> # note a todo, see Todos above
 ```
 
 ## Commands
@@ -557,6 +577,8 @@ by an environment variable are shown but can't be changed there.
   (`hidden`) claudia leaves them out everywhere; `top` or `bottom` lists them
   dim in a folded group at that end of the Sessions tab, with nothing to jump
   to or kill. `CLAUDIA_WORKERS` overrides it.
+- `todos.projects` lists the Jira projects a todo can become a ticket in, the
+  first one preselected, e.g. `["ABC", "OPS"]` (default: `jira_project`).
 - `board.statuses` pins tickets in a Jira status to a Board column, e.g.
   `{"Ready for QA": "QA", "Blocked": "Up next"}`, over the column claudia works out.
 - `autopilot` turns the autopilot on (`enabled`, off by default) and sets its

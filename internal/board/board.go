@@ -133,6 +133,7 @@ type Card struct {
 	Sessions []Session
 	MRs      []gitlab.MR
 	MR       *gitlab.MR // set on a review card, which has no issue
+	Todo     *runs.Todo // set on a todo card, which has neither
 	RStage   RStage
 	Runs     []runs.Run // newest first
 	// A review card's turn is read with its stage; a ticket's is the caller's.
@@ -142,10 +143,15 @@ type Card struct {
 
 func (c Card) IsReview() bool { return c.MR != nil }
 
+func (c Card) IsTodo() bool { return c.Todo != nil }
+
 // ID is what the card's runs and overrides are filed under.
 func (c Card) ID() string {
-	if c.IsReview() {
+	switch {
+	case c.IsReview():
 		return c.MR.WebURL
+	case c.IsTodo():
+		return c.Todo.Subject()
 	}
 	return c.Issue.Key
 }

@@ -88,6 +88,8 @@ var actions = []action{
 	{"board.pin", []string{"*"}, "agreed order"},
 	{"board.up", []string{"K"}, "agreed up"},
 	{"board.down", []string{"J"}, "agreed down"},
+	{"board.todo", []string{"T"}, "new todo"},
+	{"board.todo_done", []string{"x"}, "tick off a todo"},
 	{"board.pause", []string{"P"}, "pause/resume the autopilot"},
 	{"board.override", []string{"A"}, "this card's autopilot"},
 

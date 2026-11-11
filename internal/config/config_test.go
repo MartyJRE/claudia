@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -205,5 +206,17 @@ func TestMail(t *testing.T) {
 	fresh(t, `{"teams": {"mail": {"rules": [{"from": "boss@"}, {"subject": "Approval"}]}}}`)
 	if r := Get().Teams.Mail.Rules; len(r) != 2 || r[0] != (MailRule{From: "boss@"}) || r[1] != (MailRule{Subject: "Approval"}) {
 		t.Errorf("rules %+v", r)
+	}
+}
+
+func TestTodoProjects(t *testing.T) {
+	if got := (Config{JiraProject: "ABC"}).TodoProjects(); !slices.Equal(got, []string{"ABC"}) {
+		t.Errorf("the Jira project: %v", got)
+	}
+	if got := (Config{JiraProject: "ABC", Todos: Todos{Projects: []string{"LUT", "OPS"}}}).TodoProjects(); !slices.Equal(got, []string{"LUT", "OPS"}) {
+		t.Errorf("configured: %v", got)
+	}
+	if (Config{}).TodoProjects() != nil {
+		t.Error("none")
 	}
 }

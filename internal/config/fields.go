@@ -87,6 +87,9 @@ var Fields = []Field{
 	{Key: "board.statuses", Group: "Board", Label: "statuses", Kind: KindJSON,
 		Default: "worked out from MRs and sessions", Help: "puts a Jira status in a Board column: Up next, Plan, Building, Review, Merge, QA or Done",
 		Example: `{"Ready for QA": "QA", "Blocked": "Up next"}`},
+	{Key: "todos.projects", Group: "Board", Label: "todo projects", Kind: KindJSON,
+		Default: "the Jira project", Help: "the Jira projects a todo can become a ticket in; the first is preselected",
+		Example: `["ABC", "OPS"]`},
 
 	{Key: "autopilot.enabled", Group: "Autopilot", Label: "enabled", Kind: KindBool,
 		Default: "off", Help: "the watcher starts Board steps on its own within the limits below; P on the Board pauses it"},

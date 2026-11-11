@@ -23,11 +23,13 @@ import (
 const openRequestFile = "open-request.json"
 
 type promptBox struct {
-	title  string
-	hint   string
-	verb   string // what enter does; "open" when empty
-	in     textinput.Model
-	submit func(*Model, string) (tea.Model, tea.Cmd)
+	title string
+	hint  string
+	verb  string // what enter does; "open" when empty
+	// optional: enter on nothing submits "" rather than doing nothing.
+	optional bool
+	in       textinput.Model
+	submit   func(*Model, string) (tea.Model, tea.Cmd)
 }
 
 func (m *Model) askLink() tea.Cmd {
@@ -62,7 +64,7 @@ func (m *Model) updatePrompt(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		p := m.prompt
 		m.prompt = nil
-		if v := strings.TrimSpace(p.in.Value()); v != "" {
+		if v := strings.TrimSpace(p.in.Value()); v != "" || p.optional {
 			return p.submit(m, v)
 		}
 		return m, nil

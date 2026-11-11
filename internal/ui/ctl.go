@@ -10,6 +10,7 @@ import (
 
 	"github.com/MartyJRE/claudia/internal/board"
 	"github.com/MartyJRE/claudia/internal/gitlab"
+	"github.com/MartyJRE/claudia/internal/runs"
 	"github.com/MartyJRE/claudia/internal/state"
 	"github.com/MartyJRE/claudia/internal/tmux"
 )
@@ -320,4 +321,79 @@ func (m *Model) mrByURL(url string) (gitlab.MR, bool) {
 		}
 	}
 	return gitlab.MR{}, false
+}
+
+// CtlTodo is a todo as `claudia ctl todo` prints it.
+type CtlTodo struct {
+	ID      int64     `json:"id"`
+	Title   string    `json:"title"`
+	Note    string    `json:"note,omitempty"`
+	Asked   string    `json:"asked_by,omitempty"`
+	Project string    `json:"project,omitempty"`
+	Ticket  string    `json:"ticket,omitempty"`
+	Created time.Time `json:"created"`
+	Done    time.Time `json:"done,omitzero"`
+}
+
+func ctlTodo(t runs.Todo) CtlTodo {
+	return CtlTodo{t.ID, t.Title, t.Note, t.Asked, t.Project, t.Ticket, t.Created, t.Done}
+}
+
+func (m *Model) todoDB() (*runs.Store, error) {
+	if m.db == nil {
+		return nil, fmt.Errorf("the run log isn't open: %v", m.dbErr)
+	}
+	return m.db, nil
+}
+
+// CtlTodos is the open todos, and the ones done in the last two weeks.
+func (m *Model) CtlTodos() ([]CtlTodo, error) {
+	db, err := m.todoDB()
+	if err != nil {
+		return nil, err
+	}
+	out := []CtlTodo{}
+	for _, t := range db.Todos(clockNow().Add(-14 * 24 * time.Hour)) {
+		out = append(out, ctlTodo(t))
+	}
+	return out, nil
+}
+
+// AddTodo notes a todo; project must be one a todo can be ticketed in.
+func (m *Model) AddTodo(title, asked, note, project string) (CtlTodo, error) {
+	db, err := m.todoDB()
+	if err != nil {
+		return CtlTodo{}, err
+	}
+	if ps := getConfig().TodoProjects(); project != "" && !slices.Contains(ps, strings.ToUpper(project)) {
+		return CtlTodo{}, fmt.Errorf("%s isn't in todos.projects (%s)", project, strings.Join(ps, ", "))
+	}
+	t, err := db.AddTodo(runs.Todo{Title: title, Asked: asked, Note: note, Project: strings.ToUpper(project), Created: clockNow()})
+	return ctlTodo(t), err
+}
+
+// TicketTodo records the ticket a todo became.
+func (m *Model) TicketTodo(id, key string) error {
+	db, err := m.todoDB()
+	if err != nil {
+		return err
+	}
+	n, ok := runs.TodoID(id)
+	if !ok || !ticketRef.MatchString(strings.ToUpper(key)) {
+		return fmt.Errorf("usage: todo ticket <id> <KEY>, e.g. todo ticket 3 OPS-12")
+	}
+	return db.TicketTodo(n, strings.ToUpper(key))
+}
+
+// DoneTodo ticks a todo off.
+func (m *Model) DoneTodo(id string) error {
+	db, err := m.todoDB()
+	if err != nil {
+		return err
+	}
+	n, ok := runs.TodoID(id)
+	if !ok {
+		return fmt.Errorf("%q isn't a todo id", id)
+	}
+	return db.DoneTodo(n, clockNow())
 }

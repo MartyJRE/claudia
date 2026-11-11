@@ -59,11 +59,16 @@ func Resume(s claude.Session) Spec {
 }
 
 // hint tells the session it can operate claudia itself.
-func hint() []string {
-	self, err := executable()
-	if err != nil {
-		self = "claudia"
+// Self is how a session calls claudia back: this binary, else claudia on PATH.
+func Self() string {
+	if self, err := executable(); err == nil {
+		return self
 	}
+	return "claudia"
+}
+
+func hint() []string {
+	self := Self()
 	return []string{"--append-system-prompt", fmt.Sprintf(
 		"This session runs in tmux, started from claudia, the user's terminal dashboard. "+
 			"`%[1]s ctl here` prints, as JSON, what this session is about: its MRs, its Jira ticket and the claudia inbox items waiting on the user for it. "+

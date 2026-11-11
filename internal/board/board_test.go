@@ -166,6 +166,9 @@ func TestNextStep(t *testing.T) {
 		{"reviewed this head", "", "", Card{MR: &review, RStage: Requested, Runs: []runs.Run{run("review", runs.OK, sha(review.SHA))}}},
 		{"pushed since the review", "review", "", Card{MR: &review, RStage: Requested, Runs: []runs.Run{run("review", runs.OK, sha("old"))}}},
 		{"findings", "", "", Card{MR: &review, RStage: Findings}},
+		{"a todo", "ticket", "", Card{Todo: &runs.Todo{ID: 3}}},
+		{"a ticketed todo", "", "", Card{Todo: &runs.Todo{ID: 3, Ticket: "OPS-1"}}},
+		{"a todo ticked off", "", "", Card{Todo: &runs.Todo{ID: 3, Done: time.Now()}}},
 	} {
 		next, hold := NextStep(c.card)
 		if next != c.next || (hold == nil) != (c.hold == "") || hold != nil && hold.Step != c.hold {
@@ -212,6 +215,11 @@ func TestNextStep(t *testing.T) {
 	}
 	if ActiveSprint([]atlassian.Issue{sprint(9, "future")}) != 0 || ActiveSprint([]atlassian.Issue{sprint(5, "active"), sprint(3, "active")}) != 3 {
 		t.Error("no active sprint, or a tie")
+	}
+	todo := Card{Todo: &runs.Todo{ID: 3}}
+	if todo.ID() != "todo:3" || !todo.IsTodo() || todo.Passed("ticket") || !(Card{Todo: &runs.Todo{Ticket: "OPS-1"}}).Passed("ticket") ||
+		todo.WaitsOn("ticket") != nil || StepLabel("ticket") != "ticket" {
+		t.Error("todo card")
 	}
 	if (Card{MR: &review}).ID() != review.WebURL || (Card{Issue: atlassian.Issue{Key: "ABC-1"}}).ID() != "ABC-1" {
 		t.Error("ids")
