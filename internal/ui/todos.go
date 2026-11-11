@@ -30,7 +30,7 @@ func (m *Model) todoCards(tickets []boardCard) []boardCard {
 	}
 	var out []boardCard
 	for _, t := range m.db.Todos(clockNow()) {
-		if t.Ticket != "" && slices.ContainsFunc(tickets, func(c boardCard) bool { return c.issue.Key == t.Ticket }) {
+		if !t.Done.IsZero() || t.Ticket != "" && slices.ContainsFunc(tickets, func(c boardCard) bool { return c.issue.Key == t.Ticket }) {
 			continue
 		}
 		c := boardCard{todo: &t, stage: stUpNext, runs: m.runsFor(t.Subject())}

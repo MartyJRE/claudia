@@ -44,6 +44,7 @@ switches between those sessions.
 | 8 | Confluence | Pages you edited recently |
 | 9 | Notes | Your Obsidian vault as a folder tree, or recently edited first |
 | `tab` | Usage | Tokens and API-equivalent cost per day or per ticket, plan limits |
+| `tab` | Standup | What you did since the last standup, what's on today, what's blocked |
 
 Every view lists its keys in the footer, and every key can be rebound (see
 `keys` under [Configuration](#configuration)).
@@ -327,6 +328,23 @@ transcript on disk. A session counts toward the ticket claudia knows it by (set
 by hand, from its MR or branch), else the last ticket branch in its transcript.
 claudia's own headless runs (brief, summaries) aren't counted.
 
+## Standup
+
+The Standup tab has your talking points: **Yesterday**, **Today** and
+**Blocked**, a few bullets each, with the facts they came from below so you can
+trust them. They're written once a day, the first time you open the tab, by a
+cheap headless run on Haiku, and `r` rewrites them, `y` copies them.
+
+Yesterday covers the time since the last standup: the latest meeting in your
+calendar whose title has `standup.meeting` (default "standup", through
+[Teams](#teams-setup)), else the previous working day at `standup.time`
+(default 09:30). It takes in the Board's runs, MRs you opened, merged and
+approved, todos ticked off and the sessions you worked in. Today is the
+[agreed order](#agreed-order), tickets in progress, open todos and today's
+meetings; Blocked is every card waiting on someone else, and for how long. The
+points are in `standup.language` (default English). `claudia standup` prints
+fresh ones from a shell.
+
 ## Everywhere
 
 **`c` starts the Claude session the item calls for**: a review for a review
@@ -453,6 +471,7 @@ claudia ctl todo add <title> # note a todo, see Todos above
 claudia                 # open claudia in its own tmux session
 claudia open <link>     # hand a link to claudia, as `u` does
 claudia brief           # print a fresh inbox brief
+claudia standup         # print fresh standup talking points
 claudia keys            # every key action, its current keys and any clashes
 claudia update          # install the newest release from GitHub (ctrl+u inside claudia)
 claudia version         # the release (or commit) this binary was built from
@@ -577,6 +596,9 @@ by an environment variable are shown but can't be changed there.
   (`hidden`) claudia leaves them out everywhere; `top` or `bottom` lists them
   dim in a folded group at that end of the Sessions tab, with nothing to jump
   to or kill. `CLAUDIA_WORKERS` overrides it.
+- `standup.meeting`, `standup.time` and `standup.language`: a word in your
+  standup's calendar title, when it is for when the calendar can't tell, and
+  the language of the talking points; see [Standup](#standup).
 - `todos.projects` lists the Jira projects a todo can become a ticket in, the
   first one preselected, e.g. `["ABC", "OPS"]` (default: `jira_project`).
 - `board.statuses` pins tickets in a Jira status to a Board column, e.g.

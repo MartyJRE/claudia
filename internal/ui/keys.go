@@ -94,6 +94,8 @@ var actions = []action{
 	{"board.override", []string{"A"}, "this card's autopilot"},
 
 	{"usage.layout", []string{"v"}, "layout"},
+	{"standup.refresh", []string{"r"}, "rewrite"},
+	{"standup.copy", []string{"y"}, "copy"},
 
 	{"sessions.jump", []string{"enter"}, "jump"},
 	{"sessions.fold", []string{" "}, "fold"},
@@ -241,6 +243,8 @@ func viewScope(v view) string {
 		return "board"
 	case vUsage:
 		return "usage"
+	case vStandup:
+		return "standup"
 	case vSessions:
 		return "sessions"
 	case vReview, vMine:

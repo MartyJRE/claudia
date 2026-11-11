@@ -22,6 +22,7 @@ import (
 	"github.com/MartyJRE/claudia/internal/links"
 	"github.com/MartyJRE/claudia/internal/repos"
 	"github.com/MartyJRE/claudia/internal/runs"
+	"github.com/MartyJRE/claudia/internal/standup"
 	"github.com/MartyJRE/claudia/internal/steps"
 	"github.com/MartyJRE/claudia/internal/teams"
 	"github.com/MartyJRE/claudia/internal/tmux"
@@ -55,10 +56,11 @@ const (
 	vConfluence
 	vNotes
 	vUsage
+	vStandup
 	nViews
 )
 
-var viewNames = [nViews]string{"Inbox", "Board", "Sessions", "Review", "My MRs", "Jira", "Mentions", "Confluence", "Notes", "Usage"}
+var viewNames = [nViews]string{"Inbox", "Board", "Sessions", "Review", "My MRs", "Jira", "Mentions", "Confluence", "Notes", "Usage", "Standup"}
 
 const detailHeight = 8
 
@@ -158,6 +160,8 @@ type Model struct {
 	db            *runs.Store // the run log; nil when it couldn't be opened
 	dbErr         error
 	runCache      map[string][]runs.Run // per subject, until the next refresh
+	standup       standup.Points
+	standupBusy   bool
 	agreed        map[string]runs.Agreement
 	step          *runs.Run // the run s is starting, for the next session launched
 	ap            apState
@@ -249,6 +253,7 @@ func New(opts Options) *Model {
 	m.atl, m.atlErr = atlassian.New()
 	m.db, m.dbErr = openRuns()
 	m.tm, _ = newTeams()
+	m.standup, _ = standup.Load()
 	m.seen, m.seenExisted = loadSeen()
 	m.loadCaches()
 	m.restore = pendingRestore()
@@ -309,6 +314,9 @@ func (m *Model) reindex() {
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	model, cmd := m.update(msg)
+	if m.view == vStandup && m.standupDue() {
+		cmd = tea.Batch(cmd, m.startStandup())
+	}
 	if a := m.animate(); a != nil {
 		cmd = tea.Batch(cmd, a)
 	}
@@ -392,6 +400,11 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.frame++
 		return m, frame()
+	case standupSinceMsg:
+		return m, m.standupSince(msg)
+	case standupMsg:
+		m.standupWritten(msg)
+		return m, nil
 	case flashMsg:
 		m.setFlash(msg.text, msg.err)
 		return m, nil
@@ -590,6 +603,8 @@ func (m *Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.keyBoard(k)
 	case vUsage:
 		return m.keyUsage(k)
+	case vStandup:
+		return m.keyStandup(k)
 	case vSessions:
 		return m.keySessions(k)
 	case vReview, vMine:
@@ -677,6 +692,8 @@ func (m *Model) viewList(h int) string {
 		return m.listConfluence(h)
 	case vUsage:
 		return m.listUsage(h)
+	case vStandup:
+		return m.listStandup(h)
 	}
 	return ""
 }
@@ -845,6 +862,8 @@ func (m *Model) sourceStatus() string {
 
 func (m *Model) subtitle() string {
 	switch m.view {
+	case vStandup:
+		return m.standupSubtitle()
 	case vNotes:
 		if m.notesPrefs.Recent {
 			return sDim.Render("your vault · recently edited")
@@ -1013,6 +1032,8 @@ func (m *Model) help() [][2]string {
 			m.hints("board.plan_view", "board.plan_ok", "board.pin", "board.override", "board.sessions", "board.claude", "board.claude_bg", "board.open", "board.mr", "board.threads", "board.move", "board.copy")...)
 	case vUsage:
 		return m.hints("usage.layout")
+	case vStandup:
+		return m.hints("standup.refresh", "standup.copy")
 	}
 	return nil
 }
@@ -1038,6 +1059,8 @@ func (m *Model) count() int {
 			return len(m.vis.costRows)
 		}
 		return len(m.vis.usage)
+	case vStandup:
+		return len(m.vis.standup)
 	case vBoard:
 		if m.boardCol < len(m.vis.board) {
 			return len(m.vis.board[m.boardCol])
@@ -1058,6 +1081,7 @@ type visible struct {
 	mentions  []mention
 	pages     []atlassian.Page
 	usage     []usageRow
+	standup   []string
 
 	inboxRows, mrRows, mentionRows, pageRows []lrow
 
@@ -1104,6 +1128,7 @@ func (m *Model) refilter() {
 
 func (m *Model) buildVisible(match func(...string) bool, filtering bool) {
 	m.vis.inbox = m.filterInbox(match)
+	m.vis.standup = m.standupLines()
 	m.vis.notes = m.filterNotes(match, filtering)
 	m.vis.sessions = m.sessionRows(match, filtering)
 	m.vis.mrs = m.filterMRs(match)

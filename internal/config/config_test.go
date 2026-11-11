@@ -220,3 +220,17 @@ func TestTodoProjects(t *testing.T) {
 		t.Error("none")
 	}
 }
+
+func TestStandupDefaults(t *testing.T) {
+	var s Standup
+	if h, m := s.At(); h != 9 || m != 30 || s.MeetingWord() != "standup" || s.Lang() != "English" {
+		t.Error("defaults")
+	}
+	s = Standup{Meeting: " Daily ", Time: "10:15", Language: "Czech"}
+	if h, m := s.At(); h != 10 || m != 15 || s.MeetingWord() != "daily" || s.Lang() != "Czech" {
+		t.Error("set")
+	}
+	if h, _ := (Standup{Time: "soon"}).At(); h != 9 {
+		t.Error("a bad time")
+	}
+}
