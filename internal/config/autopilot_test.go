@@ -23,10 +23,10 @@ func TestAutopilotDefaults(t *testing.T) {
 	if !a.ReviewApprove() || a.ReviewReact() != "✅" || a.MaxRunning() != 1 || a.ReviewEvery() != time.Hour {
 		t.Error("review and running")
 	}
-	if a.CommentNote() != defaultCommentNote || (Autopilot{CommentNoteRaw: " By Claude. "}).CommentNote() != "By Claude." {
+	if a.CommentNote() != "" || (Autopilot{CommentNoteRaw: " By Claude. "}).CommentNote() != "By Claude." {
 		t.Error("comment note")
 	}
-	if i := slices.IndexFunc(Fields, func(f Field) bool { return f.Key == "autopilot.comment_note" }); i < 0 || Fields[i].Default != defaultCommentNote {
+	if i := slices.IndexFunc(Fields, func(f Field) bool { return f.Key == "autopilot.comment_note" }); i < 0 || Fields[i].Default != "none" {
 		t.Error("no comment note setting")
 	}
 	for _, p := range []string{defaultReviewPrompt, defaultImplementationPrompt, defaultAnalysisPrompt, defaultReadinessPrompt, defaultMRPrompt, defaultQAPrompt} {

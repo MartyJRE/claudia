@@ -36,6 +36,10 @@ func TestAsRun(t *testing.T) {
 	if impl := bare.AsRun("run-3", "implement", "ABC-2", "n"); !strings.Contains(impl.Args[3], PlanFile("ABC-2")+" exists, it's the plan I OK'd") {
 		t.Errorf("implement isn't pointed at the plan: %s", impl.Args[3])
 	}
+	if plain := (Spec{}).AsRun("run-4", "qa", "ABC-2", ""); strings.Contains(plain.Args[1], "panel") || strings.Contains(plain.Args[1], "markdown quote") ||
+		!strings.Contains(plain.Args[1], `Never prefix anything with "(claudia)".`) {
+		t.Errorf("no note, no panel: %s", plain.Args[1])
+	}
 	if !slices.Equal(bare.Env, []string{"A=1", "CLAUDIA_RUN=run-2"}) {
 		t.Errorf("env %q", bare.Env)
 	}

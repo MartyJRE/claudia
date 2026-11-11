@@ -42,18 +42,13 @@ type Autopilot struct {
 	// PermissionModeRaw is the --permission-mode of the runs it starts:
 	// default (your usual), acceptEdits, auto (the default) or bypassPermissions.
 	PermissionModeRaw string `json:"permission_mode"`
-	// CommentNoteRaw heads what a run posts to Jira, Confluence or GitLab.
+	// CommentNoteRaw heads what a run posts to Jira, Confluence or GitLab; empty, nothing does.
 	CommentNoteRaw string `json:"comment_note"`
 }
 
-const defaultCommentNote = "Written by Claude, an AI assistant, on my behalf — reply here as usual."
-
 // CommentNote is the sentence a run's posts start with, so colleagues know who wrote them.
 func (a Autopilot) CommentNote() string {
-	if s := strings.TrimSpace(a.CommentNoteRaw); s != "" {
-		return s
-	}
-	return defaultCommentNote
+	return strings.TrimSpace(a.CommentNoteRaw)
 }
 
 var PermissionModes = []string{"default", "acceptEdits", "auto", "bypassPermissions"}

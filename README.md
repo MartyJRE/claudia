@@ -148,8 +148,8 @@ that's unclear.
 
 The prompts are `analysis_prompt`, `implementation_prompt`, `review_prompt`,
 `readiness_prompt`, `mr_prompt` and `qa_prompt`. Whatever a run posts to Jira or
-Confluence starts with an info panel saying Claude wrote it, and on GitLab with
-a quote of the same sentence (`autopilot.comment_note`).
+Confluence starts with `autopilot.comment_note` in an info panel when you set
+one, and on GitLab with it as a quote; by default posts go out as written.
 
 A run is told to end with a line `CLAUDIA_RESULT: ok|needs-you|waiting|failed — reason`
 (a plan adds `size: simple|medium|large`, a review `no findings` when clean).
