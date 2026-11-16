@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/MartyJRE/claudia/internal/claude"
-	"github.com/MartyJRE/claudia/internal/runs"
 	"github.com/MartyJRE/claudia/internal/tmux"
 )
 
@@ -14,7 +13,7 @@ func TestStuckNotes(t *testing.T) {
 	w := newWatcher()
 	all := []claude.Session{{ID: "known", Live: &claude.Live{}}}
 	procs := map[string]claude.Proc{
-		"stuck": {PID: 7, Name: "review: fix it", Age: runs.Grace + time.Second},
+		"stuck": {PID: 7, Name: "review: fix it", Age: claude.StartupGrace + time.Second},
 		"young": {PID: 8, Age: time.Second},
 		"mine":  {PID: 9, Age: time.Hour},
 		"known": {PID: 10, Age: time.Hour},

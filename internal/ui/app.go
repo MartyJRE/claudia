@@ -14,16 +14,13 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/MartyJRE/claudia/internal/atlassian"
-	"github.com/MartyJRE/claudia/internal/board"
 	"github.com/MartyJRE/claudia/internal/brief"
 	"github.com/MartyJRE/claudia/internal/claude"
 	"github.com/MartyJRE/claudia/internal/gitlab"
 	"github.com/MartyJRE/claudia/internal/launch"
 	"github.com/MartyJRE/claudia/internal/links"
 	"github.com/MartyJRE/claudia/internal/repos"
-	"github.com/MartyJRE/claudia/internal/runs"
 	"github.com/MartyJRE/claudia/internal/standup"
-	"github.com/MartyJRE/claudia/internal/steps"
 	"github.com/MartyJRE/claudia/internal/teams"
 	"github.com/MartyJRE/claudia/internal/tmux"
 	"github.com/MartyJRE/claudia/internal/vault"
@@ -47,7 +44,6 @@ type view int
 
 const (
 	vInbox view = iota
-	vBoard
 	vSessions
 	vReview
 	vMine
@@ -60,7 +56,7 @@ const (
 	nViews
 )
 
-var viewNames = [nViews]string{"Inbox", "Board", "Sessions", "Review", "My MRs", "Jira", "Mentions", "Confluence", "Notes", "Usage", "Standup"}
+var viewNames = [nViews]string{"Inbox", "Sessions", "Review", "My MRs", "Jira", "Mentions", "Confluence", "Notes", "Usage", "Standup"}
 
 const detailHeight = 8
 
@@ -90,41 +86,38 @@ func splitWorkers(rows []row) (sessions, workers []row) {
 	return sessions, workers
 }
 
+// The prefixes the watcher's summaries start with.
 const (
-	needsYouPrefix = board.NeedsYouPrefix
-	donePrefix     = board.DonePrefix
-	waitingPrefix  = board.WaitingPrefix
+	needsYouPrefix = "Needs you:"
+	donePrefix     = "Done:"
+	waitingPrefix  = "Waiting:"
 )
 
-// sess is the row as the board reads it.
-func (r row) sess() board.Session {
-	return board.Session{Session: r.Session, Kind: r.kind, Summary: r.summary, SummaryFor: r.summaryFor}
-}
-
-func sessionsOf(rows []row) []board.Session {
-	out := make([]board.Session, len(rows))
-	for i, r := range rows {
-		out[i] = r.sess()
-	}
-	return out
-}
-
 // summarized: the summary was written from the session's latest turn.
-func (r row) summarized(prefix string) bool { return r.sess().Summarized(prefix) }
+func (r row) summarized(prefix string) bool {
+	return strings.HasPrefix(r.summary, prefix) && r.Transcript != nil && r.summaryFor.Equal(r.Updated)
+}
+
+func (r row) working() bool { return r.Live != nil && r.Live.Status.Working() }
 
 // done: stopped, and its summary of that very turn says nothing is left, so
 // it's likely safe to close.
-func (r row) done() bool { return r.sess().Done() }
+func (r row) done() bool {
+	return r.live() && !r.working() && !r.needsYou() && r.summarized(donePrefix)
+}
 
 // needsYou: Claude is waiting on a prompt, or it stopped and its summary of
 // that very turn says it's asking you something.
-func (r row) needsYou() bool { return r.sess().NeedsYou() }
+func (r row) needsYou() bool {
+	if !r.live() || r.working() {
+		return false
+	}
+	return r.Live.Status == claude.StatusWaiting || r.summarized(needsYouPrefix)
+}
 
 type Model struct {
-	// pickWork makes the next repo picker start on the work profile: a ticket is work.
-	pickWork bool
-	opts     Options
-	Result   Result
+	opts   Options
+	Result Result
 
 	km     keymap
 	marked map[string]bool // session ids marked for a split
@@ -136,62 +129,45 @@ type Model struct {
 	visual     *visualSel // rows picked with V
 	background bool       // the action being run was C: start claude without switching to it
 
-	sessions      []row
-	workers       []row           // claudia's own runs, only ever shown in the Sessions tab
-	autoSess      map[string]bool // sessions of runs the autopilot started, grouped apart in the Sessions tab
-	usage         []claude.DayModel
-	usageScanner  *claude.UsageScanner
-	usageLoaded   bool
-	usageLoading  bool
-	usageAt       time.Time
-	ledger        *claude.Ledger
-	costs         map[string]claude.TicketCost
-	jiraPrefs     jiraPrefs
-	boardPrefs    boardPrefs
-	boardFocus    bool            // stepped into the Board: h/l move columns, not tabs
-	boardCol      int             // the Board column the cursor is in
-	boardOff      int             // the first column shown when they don't all fit
-	boardCur      [nStages]cursor // each column's cursor while another has it
-	boardRevNeeds int             // review cards that need you, for the subtitle
-	boardLater    int             // Up next tickets folded away as later sprints
-	boardSprint   int             // 0 the current sprint, n the nth future one (f)
-	boardFutures  []string
-	boardNeeds    int
-	db            *runs.Store // the run log; nil when it couldn't be opened
-	dbErr         error
-	runCache      map[string][]runs.Run // per subject, until the next refresh
-	standup       standup.Points
-	standupBusy   bool
-	agreed        map[string]runs.Agreement
-	step          *runs.Run // the run s is starting, for the next session launched
-	ap            apState
-	sessLoaded    bool
-	sessLoading   bool
-	gl            gitlab.Snapshot
-	jira          atlassian.JiraSnapshot
-	conf          atlassian.ConfluenceSnapshot
-	teams         teams.Snapshot
-	tm            *teams.Client
-	postMRs       map[string]bool // done-ness of MRs in Teams posts that claudia doesn't track
-	repos         []repos.Repo
-	ix            index
-	seen          seenStore
-	seenExisted   bool
-	dismissed     dismissed
-	dismissedAt   time.Time
-	vault         *vault.Index
-	vaultNotes    []vault.Note
-	vaultLoading  bool
-	vaultAt       time.Time
-	notesPrefs    notesPrefs
-	sessPrefs     sessionPrefs
-	listPrefs     listPrefs
-	brief         brief.Brief
-	briefAt       time.Time
-	briefPending  time.Time
-	updateAvail   bool
-	updateAt      time.Time
-	restore       []restoreItem
+	sessions     []row
+	workers      []row // claudia's own runs, only ever shown in the Sessions tab
+	usage        []claude.DayModel
+	usageScanner *claude.UsageScanner
+	usageLoaded  bool
+	usageLoading bool
+	usageAt      time.Time
+	ledger       *claude.Ledger
+	costs        map[string]claude.TicketCost
+	jiraPrefs    jiraPrefs
+	standup      standup.Points
+	standupBusy  bool
+	sessLoaded   bool
+	sessLoading  bool
+	gl           gitlab.Snapshot
+	jira         atlassian.JiraSnapshot
+	conf         atlassian.ConfluenceSnapshot
+	teams        teams.Snapshot
+	tm           *teams.Client
+	postMRs      map[string]bool // done-ness of MRs in Teams posts that claudia doesn't track
+	repos        []repos.Repo
+	ix           index
+	seen         seenStore
+	seenExisted  bool
+	dismissed    dismissed
+	dismissedAt  time.Time
+	vault        *vault.Index
+	vaultNotes   []vault.Note
+	vaultLoading bool
+	vaultAt      time.Time
+	notesPrefs   notesPrefs
+	sessPrefs    sessionPrefs
+	listPrefs    listPrefs
+	brief        brief.Brief
+	briefAt      time.Time
+	briefPending time.Time
+	updateAvail  bool
+	updateAt     time.Time
+	restore      []restoreItem
 
 	busy      [nSources]bool
 	errs      [nSources]error
@@ -237,7 +213,6 @@ func New(opts Options) *Model {
 		opts:       opts,
 		store:      claude.NewStore(claude.DefaultProfiles(), 7*24*time.Hour),
 		jiraPrefs:  loadJiraPrefs(),
-		boardPrefs: loadBoardPrefs(),
 		ledger:     claude.OpenLedger(),
 		vault:      newVault(),
 		notesPrefs: loadNotesPrefs(),
@@ -251,7 +226,6 @@ func New(opts Options) *Model {
 	var problems []string
 	m.km, problems = newKeymap(getConfig().Keys)
 	m.atl, m.atlErr = atlassian.New()
-	m.db, m.dbErr = openRuns()
 	m.tm, _ = newTeams()
 	m.standup, _ = standup.Load()
 	m.seen, m.seenExisted = loadSeen()
@@ -340,10 +314,6 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case sessionsMsg:
 		m.sessions, m.workers = splitWorkers(msg)
-		if m.db != nil {
-			m.autoSess = m.db.SessionsStartedBy(runs.ByAutopilot)
-		}
-		m.runCache = nil
 		m.sessLoaded, m.sessLoading = true, false
 		m.restore = notLive(m.restore, m.sessions)
 		saveLive(m.sessions, m.restore != nil)
@@ -423,13 +393,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.openImages(msg)
 	case startMsg:
 		m.background = msg.background
-		mm, cmd := m.start(msg.sp)
-		if msg.err != nil {
-			m.setFlash("run log: "+msg.err.Error(), true)
-		}
-		return mm, cmd
-	case mergedMsg:
-		return m, m.merged(msg)
+		return m.start(msg.sp)
 	case transitionsMsg:
 		m.showTransitions(msg)
 		return m, nil
@@ -523,11 +487,6 @@ func (m *Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return mm, cmd
 		}
 	}
-	if m.view == vBoard {
-		if mm, cmd, done := m.boardNav(k); done {
-			return mm, cmd
-		}
-	}
 	switch m.action(k) {
 	case "global.visual":
 		if !visualView(m.view) || m.count() == 0 {
@@ -599,8 +558,6 @@ func (m *Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.keyNotes(k)
 	case vInbox:
 		return m.keyInbox(k)
-	case vBoard:
-		return m.keyBoard(k)
 	case vUsage:
 		return m.keyUsage(k)
 	case vStandup:
@@ -622,7 +579,6 @@ func (m *Model) switchView(v view) {
 		return
 	}
 	m.view = v
-	m.boardFocus = false
 	m.visual = nil
 	m.filter.SetValue("")
 	m.refilter()
@@ -678,8 +634,6 @@ func (m *Model) viewList(h int) string {
 		return m.listNotes(h)
 	case vInbox:
 		return m.listInbox(h)
-	case vBoard:
-		return m.listBoard(h)
 	case vSessions:
 		return m.listSessions(h)
 	case vReview, vMine:
@@ -704,8 +658,6 @@ func (m *Model) viewDetail() string {
 		return m.detailNote()
 	case vInbox:
 		return m.detailInbox()
-	case vBoard:
-		return m.detailBoard()
 	case vSessions:
 		return m.detailSession()
 	case vReview, vMine:
@@ -748,9 +700,6 @@ func (m *Model) viewHeader() string {
 	}
 	title := sAccent.Render(" ✻ claudia")
 	var pills []string
-	if p := m.autopilotPill(); p != "" {
-		pills = append(pills, p)
-	}
 	if m.updateAvail {
 		pills = append(pills, pill(black, cyan, "⬆ update · ctrl+u"))
 	}
@@ -810,8 +759,6 @@ func (m *Model) badge(v view) string {
 	switch v {
 	case vInbox:
 		n = m.inboxCount()
-	case vBoard:
-		n = m.boardNeeds
 	case vSessions:
 		n = m.countLive()
 	case vReview:
@@ -833,7 +780,7 @@ func (m *Model) viewSourceOf() (source, bool) {
 	switch m.view {
 	case vReview, vMine, vInbox:
 		return srcGitlab, true
-	case vJira, vMentions, vBoard:
+	case vJira, vMentions:
 		return srcJira, true
 	case vConfluence:
 		return srcConfluence, true
@@ -905,38 +852,6 @@ func (m *Model) subtitle() string {
 		return sDim.Render("Jira and Confluence mentions, last 30 days"+m.listMode(vMentions)) + "  " + hint
 	case vConfluence:
 		return sDim.Render("pages you edited recently" + m.listMode(vConfluence))
-	case vBoard:
-		s := "my tickets"
-		if m.boardPrefs.Team {
-			s = "team sprint"
-		}
-		if sp := m.currentSprint(); sp != "" {
-			s += " in " + sp
-		}
-		switch m.boardPrefs.view() {
-		case bvReviews:
-			s = "MRs waiting on your review"
-		case bvAll:
-			s += " and your reviews"
-		}
-		if m.boardPrefs.Done {
-			s += " incl. done"
-		}
-		s += " by stage"
-		hint := sKey.Render(m.key("board.reviews")) + sDim.Render(" view  ") + sKey.Render(m.key("board.team")) + sDim.Render(" mine/team  ") + sKey.Render(m.key("board.done")) + sDim.Render(" done  ") + sKey.Render(m.key("board.later")) + sDim.Render(" next sprint  ")
-		if m.ap.on {
-			word := " pause  "
-			if m.ap.paused {
-				word = " resume  "
-			}
-			hint += sKey.Render(m.key("board.pause")) + sDim.Render(word)
-		}
-		if m.boardFocus {
-			hint += sKey.Render("↑") + sDim.Render(" on a top card steps out")
-		} else {
-			hint += sKey.Render("↓") + sDim.Render(" steps in")
-		}
-		return m.boardViews() + "  " + sDim.Render(s) + "  " + hint
 	case vUsage:
 		layout := "  " + sKey.Render(m.key("usage.layout")) + sDim.Render(" layout")
 		if m.usageByTicket() {
@@ -1017,19 +932,6 @@ func (m *Model) help() [][2]string {
 		return m.hints("mentions.open", "mentions.dismiss", "mentions.ticket", "mentions.reply", "mentions.reply_bg")
 	case vConfluence:
 		return m.hints("confluence.open", "confluence.copy")
-	case vBoard:
-		if !m.boardFocus {
-			return append([][2]string{{"↓", "step in"}}, m.hints("board.reviews", "board.team", "board.done", "board.later", "board.todo")...)
-		}
-		c, _ := m.currentCard()
-		switch {
-		case c.review():
-			return m.reviewHints(c)
-		case c.isTodo():
-			return m.todoHints()
-		}
-		return append([][2]string{{m.key("board.left") + "/" + m.key("board.right"), "columns"}, m.hint("board.run", runHint(c)), m.hint("board.run_bg", "in the background")},
-			m.hints("board.plan_view", "board.plan_ok", "board.pin", "board.override", "board.sessions", "board.claude", "board.claude_bg", "board.open", "board.mr", "board.threads", "board.move", "board.copy")...)
 	case vUsage:
 		return m.hints("usage.layout")
 	case vStandup:
@@ -1061,27 +963,21 @@ func (m *Model) count() int {
 		return len(m.vis.usage)
 	case vStandup:
 		return len(m.vis.standup)
-	case vBoard:
-		if m.boardCol < len(m.vis.board) {
-			return len(m.vis.board[m.boardCol])
-		}
 	}
 	return 0
 }
 
 type visible struct {
-	board     [][]boardCard // per shown column
-	boardCols []boardCol
-	costRows  []costRow
-	inbox     []inboxItem
-	notes     []nrow
-	sessions  []srow
-	mrs       []mrRow
-	jira      []jrow
-	mentions  []mention
-	pages     []atlassian.Page
-	usage     []usageRow
-	standup   []string
+	costRows []costRow
+	inbox    []inboxItem
+	notes    []nrow
+	sessions []srow
+	mrs      []mrRow
+	jira     []jrow
+	mentions []mention
+	pages    []atlassian.Page
+	usage    []usageRow
+	standup  []string
 
 	inboxRows, mrRows, mentionRows, pageRows []lrow
 
@@ -1117,7 +1013,6 @@ func (m *Model) refilter() {
 	if i := slices.IndexFunc(m.vis.sessions, func(r srow) bool { return r.id() == selected }); selected != "" && i >= 0 {
 		m.cur[vSessions].pos = i
 	}
-	m.refilterBoard(match)
 	for v := view(0); v < nViews; v++ {
 		saved := m.view
 		m.view = v
@@ -1162,7 +1057,6 @@ func (m *Model) measureTables() tableWidths {
 
 // start opens a claude window and jumps to it.
 func (m *Model) start(sp launch.Spec) (tea.Model, tea.Cmd) {
-	m.runCache = nil
 	sp = m.colored(sp, nil)
 	target, err := startSession(sp)
 	if err != nil {
@@ -1192,7 +1086,12 @@ func (m *Model) colored(sp launch.Spec, also []string) launch.Spec {
 			used[r.Color]++
 		}
 	}
-	sp.Color = steps.Color(used)
+	sp.Color = launch.Colors[0]
+	for _, c := range launch.Colors {
+		if used[c] < used[sp.Color] {
+			sp.Color = c
+		}
+	}
 	return sp
 }
 
@@ -1244,14 +1143,7 @@ func (m *Model) pickDir(title, query, pinned string, preferred func(repos.Repo) 
 		}
 	}
 	shift := map[string]int{}
-	work := m.pickWork
-	m.pickWork = false
-	profile := func(m *Model, dir string) claude.Profile {
-		if work {
-			return m.shiftProfile(launch.WorkProfile(m.store.Profiles), shift[dir])
-		}
-		return m.profileFor(dir, shift[dir])
-	}
+	profile := func(m *Model, dir string) claude.Profile { return m.profileFor(dir, shift[dir]) }
 	c := newChooser(title, append(first, rest...), func(m *Model, ch choice) (tea.Model, tea.Cmd) {
 		dir := ch.value.(string)
 		return then(m, dir, profile(m, dir))

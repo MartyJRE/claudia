@@ -143,9 +143,6 @@ func Check(f File) error {
 	if err := CheckBriefEvery(c.BriefEveryRaw); err != nil {
 		return err
 	}
-	if err := CheckAutopilot(c.Autopilot); err != nil {
-		return err
-	}
 	return CheckWorkers(c.WorkersRaw)
 }
 

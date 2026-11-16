@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/MartyJRE/claudia/internal/claude"
-	"github.com/MartyJRE/claudia/internal/runs"
 	"github.com/MartyJRE/claudia/internal/tmux"
 )
 
@@ -16,7 +15,7 @@ func TestStuckAtStartupFull(t *testing.T) {
 	fake(t, &locatePane, func(_ *tmux.Locator, pid int) (tmux.Pane, bool) { return pane, pid == 7 })
 	rows := []row{{Session: claude.Session{ID: "known", Live: &claude.Live{}}}}
 	procs := map[string]claude.Proc{
-		"stuck": {PID: 7, Name: "review: fix it", Age: runs.Grace + time.Second},
+		"stuck": {PID: 7, Name: "review: fix it", Age: claude.StartupGrace + time.Second},
 		"other": {PID: 8, Name: "no pane", Age: time.Hour},
 		"young": {PID: 9, Age: time.Second},
 		"mine":  {PID: 10, Age: time.Hour},
@@ -64,12 +63,5 @@ func TestStuckRowWithTranscript(t *testing.T) {
 	}
 	if s := plainShell(m.status(r)); s != "◆ stuck at startup" {
 		t.Errorf("status %q", s)
-	}
-}
-
-func TestStuckCardTurn(t *testing.T) {
-	stuck := row{Session: claude.Session{ID: "s", Live: &claude.Live{Status: claude.StatusWaiting, Starting: true}}}
-	if tn, next, _ := cardTurn(boardCard{sessions: []row{stuck}}, nil); tn != turnNeedsYou || next != "stuck at startup" {
-		t.Errorf("turn %d %q", tn, next)
 	}
 }

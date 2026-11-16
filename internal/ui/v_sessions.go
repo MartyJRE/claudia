@@ -34,7 +34,7 @@ var sessionCols = []col{
 func (m *Model) filterSessions(match func(...string) bool) []row {
 	var out []row
 	for _, r := range m.sessions {
-		if !m.allSessions && !r.live() || m.autoSess[r.ID] {
+		if !m.allSessions && !r.live() {
 			continue
 		}
 		if match(r.Name(), project(r.Dir()), branch(r), m.ix.SessionTicket[r.ID], r.Profile.Name) {
@@ -155,8 +155,6 @@ func (m *Model) status(r row) string {
 	case s.Working():
 		verb, _ := activity(r)
 		return sOK.Render(m.activityGlyph(verb))
-	case r.summarized(waitingPrefix):
-		return sDim.Render("⧗ waiting")
 	case r.done():
 		return sOK.Render("✓ done")
 	default:

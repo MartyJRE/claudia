@@ -13,7 +13,6 @@ import (
 	"github.com/MartyJRE/claudia/internal/gitlab"
 	"github.com/MartyJRE/claudia/internal/launch"
 	"github.com/MartyJRE/claudia/internal/repos"
-	"github.com/MartyJRE/claudia/internal/runs"
 	"github.com/MartyJRE/claudia/internal/state"
 	"github.com/MartyJRE/claudia/internal/summary"
 	"github.com/MartyJRE/claudia/internal/teams"
@@ -66,7 +65,7 @@ func stuckRows(rows []row, procs map[string]claude.Proc, kinds map[string]string
 	var out []row
 	for id, p := range procs {
 		i, known := at[id]
-		if known && rows[i].Live != nil || kinds[id] == "" || p.Age < runs.Grace {
+		if known && rows[i].Live != nil || kinds[id] == "" || p.Age < claude.StartupGrace {
 			continue
 		}
 		live := &claude.Live{PID: p.PID, SessionID: id, Name: p.Name, Status: claude.StatusWaiting, Starting: true}
@@ -89,7 +88,7 @@ func stuckRows(rows []row, procs map[string]claude.Proc, kinds map[string]string
 }
 
 func (m *Model) loadSessions() tea.Cmd {
-	store, db := m.store, m.db
+	store := m.store
 	return func() tea.Msg {
 		loc := newLocator()
 		sums := summary.Load()
@@ -108,23 +107,7 @@ func (m *Model) loadSessions() tea.Cmd {
 		}
 		procs := processSessions()
 		rows = stuckRows(rows, procs, kinds, loc)
-		if db != nil {
-			seen := make([]runs.Seen, len(rows))
-			for i, r := range rows {
-				seen[i] = runs.SeenOf(r.Session, r.summary, r.summaryFor)
-			}
-			_, _ = db.Reconcile(runs.WithStarting(seen, procs), clockNow())
-			waitingRuns(rows, db.Latest())
-		}
 		return sessionsMsg(rows)
-	}
-}
-
-func waitingRuns(rows []row, latest map[string]runs.Run) {
-	for i, r := range rows {
-		s := r.sess()
-		s.WaitOnRun(latest)
-		rows[i].summary, rows[i].summaryFor = s.Summary, s.SummaryFor
 	}
 }
 

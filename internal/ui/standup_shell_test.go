@@ -8,45 +8,34 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/MartyJRE/claudia/internal/atlassian"
 	"github.com/MartyJRE/claudia/internal/gitlab"
-	"github.com/MartyJRE/claudia/internal/runs"
 	"github.com/MartyJRE/claudia/internal/standup"
 	"github.com/MartyJRE/claudia/internal/teams"
 )
 
 func TestStandupShell(t *testing.T) {
-	m, db := todoBoardShell(t, "ABC")
+	m := newModelShell(t)
 	now := time.Now()
 	since := now.Add(-20 * time.Hour)
-	_ = db.Start(runs.Run{ID: "r1", Subject: "ABC-1", Step: "implement", Session: "s1", Started: now.Add(-3 * time.Hour), Outcome: runs.OK, Reason: "done"})
-	_ = db.Start(runs.Run{ID: "r2", Subject: "ABC-2", Step: "plan", Session: "s2", Started: now.Add(-time.Hour), Outcome: runs.Running})
-	done, _ := db.AddTodo(runs.Todo{Title: "rotate certs", Created: now.Add(-30 * time.Hour)})
-	_ = db.DoneTodo(done.ID, now.Add(-2*time.Hour))
-	_, _ = db.AddTodo(runs.Todo{Title: "bump node", Created: now.Add(-time.Hour)})
-	_ = db.SetAgreed([]string{"ABC-2"}, "", 0, now)
 	merged := mrShell("ledger", 40, "fix: totals", "me", "fix/totals", time.Hour)
 	merged.State, merged.MergedAt = "merged", now.Add(-5*time.Hour)
 	m.gl.Merged = []gitlab.MR{merged}
-	m.gl.Mine[0].CreatedAt = now.Add(-4 * time.Hour)
+	m.gl.Mine = append(m.gl.Mine, mrShell("orders", 41, "feat: refunds", "me", "feat/refunds", 2*time.Hour))
 	m.gl.Review[0].ApprovedBy, m.gl.Review[0].UpdatedAt = []string{m.gl.Me.Username}, now.Add(-time.Hour)
-	_ = db.Start(runs.Run{ID: "r3", Subject: m.gl.Review[0].WebURL, Step: "review", Session: "s3", Started: now.Add(-2 * time.Hour), Outcome: runs.NeedsYou, Reason: "2 findings"})
-	_ = db.Start(runs.Run{ID: "r4", Subject: done.Subject(), Step: "ticket", Session: "s4", Started: now.Add(-2 * time.Hour), Outcome: runs.OK})
-	_ = db.Start(runs.Run{ID: "r5", Subject: "XYZ-9", Step: "qa", Session: "s5", Started: now.Add(-2 * time.Hour), Outcome: runs.Failed})
-	waiting := mrShell("search", 50, "feat: search", "bob", "feat/s", 30*time.Hour)
-	waiting.MyReview = "reviewed"
-	m.gl.Review = append(m.gl.Review, waiting)
+	blocked := atlassian.Issue{Key: "ABC-7", Summary: "Card limits", Status: "Blocked", Category: "indeterminate", Mine: true, Updated: now.Add(-3 * time.Hour)}
+	m.jira.Sprint = append(m.jira.Sprint, blocked)
 	m.teams.Events = []teams.Event{{Subject: "Grooming", Start: now.Add(2 * time.Hour), End: now.Add(3 * time.Hour), Response: "accepted"}}
 	m.reindex()
 
 	f := m.StandupData(since)
-	titles := map[string]string{}
-	for _, r := range f.Yesterday.Runs {
-		titles[r.Card] = r.Title
+	refs := map[string]string{}
+	for _, b := range f.Blocked {
+		refs[b.Ref] = b.WaitsOn
 	}
-	if titles["ABC-1"] != "Payments export" || titles["payments!11"] == "" || titles[done.Subject()] != "rotate certs" || titles["XYZ-9"] != "" ||
-		len(f.Blocked) == 0 || f.Blocked[0].Since.IsZero() ||
-		len(f.Yesterday.TodosDone) != 1 || len(f.Today.Todos) != 1 || len(f.Yesterday.Merged) != 1 || len(f.Yesterday.Opened) == 0 ||
-		len(f.Today.Agreed) != 1 || len(f.Today.InProgress) == 0 || len(f.Today.Meetings) != 1 || len(f.Yesterday.Worked) == 0 {
+	if refs["orders!41"] != "review" || refs["ABC-7"] != "Blocked" ||
+		len(f.Yesterday.Merged) != 1 || len(f.Yesterday.Opened) == 0 || len(f.Yesterday.Reviewed) == 0 ||
+		len(f.Today.InProgress) == 0 || len(f.Today.Meetings) != 1 {
 		t.Errorf("facts %+v", f)
 	}
 
@@ -83,8 +72,8 @@ func TestStandupShell(t *testing.T) {
 		t.Error("saved")
 	}
 	s := screenShell(m)
-	containsAllShell(t, "tab", s, "Standup", "Yesterday", "- shipped ABC-1", "what it was written from", "ABC-1 implement: ok done",
-		"merged ledger!40 fix: totals", "ticked off rotate certs", "① ABC-2", "todo: bump node", "Grooming", "r rewrite", "y copy", "since ")
+	containsAllShell(t, "tab", s, "Standup", "Yesterday", "- shipped ABC-1", "what it was written from",
+		"merged ledger!40 fix: totals", "orders!41 feat: refunds: review", "Grooming", "r rewrite", "y copy", "since ")
 	if m.standupDue() {
 		t.Error("written today")
 	}

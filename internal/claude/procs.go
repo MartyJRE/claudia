@@ -7,6 +7,10 @@ import (
 	"time"
 )
 
+// StartupGrace is how long a fresh session may run without registering before
+// it counts as stuck at startup.
+const StartupGrace = 2 * time.Minute
+
 // Proc is a claude process started for a known session id.
 type Proc struct {
 	PID  int

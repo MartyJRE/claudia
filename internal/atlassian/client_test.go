@@ -9,7 +9,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -135,11 +134,7 @@ func TestFetchJira(t *testing.T) {
 					`,"customfield_10020":[{"id":1,"name":"S1","state":"closed"},{"id":2,"name":"S2","state":"active"}],
 					"parent":{"key":"PAY-100","fields":{"summary":"Epic","status":{"name":"Open","statusCategory":{"key":"new"}},"issuetype":{"name":"Epic"}}}`)+`]}`)
 			case strings.HasPrefix(jql, "assignee = currentUser()"):
-				blocked := func(dir, key, cat string) string {
-					return `{"type":{"inward":"is blocked by","outward":"blocks"},"` + dir + `":{"key":"` + key + `","fields":{"summary":"x","status":{"name":"s","statusCategory":{"key":"` + cat + `"}}}}}`
-				}
-				io.WriteString(w, `{"issues":[`+issueJSON("PAY-2", "two", "To Do", "new", "me", -1,
-					`,"issuelinks":[`+blocked("inwardIssue", "PAY-5", "indeterminate")+","+blocked("inwardIssue", "PAY-6", "done")+","+blocked("outwardIssue", "PAY-7", "new")+`]`)+`]}`)
+				io.WriteString(w, `{"issues":[`+issueJSON("PAY-2", "two", "To Do", "new", "me", -1, "")+`]}`)
 			case strings.HasPrefix(jql, "project = PAY"):
 				io.WriteString(w, `{"issues":[`+issueJSON("PAY-3", "three", "Done", "done", "bob", 0, "")+","+
 					issueJSON("PAY-4", "four", "To Do", "new", "", 0, "")+`]}`)
@@ -175,7 +170,7 @@ func TestFetchJira(t *testing.T) {
 	if want := time.Date(2026, 11, 2, 9, 30, 0, 0, time.UTC); !one.Updated.Equal(want) {
 		t.Errorf("updated %v", one.Updated)
 	}
-	if s.Sprint[1].Level != -1 || s.Sprint[1].Sprint != nil || !slices.Equal(s.Sprint[1].BlockedBy, []string{"PAY-5"}) {
+	if s.Sprint[1].Level != -1 || s.Sprint[1].Sprint != nil {
 		t.Errorf("PAY-2 %+v", s.Sprint[1])
 	}
 	if len(s.Team) != 2 || s.Team[0].Mine || s.Team[0].Assignee != "BOB" || s.Team[1].Assignee != "" {
@@ -183,7 +178,7 @@ func TestFetchJira(t *testing.T) {
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	if !strings.HasSuffix(fieldsAsked[0], ",updated,issuelinks,customfield_10020") {
+	if !strings.HasSuffix(fieldsAsked[0], ",updated,customfield_10020") {
 		t.Errorf("fields %q", fieldsAsked[0])
 	}
 	if len(s.Mentions) != 2 {

@@ -40,7 +40,6 @@ func TestProfileFor(t *testing.T) {
 		want     claude.Profile
 	}{
 		{"/code/Work/pay", []claude.Profile{other, personal, work}, work},
-		{"/code/Work", []claude.Profile{other, personal, work}, work},
 		{"/code/Work/pay", []claude.Profile{other, personal}, other},
 		{"/code/Workshop/x", []claude.Profile{work, personal}, personal},
 		{"/code/Personal/x", []claude.Profile{work, other}, other},
@@ -61,11 +60,6 @@ func TestWindowName(t *testing.T) {
 	}
 	if got := windowName("review", "pay !12"); got != "\U000F0208 pay !12" {
 		t.Errorf("review icon: %q", got)
-	}
-	for _, kind := range []string{"readiness", "mr", "qa"} {
-		if got := windowName(kind, "x"); got == tmux.Icon+" x" {
-			t.Errorf("%s has no icon of its own", kind)
-		}
 	}
 	if got := windowName("unknown", "x"); got != tmux.Icon+" x" {
 		t.Errorf("unknown kind falls back to the robot: %q", got)
