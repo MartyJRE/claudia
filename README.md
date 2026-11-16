@@ -131,7 +131,9 @@ request, a drafted reply for a mention, fixes for review threads. On a ticket it
 asks which kind (analysis, implementation, general, review, …), with the one
 that fits the ticket's state preselected, so `enter` just goes; a session of the
 ticket's that waits on you comes first. `C` does the same in the background: you
-stay in claudia and get a ping when it needs you.
+stay in claudia and get a ping when it needs you. While a session started for an
+Inbox item (or on its MR) runs, the item's row leads with that session's status,
+so you can see it's being handled.
 
 **The brief.** The Inbox opens with a short brief in plain English, written by a
 headless `claude -p` over claudia's own data (no tools): who's waited longest,

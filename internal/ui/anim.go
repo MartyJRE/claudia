@@ -97,7 +97,14 @@ func (m *Model) animates() bool {
 			}
 		}
 	case vInbox:
-		return !m.briefPending.IsZero()
+		if !m.briefPending.IsZero() {
+			return true
+		}
+		for _, it := range m.vis.inbox {
+			if s, ok := m.handling(it); ok && s.working() {
+				return true
+			}
+		}
 	case vReview, vMine:
 		return m.gl.FetchedAt.IsZero() && m.errs[srcGitlab] == nil
 	case vJira:

@@ -56,6 +56,42 @@ type inboxItem struct {
 	tw     teams.Waiting
 }
 
+// key names the item apart from its version, so the sessions started for it
+// stay with it as it changes; "" for an item that is itself a session or
+// starts none.
+func (it inboxItem) key() string {
+	switch it.kind {
+	case kReview, kThreads:
+		return it.mr.WebURL
+	case kMention, kPage:
+		return "ment:" + it.ment.url
+	case kTeams, kMail:
+		return "tm:" + it.tw.Ref
+	}
+	return ""
+}
+
+// handling is the live session working on the item, the one that needs you
+// first: started for it from here, or on its MR.
+func (m *Model) handling(it inboxItem) (row, bool) {
+	k := it.key()
+	if k == "" {
+		return row{}, false
+	}
+	ids := slices.Concat(m.ix.ItemSessions[k], m.ix.MRSessions[it.mr.WebURL])
+	var best row
+	found := false
+	for _, r := range m.sessions {
+		if !r.live() || !slices.Contains(ids, r.ID) {
+			continue
+		}
+		if !found || r.needsYou() && !best.needsYou() || r.needsYou() == best.needsYou() && r.LastActive().After(best.LastActive()) {
+			best, found = r, true
+		}
+	}
+	return best, found
+}
+
 func (m *Model) inbox() []inboxItem {
 	var out []inboxItem
 	for _, mr := range m.gl.Review {
@@ -238,7 +274,11 @@ func (m *Model) inboxCells(i int, sel bool) []string {
 	if it.kind == kMention {
 		where = sTicket.Render(it.where)
 	}
-	return []string{listIndent(r) + waiting(it.since), kindStyle(it.kind).Render(kindLabel[it.kind]), where, sDim.Render(it.who), st.Render(it.text)}
+	text := st.Render(it.text)
+	if s, ok := m.handling(it); ok {
+		text = m.status(s) + "  " + text
+	}
+	return []string{listIndent(r) + waiting(it.since), kindStyle(it.kind).Render(kindLabel[it.kind]), where, sDim.Render(it.who), text}
 }
 
 func (m *Model) currentInbox() (inboxItem, bool) {
@@ -268,6 +308,9 @@ func (m *Model) detailInbox() string {
 		}
 	}
 	lines := []string{head, sDim.Render("waiting since " + it.since.Local().Format("Mon 2 Jan 15:04") + " · " + it.who)}
+	if s, ok := m.handling(it); ok {
+		lines = append(lines, sDim.Render("session: ")+sText.Render(s.Name())+"  "+m.status(s))
+	}
 	switch it.kind {
 	case kReview:
 		lines = append(lines, sText.Render(it.mr.Title), pipelineText(mrRow{it.mr, false})+"  "+m.approvalText(it.mr)+"  "+m.chipsText(mrRow{it.mr, false}))

@@ -18,6 +18,7 @@ type index struct {
 	TicketSess    map[string][]string
 	Issues        map[string]atlassian.Issue
 	MRs           map[string]gitlab.MR
+	ItemSessions  map[string][]string // Inbox item key → sessions started for it
 }
 
 func buildSessionIndex(sessions []claude.Session, gl gitlab.Snapshot, js atlassian.JiraSnapshot, l *links.Links) index {
@@ -29,6 +30,7 @@ func buildSessionIndex(sessions []claude.Session, gl gitlab.Snapshot, js atlassi
 		TicketSess:    map[string][]string{},
 		Issues:        map[string]atlassian.Issue{},
 		MRs:           map[string]gitlab.MR{},
+		ItemSessions:  map[string][]string{},
 	}
 	for _, i := range append(js.Team, js.Sprint...) {
 		ix.Issues[i.Key] = i
@@ -52,6 +54,9 @@ func buildSessionIndex(sessions []claude.Session, gl gitlab.Snapshot, js atlassi
 			if !slices.Contains(urls, u) {
 				urls = append(urls, u)
 			}
+		}
+		for _, k := range l.Items(s.ID) {
+			ix.ItemSessions[k] = append(ix.ItemSessions[k], s.ID)
 		}
 		ix.SessionMRs[s.ID] = urls
 		for _, u := range urls {
