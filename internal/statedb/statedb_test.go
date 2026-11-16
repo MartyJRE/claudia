@@ -12,7 +12,7 @@ import (
 	"github.com/MartyJRE/claudia/internal/state"
 )
 
-// A database made by the first release keeps its runs and gains the new tables.
+// A database made by the first release ends with only the cost ledger.
 func TestMigrateFromOne(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	old := Migrations
@@ -31,13 +31,12 @@ func TestMigrateFromOne(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	var by string
-	if err := db.QueryRow(`SELECT started_by FROM runs WHERE id = 'r'`).Scan(&by); err != nil || by != "" {
-		t.Errorf("started_by %q %v", by, err)
+	if _, err := db.Exec(`SELECT * FROM costs`); err != nil {
+		t.Errorf("costs: %v", err)
 	}
-	for _, table := range []string{"kv", "overrides", "costs"} {
-		if _, err := db.Exec(`SELECT * FROM ` + table); err != nil {
-			t.Errorf("%s: %v", table, err)
+	for _, table := range []string{"runs", "kv", "overrides", "agreed", "todos"} {
+		if _, err := db.Exec(`SELECT * FROM ` + table); err == nil {
+			t.Errorf("%s is still there", table)
 		}
 	}
 }

@@ -1,5 +1,5 @@
 // Package statedb opens state.db, the SQLite file the TUI and the watcher
-// share: the run log, the cost ledger and the autopilot's own state.
+// share: the cost ledger.
 package statedb
 
 import (
@@ -75,6 +75,13 @@ var Migrations = []string{
 		created INTEGER NOT NULL,
 		done    INTEGER NOT NULL DEFAULT 0
 	);`,
+
+	// The run log, autopilot, agreed order and todos were removed.
+	`DROP TABLE IF EXISTS runs;
+	DROP TABLE IF EXISTS kv;
+	DROP TABLE IF EXISTS overrides;
+	DROP TABLE IF EXISTS agreed;
+	DROP TABLE IF EXISTS todos;`,
 }
 
 // Open opens state.db in the state dir, migrating it as needed. The TUI and

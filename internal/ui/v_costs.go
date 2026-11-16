@@ -231,3 +231,11 @@ func (m *Model) detailCost() string {
 	}
 	return m.panel(lines)
 }
+
+func costText(usd float64, unknown bool) string {
+	s := lipgloss.NewStyle().Foreground(yellow).Render(money(usd))
+	if unknown {
+		s += sDim.Render("+?")
+	}
+	return s
+}

@@ -61,11 +61,6 @@ type Config struct {
 	AnalysisPrompt string `json:"analysis_prompt"`
 	// ImplementationPrompt starts implementing a ticket; same placeholders.
 	ImplementationPrompt string `json:"implementation_prompt"`
-	// ReadinessPrompt, MRPrompt and QAPrompt start the Board's readiness, open
-	// MR and QA notes steps; same placeholders.
-	ReadinessPrompt string `json:"readiness_prompt"`
-	MRPrompt        string `json:"mr_prompt"`
-	QAPrompt        string `json:"qa_prompt"`
 	// SessionNames names sessions per intent (analysis, implementation,
 	// general, review, fix, test, continue, reply), e.g. {"analysis":
 	// "{key}-analysis"}; {key}, {summary} and {verb} are filled in.
@@ -85,34 +80,8 @@ type Config struct {
 	// in the Sessions tab: "hidden" (the default), "top" or "bottom".
 	WorkersRaw string `json:"workers"`
 	// Teams links review requests posted in a Teams channel to their MRs.
-	Teams     Teams     `json:"teams"`
-	Board     Board     `json:"board"`
-	Todos     Todos     `json:"todos"`
-	Standup   Standup   `json:"standup"`
-	Autopilot Autopilot `json:"autopilot"`
-}
-
-type Board struct {
-	// Statuses puts the tickets in a Jira status into a Board column by name,
-	// e.g. {"Ready for QA": "QA"}, over the column claudia would work out.
-	Statuses map[string]string `json:"statuses"`
-}
-
-type Todos struct {
-	// Projects are the Jira projects a todo can become a ticket in, the
-	// first one preselected.
-	Projects []string `json:"projects"`
-}
-
-// TodoProjects are todos.projects, else the Jira project.
-func (c Config) TodoProjects() []string {
-	if len(c.Todos.Projects) > 0 {
-		return c.Todos.Projects
-	}
-	if c.JiraProject != "" {
-		return []string{c.JiraProject}
-	}
-	return nil
+	Teams   Teams   `json:"teams"`
+	Standup Standup `json:"standup"`
 }
 
 type Standup struct {
@@ -216,20 +185,6 @@ const defaultAnalysisPrompt = "Read the Jira issue {key} at {brief} and analyse 
 	"what changes where in this codebase, the rollout steps, what's out of scope, and the open questions. " +
 	"Don't change any files and don't write anything to Jira."
 
-const defaultReadinessPrompt = "Read the Jira issue {key} at {brief} and check it's ready to implement: a clear spec, acceptance criteria, and designs where the UI changes. " +
-	"Don't change any files. If it's under-specified, post your concrete questions as one comment on the ticket, or on its linked Confluence page when the spec lives there, " +
-	"with the Atlassian MCP, mentioning who should answer: whoever last changed the description (the newest `description` change in the issue's changelog, and in the description history of a ticket it clones), else the reporter; " +
-	"never someone just for being the assignee, a reviewer or in another people field. Questions about a part the description credits to someone (\"based on analysis of X\") go to them, " +
-	"but only if their Jira account is active and can be mentioned, else to the description's author. With several people, group the questions under each one's mention in that one comment. " +
-	"Then end with `CLAUDIA_RESULT: waiting — asked N questions`. If it's ready, say what you checked."
-
-const defaultMRPrompt = "Jira issue {key} ({brief}) is implemented on this branch. Push the branch and open a merge request with `glab mr create`: " +
-	"a title in the repo's commit style and a description from the plan, saying what changed and why and what the reviewer should look at closely. " +
-	"Stop and ask if the working tree has uncommitted changes or this isn't the ticket's branch."
-
-const defaultQAPrompt = "Jira issue {key} ({brief}) is merged. Look at the MRs that went in for it, then post a comment for the tester on the ticket with the Atlassian MCP: " +
-	"what changed, what to test with concrete steps and expected results, and the risks. Don't change any files."
-
 var (
 	once sync.Once
 	cfg  Config
@@ -320,15 +275,6 @@ func Get() Config {
 		}
 		if cfg.ImplementationPrompt == "" {
 			cfg.ImplementationPrompt = defaultImplementationPrompt
-		}
-		if cfg.ReadinessPrompt == "" {
-			cfg.ReadinessPrompt = defaultReadinessPrompt
-		}
-		if cfg.MRPrompt == "" {
-			cfg.MRPrompt = defaultMRPrompt
-		}
-		if cfg.QAPrompt == "" {
-			cfg.QAPrompt = defaultQAPrompt
 		}
 	})
 	return cfg

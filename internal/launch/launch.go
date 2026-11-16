@@ -2,7 +2,6 @@ package launch
 
 import (
 	"crypto/rand"
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -28,7 +27,6 @@ type Spec struct {
 	ID      string // the Claude session id, when known
 	Kind    string // what it was started for; picks the window's icon
 	Color   string // a /color name to give the session, if any
-	Env     []string
 }
 
 // Colors are the names Claude's /color accepts.
@@ -45,9 +43,6 @@ var kindIcons = map[string]string{
 	"continue":       "\U000F040A", // md-play
 	"look":           "\U000F0337", // md-link
 	"batch":          "\U000F0756", // md-format_list_checks
-	"readiness":      "\U000F014C", // md-clipboard_check
-	"mr":             "\U000F04C2", // md-source_pull
-	"qa":             "\U000F014D", // md-clipboard_text
 }
 
 const kindsFile = "session-kinds.json"
@@ -59,16 +54,11 @@ func Resume(s claude.Session) Spec {
 }
 
 // hint tells the session it can operate claudia itself.
-// Self is how a session calls claudia back: this binary, else claudia on PATH.
-func Self() string {
-	if self, err := executable(); err == nil {
-		return self
-	}
-	return "claudia"
-}
-
 func hint() []string {
-	self := Self()
+	self, err := executable()
+	if err != nil {
+		self = "claudia"
+	}
 	return []string{"--append-system-prompt", fmt.Sprintf(
 		"This session runs in tmux, started from claudia, the user's terminal dashboard. "+
 			"`%[1]s ctl here` prints, as JSON, what this session is about: its MRs, its Jira ticket and the claudia inbox items waiting on the user for it. "+
@@ -87,54 +77,6 @@ func New(dir string, p claude.Profile, name, prompt string) (Spec, string) {
 		args = append(args, prompt)
 	}
 	return Spec{Dir: dir, Profile: p, Name: name, Args: args, ID: id}, id
-}
-
-// AsRun makes the session claudia run id of step on subject: it gets
-// CLAUDIA_RUN and is told to end with a result line. The note joins the
-// appended system prompt, since a second --append-system-prompt replaces the
-// first. Whatever the run posts starts with commentNote, when there is one.
-func (sp Spec) AsRun(id, step, subject, commentNote string) Spec {
-	note := fmt.Sprintf("This is claudia run %s, step %s for %s. When you're done, or stuck, end your last message with exactly one line "+
-		"`CLAUDIA_RESULT: ok|needs-you|waiting|failed — <short reason>`; waiting means you asked someone else (on Jira, an MR, Teams) and the step can't go on until they answer. Keep your own context lean: push broad searches and big reads into subagents, since this session doesn't compact on its own.", id, step, subject)
-	if commentNote != "" {
-		text, _ := json.Marshal(commentNote)
-		note += fmt.Sprintf(" When you post anything to Jira or Confluence, use the Atlassian MCP with ADF content (contentFormat and responseContentFormat \"adf\" where the tool takes them) "+
-			"and start the body with this panel node, then the rest as normal ADF: "+
-			`{"type":"panel","attrs":{"panelType":"info"},"content":[{"type":"paragraph","content":[{"type":"text","text":%s}]}]}.`+
-			" When you post to GitLab (MR notes or threads), start with the same sentence as a markdown quote: `> %s`.", text, commentNote)
-	}
-	note += ` Never prefix anything with "(claudia)".`
-	switch step {
-	case "plan":
-		note += fmt.Sprintf(" Write the plan as markdown to %s, replacing what's there: what changes where, the steps in order, and the open questions. "+
-			"I'll read it and may iterate on it with you in this session before I OK it; keep that file up to date with every change we agree on, since implementation follows it. "+
-			"The reason says how big the change is: `size: simple`, `size: medium` or `size: large`; simple is a small change with no open questions.", PlanFile(subject))
-	case "implement":
-		note += fmt.Sprintf(" If %s exists, it's the plan I OK'd for this ticket: follow it.", PlanFile(subject))
-	case "review":
-		note += " End with `CLAUDIA_RESULT: ok — no findings` when there's nothing the author should change, else `CLAUDIA_RESULT: needs-you — <n> findings`."
-	}
-	sp.Args = slices.Clone(sp.Args)
-	if i := slices.Index(sp.Args, "--append-system-prompt"); i >= 0 && i+1 < len(sp.Args) {
-		sp.Args[i+1] += " " + note
-	} else {
-		sp.Args = append(sp.Args, "--append-system-prompt", note)
-	}
-	sp.Env = append(slices.Clone(sp.Env), "CLAUDIA_RUN="+id)
-	return sp
-}
-
-// PlanFile is where a ticket's plan step writes its plan.
-func PlanFile(key string) string { return state.Path(filepath.Join("plans", key+".md")) }
-
-// WithPermissionMode starts the session in that --permission-mode; "default"
-// or "" leaves the user's own.
-func (sp Spec) WithPermissionMode(mode string) Spec {
-	if mode == "" || mode == "default" {
-		return sp
-	}
-	sp.Args = append([]string{"--permission-mode", mode}, sp.Args...)
-	return sp
 }
 
 func uuid() string {
@@ -174,7 +116,7 @@ func Start(sp Spec) (string, error) {
 	if sp.Color != "" && sp.ID != "" {
 		argv = withColor(bin, sp, argv)
 	}
-	env := append([]string{"CLAUDE_CONFIG_DIR=" + sp.Profile.Dir}, sp.Env...)
+	env := []string{"CLAUDE_CONFIG_DIR=" + sp.Profile.Dir}
 	session := sp.Session
 	if session == "" {
 		session = SessionName(sp.Dir)
@@ -253,8 +195,8 @@ func windowName(kind, name string) string {
 // profile under the work folder, otherwise "personal", otherwise any other one.
 func ProfileFor(dir string, profiles []claude.Profile) claude.Profile {
 	c := config.Get()
-	root := filepath.Join(c.CodeRoot, c.WorkDir)
-	if dir == root || strings.HasPrefix(dir, root+"/") {
+	work := strings.HasPrefix(dir, filepath.Join(c.CodeRoot, c.WorkDir)+"/")
+	if work {
 		return WorkProfile(profiles)
 	}
 	for _, p := range profiles {

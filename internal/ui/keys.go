@@ -67,32 +67,6 @@ var actions = []action{
 	{"inbox.fold_all", []string{"-"}, "fold all"},
 	{"inbox.unfold_all", []string{"+", "="}, "unfold all"},
 
-	{"board.left", []string{"h", "left"}, "column left"},
-	{"board.right", []string{"l", "right"}, "column right"},
-	{"board.sessions", []string{"enter"}, "sessions"},
-	{"board.claude", []string{"c"}, "claude"},
-	{"board.claude_bg", []string{"C"}, "claude in the background"},
-	{"board.open", []string{"o"}, "open in Jira"},
-	{"board.mr", []string{"M"}, "open MR"},
-	{"board.threads", []string{"t"}, "threads"},
-	{"board.move", []string{"m"}, "move"},
-	{"board.copy", []string{"y"}, "copy key"},
-	{"board.team", []string{"a"}, "mine/team"},
-	{"board.done", []string{"d"}, "show done"},
-	{"board.later", []string{"f"}, "next sprint"},
-	{"board.reviews", []string{"r"}, "tickets/reviews/all"},
-	{"board.run", []string{"s"}, "start the next step"},
-	{"board.run_bg", []string{"S"}, "start it in the background"},
-	{"board.plan_ok", []string{"p"}, "plan OK"},
-	{"board.plan_view", []string{"v"}, "view the plan"},
-	{"board.pin", []string{"*"}, "agreed order"},
-	{"board.up", []string{"K"}, "agreed up"},
-	{"board.down", []string{"J"}, "agreed down"},
-	{"board.todo", []string{"T"}, "new todo"},
-	{"board.todo_done", []string{"x"}, "tick off a todo"},
-	{"board.pause", []string{"P"}, "pause/resume the autopilot"},
-	{"board.override", []string{"A"}, "this card's autopilot"},
-
 	{"usage.layout", []string{"v"}, "layout"},
 	{"standup.refresh", []string{"r"}, "rewrite"},
 	{"standup.copy", []string{"y"}, "copy"},
@@ -174,13 +148,6 @@ var actions = []action{
 	{"confluence.unfold_all", []string{"+", "="}, "unfold all"},
 }
 
-// mayShadow lists the global actions a view's action may take keys from on
-// purpose: on the Board h/l move between columns, and tab still switches views.
-var mayShadow = map[string][]string{
-	"board.left":  {"global.prev_view"},
-	"board.right": {"global.next_view"},
-}
-
 type keymap struct {
 	byScope map[string]map[string]string // scope → key → action id
 	keys    map[string][]string          // action id → keys
@@ -219,7 +186,7 @@ func newKeymap(over map[string]config.KeyList) (keymap, []string) {
 			continue
 		}
 		for k, id := range m {
-			if g := km.byScope["global"][k]; g != "" && !slices.Contains(mayShadow[id], g) {
+			if g := km.byScope["global"][k]; g != "" {
 				problems = append(problems, fmt.Sprintf("%s is bound to both %s and %s", keyName(k), g, id))
 			}
 		}
@@ -239,8 +206,6 @@ func viewScope(v view) string {
 		return "notes"
 	case vInbox:
 		return "inbox"
-	case vBoard:
-		return "board"
 	case vUsage:
 		return "usage"
 	case vStandup:

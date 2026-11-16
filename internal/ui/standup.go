@@ -3,7 +3,6 @@ package ui
 import (
 	"errors"
 	"fmt"
-	"slices"
 	"strings"
 	"time"
 
@@ -12,15 +11,12 @@ import (
 
 	"github.com/MartyJRE/claudia/internal/gitlab"
 	"github.com/MartyJRE/claudia/internal/launch"
-	"github.com/MartyJRE/claudia/internal/runs"
 	"github.com/MartyJRE/claudia/internal/standup"
 	"github.com/MartyJRE/claudia/internal/teams"
 )
 
 // The Standup tab: Yesterday, Today and Blocked as talking points written
 // once a day by a cheap headless run, with the facts they came from below.
-
-type sfRun struct{ Card, Title, Step, Outcome, Reason string }
 
 type sfMR struct{ Ref, Title, Ticket string }
 
@@ -39,17 +35,13 @@ type sfMeeting struct{ Subject, Start, End string }
 type StandupFacts struct {
 	Since     time.Time
 	Yesterday struct {
-		Runs      []sfRun     `json:",omitempty"`
-		Opened    []sfMR      `json:",omitempty"`
-		Merged    []sfMR      `json:",omitempty"`
-		Reviewed  []sfMR      `json:",omitempty"`
-		TodosDone []string    `json:",omitempty"`
-		Worked    []sfSession `json:",omitempty"`
+		Opened   []sfMR      `json:",omitempty"`
+		Merged   []sfMR      `json:",omitempty"`
+		Reviewed []sfMR      `json:",omitempty"`
+		Worked   []sfSession `json:",omitempty"`
 	}
 	Today struct {
-		Agreed     []CtlAgreed `json:",omitempty"`
 		InProgress []sfIssue   `json:",omitempty"`
-		Todos      []string    `json:",omitempty"`
 		Meetings   []sfMeeting `json:",omitempty"`
 	}
 	Blocked []sfBlocked `json:",omitempty"`
@@ -59,20 +51,6 @@ func (m *Model) StandupData(since time.Time) StandupFacts {
 	var f StandupFacts
 	f.Since = since
 	now := clockNow()
-	if m.db != nil {
-		for _, r := range m.db.Since(since) {
-			if r.Outcome != runs.Running {
-				f.Yesterday.Runs = append(f.Yesterday.Runs, sfRun{m.subjectRef(r.Subject), m.subjectTitle(r.Subject), r.Step, r.Outcome, r.Reason})
-			}
-		}
-		for _, t := range m.db.Todos(since) {
-			if t.Done.IsZero() {
-				f.Today.Todos = append(f.Today.Todos, t.Title)
-			} else {
-				f.Yesterday.TodosDone = append(f.Yesterday.TodosDone, t.Title)
-			}
-		}
-	}
 	mr := func(g gitlab.MR) sfMR { return sfMR{fmt.Sprintf("%s!%d", g.Repo(), g.IID), g.Title, mrTicket(g)} }
 	for _, g := range m.gl.Mine {
 		if g.CreatedAt.After(since) {
@@ -94,7 +72,6 @@ func (m *Model) StandupData(since time.Time) StandupFacts {
 			f.Yesterday.Worked = append(f.Yesterday.Worked, sfSession{r.Name(), m.ix.SessionTicket[r.ID]})
 		}
 	}
-	f.Today.Agreed = m.CtlPrio()
 	for _, is := range m.jira.Sprint {
 		if is.Category == "indeterminate" && is.Level < 1 {
 			f.Today.InProgress = append(f.Today.InProgress, sfIssue{is.Key, is.Summary, is.Status})
@@ -106,45 +83,17 @@ func (m *Model) StandupData(since time.Time) StandupFacts {
 			f.Today.Meetings = append(f.Today.Meetings, sfMeeting{e.Subject, s.Format("15:04"), e.End.Local().Format("15:04")})
 		}
 	}
-	for _, c := range slices.Concat(m.boardCards(), m.reviewCards()) {
-		if c.turn != turnColleague || c.stage == stDone {
-			continue
+	for _, g := range m.gl.Mine {
+		if !g.Draft && !g.Approved && g.State == "opened" {
+			f.Blocked = append(f.Blocked, sfBlocked{Ref: fmt.Sprintf("%s!%d", g.Repo(), g.IID), Title: g.Title, WaitsOn: "review", Since: g.CreatedAt})
 		}
-		b := sfBlocked{Ref: c.ref(), WaitsOn: c.next}
-		switch {
-		case c.review():
-			b.Title, b.Since = c.mr.Title, c.mr.UpdatedAt
-		default:
-			b.Title, b.Since = c.issue.Summary, c.issue.Updated
+	}
+	for _, is := range m.jira.Sprint {
+		if st := strings.ToLower(is.Status); is.Mine && (strings.Contains(st, "block") || strings.Contains(st, "wait")) {
+			f.Blocked = append(f.Blocked, sfBlocked{Ref: is.Key, Title: is.Summary, WaitsOn: is.Status, Since: is.Updated})
 		}
-		if _, hold := nextStep(c); hold != nil && !hold.Finished.IsZero() {
-			b.Since = hold.Finished
-		}
-		f.Blocked = append(f.Blocked, b)
 	}
 	return f
-}
-
-func (m *Model) subjectRef(subject string) string {
-	if g, ok := m.mrByURL(subject); ok {
-		return fmt.Sprintf("%s!%d", g.Repo(), g.IID)
-	}
-	return subject
-}
-
-func (m *Model) subjectTitle(subject string) string {
-	if is, ok := m.ix.Issues[subject]; ok {
-		return is.Summary
-	}
-	if g, ok := m.mrByURL(subject); ok {
-		return g.Title
-	}
-	if id, ok := runs.TodoID(subject); ok && m.db != nil {
-		if t, ok := m.db.Todo(id); ok {
-			return t.Title
-		}
-	}
-	return ""
 }
 
 type standupSinceMsg struct{ since time.Time }
@@ -249,9 +198,6 @@ func (m *Model) standupLines() []string {
 	f := m.StandupData(m.standup.Since)
 	fact := func(s string) string { return "   " + sDim.Render(s) }
 	out = append(out, "", " "+sDim.Render("─── what it was written from"), "", " "+sBold.Render("Yesterday"))
-	for _, r := range f.Yesterday.Runs {
-		out = append(out, fact(fmt.Sprintf("%s %s: %s %s", r.Card, r.Step, r.Outcome, r.Reason)))
-	}
 	for _, list := range []struct {
 		verb string
 		mrs  []sfMR
@@ -260,21 +206,12 @@ func (m *Model) standupLines() []string {
 			out = append(out, fact(list.verb+" "+g.Ref+" "+g.Title))
 		}
 	}
-	for _, t := range f.Yesterday.TodosDone {
-		out = append(out, fact("ticked off "+t))
-	}
 	for _, s := range f.Yesterday.Worked {
 		out = append(out, fact(strings.TrimSpace("worked in "+s.Name+" "+s.Ticket)))
 	}
 	out = append(out, "", " "+sBold.Render("Today"))
-	for _, a := range f.Today.Agreed {
-		out = append(out, fact(fmt.Sprintf("%s %s %s", circled(a.Pos), a.Ref, a.Title)))
-	}
 	for _, is := range f.Today.InProgress {
 		out = append(out, fact(is.Key+" "+is.Summary+" · "+is.Status))
-	}
-	for _, t := range f.Today.Todos {
-		out = append(out, fact("todo: "+t))
 	}
 	for _, e := range f.Today.Meetings {
 		out = append(out, fact(e.Start+"–"+e.End+" "+e.Subject))

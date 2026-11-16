@@ -14,7 +14,6 @@ import (
 	"github.com/MartyJRE/claudia/internal/gitlab"
 	"github.com/MartyJRE/claudia/internal/launch"
 	"github.com/MartyJRE/claudia/internal/repos"
-	"github.com/MartyJRE/claudia/internal/runs"
 	"github.com/MartyJRE/claudia/internal/teams"
 	"github.com/MartyJRE/claudia/internal/tmux"
 	"github.com/MartyJRE/claudia/internal/update"
@@ -36,7 +35,6 @@ var (
 	listSessions    = (*claude.Store).Sessions
 	scanUsage       = (*claude.UsageScanner).Scan
 	killProcess     = syscall.Kill
-	openRuns        = runs.Open
 
 	cmdOutput         = (*exec.Cmd).Output
 	cmdCombinedOutput = (*exec.Cmd).CombinedOutput
@@ -51,7 +49,6 @@ var (
 	approveMR   = gitlab.Approve
 	unapproveMR = gitlab.Unapprove
 	rebaseMR    = gitlab.Rebase
-	mergeMR     = gitlab.Merge
 	findRepos   = repos.Find
 	createRepo  = repos.Create
 

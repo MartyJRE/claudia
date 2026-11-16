@@ -1,13 +1,12 @@
 package ui
 
 import (
-	"slices"
+	"cmp"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/MartyJRE/claudia/internal/board"
-	"github.com/MartyJRE/claudia/internal/runs"
+	"github.com/MartyJRE/claudia/internal/claude"
 )
 
 type frameMsg time.Time
@@ -46,7 +45,20 @@ func (m *Model) glyph(f frames) string {
 func (m *Model) spin() string { return m.glyph(spinner) }
 
 // activity is what a working session is doing, as a verb and what it acts on.
-func activity(r row) (string, string) { return board.Activity(r.sess()) }
+func activity(r row) (string, string) {
+	if r.Live != nil && r.Live.Status == claude.StatusShell {
+		return "running", ""
+	}
+	var a claude.Activity
+	if r.Transcript != nil {
+		a = r.Transcript.Activity
+	}
+	verb := cmp.Or(a.Verb, "thinking")
+	if r.kind == "review" && (verb == "reading" || verb == "thinking") {
+		verb = "reviewing"
+	}
+	return verb, a.Detail
+}
 
 func (m *Model) activityGlyph(verb string) string {
 	return m.glyph(activityFrames[verb]) + " " + verb
@@ -86,17 +98,6 @@ func (m *Model) animates() bool {
 		}
 	case vInbox:
 		return !m.briefPending.IsZero()
-	case vBoard:
-		if m.jira.FetchedAt.IsZero() && m.atlErr == nil {
-			return true
-		}
-		for _, col := range m.vis.board {
-			if slices.ContainsFunc(col, func(c boardCard) bool {
-				return c.turn == turnAgent || slices.ContainsFunc(c.runs, func(r runs.Run) bool { return r.Outcome == runs.Running })
-			}) {
-				return true
-			}
-		}
 	case vReview, vMine:
 		return m.gl.FetchedAt.IsZero() && m.errs[srcGitlab] == nil
 	case vJira:

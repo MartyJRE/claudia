@@ -20,7 +20,6 @@ import (
 	"github.com/MartyJRE/claudia/internal/config"
 	"github.com/MartyJRE/claudia/internal/gitlab"
 	"github.com/MartyJRE/claudia/internal/launch"
-	"github.com/MartyJRE/claudia/internal/runs"
 	"github.com/MartyJRE/claudia/internal/state"
 	"github.com/MartyJRE/claudia/internal/summary"
 	"github.com/MartyJRE/claudia/internal/tmux"
@@ -40,7 +39,6 @@ var (
 	checkUpdate  = update.Check
 	pollEvery    = 3 * time.Second
 	stopRun      chan struct{} // closing it ends Run; nil never does
-	openRuns     = runs.Open
 )
 
 // Running reports whether a watcher holds the lock. A pid alone can't say: a
@@ -112,7 +110,6 @@ type watcher struct {
 
 	status   map[string]claude.Status
 	stuck    map[string]bool // sessions told about as stuck at startup
-	closed   map[string]bool // runs whose dormant window was closed
 	reviews  map[string]bool
 	pipeline map[string]string
 	approved map[string]bool
@@ -122,13 +119,6 @@ type watcher struct {
 	summaries   map[string]summary.Summary
 	summarizing chan struct{}
 	summaryMu   sync.Mutex
-
-	runs      *runs.Store
-	settledAt time.Time
-
-	gl    gitlab.Snapshot // the latest fetches, for the autopilot
-	js    atlassian.JiraSnapshot
-	pilot *pilot
 }
 
 var summarize = summary.Generate
@@ -190,14 +180,6 @@ func Run(makeBrief func()) error {
 		summarizing: make(chan struct{}, 1),
 	}
 	w.atl, _ = atlassian.New()
-	if w.runs, err = openRuns(); err == nil {
-		defer w.runs.Close()
-		w.startPilot(claude.DefaultProfiles())
-		state.Load("cache-gitlab.json", &w.gl)
-		state.Load("cache-jira.json", &w.js)
-	} else {
-		fmt.Fprintln(os.Stderr, time.Now().Format(time.TimeOnly), "runs:", err)
-	}
 
 	var lastGL, lastJira time.Time
 	lastBrief := time.Now()
@@ -220,7 +202,6 @@ func Run(makeBrief func()) error {
 			}()
 		}
 		w.sessions()
-		w.autopilot(time.Now())
 		if time.Since(lastGL) >= time.Minute {
 			lastGL = time.Now()
 			if s, err := gitlab.Fetch(); err == nil {
@@ -255,21 +236,14 @@ func (w *watcher) sessions() {
 	w.baseline[0] = true
 	seen := map[string]bool{}
 	waiting := map[string]bool{} // window ids with a waiting Claude
-	var ran []runs.Seen
-	stopped := first
 	all := w.store.Sessions()
 	for _, s := range all {
-		w.summaryMu.Lock()
-		sum := w.summaries[s.ID]
-		w.summaryMu.Unlock()
-		ran = append(ran, runs.SeenOf(s, sum.Text, sum.For))
 		if s.Live == nil || s.Live.Worker != "" {
 			continue
 		}
 		seen[s.ID] = true
 		prev, had := w.status[s.ID]
 		w.status[s.ID] = s.Live.Status
-		stopped = stopped || had && prev.Working() && !s.Live.Status.Working()
 		if !s.Live.Status.Working() && w.summarizing != nil {
 			w.summarize(s)
 		}
@@ -296,12 +270,8 @@ func (w *watcher) sessions() {
 	for id := range w.status {
 		if !seen[id] {
 			delete(w.status, id)
-			stopped = true
 		}
 	}
-	w.settle(ran, stopped)
-	w.closeDormant(all, loc, time.Now())
-	w.contextNotes(all, loc)
 	w.stuckNotes(all, processSessions(), launch.Kinds(), loc)
 	for _, l := range tmux.Borrowed() {
 		if !waiting[l.WindowID] && !l.Viewed {
@@ -309,18 +279,6 @@ func (w *watcher) sessions() {
 		}
 	}
 	tmux.MarkWaiting(waiting)
-}
-
-// settle reads how runs went when a session stopped or exited, so the run log
-// stays current with the TUI closed; once a minute it also catches a missed edge.
-func (w *watcher) settle(seen []runs.Seen, stopped bool) {
-	if w.runs == nil || !stopped && time.Since(w.settledAt) < time.Minute {
-		return
-	}
-	w.settledAt = time.Now()
-	if _, err := w.runs.Reconcile(runs.WithStarting(seen, claude.ProcessSessions()), w.settledAt); err != nil {
-		fmt.Fprintln(os.Stderr, w.settledAt.Format(time.TimeOnly), "runs:", err)
-	}
 }
 
 // borrow links a waiting session's window into the session you're in, so it's a
@@ -345,7 +303,6 @@ func borrow(p tmux.Pane) string {
 }
 
 func (w *watcher) gitlab(s gitlab.Snapshot) {
-	w.gl = s
 	first := !w.baseline[1]
 	w.baseline[1] = true
 	for _, m := range s.Review {
@@ -379,7 +336,6 @@ func (w *watcher) gitlab(s gitlab.Snapshot) {
 }
 
 func (w *watcher) jira(s atlassian.JiraSnapshot) {
-	w.js = s
 	first := !w.baseline[2]
 	w.baseline[2] = true
 	for _, m := range s.Mentions {
@@ -507,45 +463,7 @@ func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
 
 var (
 	processSessions = claude.ProcessSessions
-	killWindow      = tmux.KillWindow
 )
-
-// dormantAfter is how long a finished or waiting autopilot run sits idle
-// before its window closes.
-const dormantAfter = 2 * time.Minute
-
-// closeDormant closes the windows of the autopilot's runs that ended ok or
-// wait on someone else, once idle; the transcript stays to resume. A window
-// holding anything else is left alone.
-func (w *watcher) closeDormant(all []claude.Session, loc *tmux.Locator, now time.Time) {
-	if w.runs == nil {
-		return
-	}
-	var latest map[string]runs.Run
-	for _, s := range all {
-		if s.Live == nil || s.Live.Worker != "" || s.Live.Status != claude.StatusIdle || now.Sub(s.LastActive()) < dormantAfter {
-			continue
-		}
-		if latest == nil {
-			latest = w.runs.Latest()
-		}
-		r, ok := latest[s.ID]
-		if !ok || r.StartedBy != runs.ByAutopilot || r.Outcome != runs.OK && r.Outcome != runs.Waiting || now.Sub(r.Finished) < dormantAfter || w.closed[r.ID] {
-			continue
-		}
-		p, ok := loc.Pane(s.Live.PID)
-		if !ok || !loc.Alone(p) {
-			continue
-		}
-		if w.closed == nil {
-			w.closed = map[string]bool{}
-		}
-		w.closed[r.ID] = true
-		if err := killWindow(p.WindowID); err != nil {
-			fmt.Fprintln(os.Stderr, now.Format(time.TimeOnly), "close dormant:", err)
-		}
-	}
-}
 
 // stuckNotes tells once of each session claudia started whose claude runs but
 // never registered, most likely held by a dialog nobody sees in its window;
@@ -559,7 +477,7 @@ func (w *watcher) stuckNotes(all []claude.Session, procs map[string]claude.Proc,
 		known[s.ID] = s.Live != nil
 	}
 	for id, p := range procs {
-		if known[id] || kinds[id] == "" || p.Age < runs.Grace || w.stuck[id] {
+		if known[id] || kinds[id] == "" || p.Age < claude.StartupGrace || w.stuck[id] {
 			continue
 		}
 		w.stuck[id] = true

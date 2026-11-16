@@ -43,14 +43,14 @@ func Since(events []teams.Event, now time.Time, c config.Standup) time.Time {
 
 const instructions = `You write a developer's standup talking points. They read them out at standup, so keep them short and plain: a few bullets per section, each a phrase they can say, with ticket keys where they help.
 
-You get JSON facts gathered since the last standup: runs of their Claude steps, MRs opened, merged and reviewed, todos done, sessions worked in, the order agreed for today, cards in progress, today's meetings, and cards waiting on someone else with since when.
+You get JSON facts gathered since the last standup: MRs opened, merged and reviewed, sessions worked in, tickets in progress, today's meetings, and MRs or tickets waiting on someone else with since when.
 
 Write exactly three sections with these headings, in this order:
 Yesterday
 Today
 Blocked
 
-Under each, "- " bullets. Merge facts about the same ticket into one bullet. Skip noise (failed retries that later passed, sessions with nothing to show). Today follows the agreed order first. Under Blocked say who or what it waits on and for how long; write "- nothing" when there's nothing. Write in %s. Plain text, no Markdown beyond the bullets.`
+Under each, "- " bullets. Merge facts about the same ticket into one bullet. Skip noise (failed retries that later passed, sessions with nothing to show). Under Blocked say who or what it waits on and for how long; write "- nothing" when there's nothing. Write in %s. Plain text, no Markdown beyond the bullets.`
 
 // Write turns facts into talking points with a cheap headless run.
 func Write(facts any, lang, configDir string) (string, error) {

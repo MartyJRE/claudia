@@ -3,7 +3,6 @@ package config
 import (
 	"os"
 	"path/filepath"
-	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -70,8 +69,7 @@ func TestDefaults(t *testing.T) {
 	if c.BriefEvery != 2*time.Hour {
 		t.Errorf("brief every %v", c.BriefEvery)
 	}
-	if c.ReviewPrompt != defaultReviewPrompt || c.AnalysisPrompt != defaultAnalysisPrompt || c.ImplementationPrompt != defaultImplementationPrompt ||
-		c.ReadinessPrompt != defaultReadinessPrompt || c.MRPrompt != defaultMRPrompt || c.QAPrompt != defaultQAPrompt {
+	if c.ReviewPrompt != defaultReviewPrompt || c.AnalysisPrompt != defaultAnalysisPrompt || c.ImplementationPrompt != defaultImplementationPrompt {
 		t.Error("default prompts")
 	}
 	if len(c.TicketKeys) != 0 || !c.RoundedPills() || !c.Animations() {
@@ -206,18 +204,6 @@ func TestMail(t *testing.T) {
 	fresh(t, `{"teams": {"mail": {"rules": [{"from": "boss@"}, {"subject": "Approval"}]}}}`)
 	if r := Get().Teams.Mail.Rules; len(r) != 2 || r[0] != (MailRule{From: "boss@"}) || r[1] != (MailRule{Subject: "Approval"}) {
 		t.Errorf("rules %+v", r)
-	}
-}
-
-func TestTodoProjects(t *testing.T) {
-	if got := (Config{JiraProject: "ABC"}).TodoProjects(); !slices.Equal(got, []string{"ABC"}) {
-		t.Errorf("the Jira project: %v", got)
-	}
-	if got := (Config{JiraProject: "ABC", Todos: Todos{Projects: []string{"LUT", "OPS"}}}).TodoProjects(); !slices.Equal(got, []string{"LUT", "OPS"}) {
-		t.Errorf("configured: %v", got)
-	}
-	if (Config{}).TodoProjects() != nil {
-		t.Error("none")
 	}
 }
 
