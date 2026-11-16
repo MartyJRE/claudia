@@ -20,7 +20,7 @@ exact bytes the prompt receives. `go test -short` skips it.
 
 ## Commits and releases
 
-Commit subjects start with a lowercase scope, e.g. `board: …` or `sessions: …`,
+Commit subjects start with a lowercase scope, e.g. `inbox: …` or `sessions: …`,
 and say what changed for the user. Every green push to `main` is released: CI
 tags it with the next patch version and goreleaser publishes the binaries, with
 notes grouped by that scope. A `Release: minor` or `Release: major` trailer in
