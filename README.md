@@ -35,239 +35,18 @@ switches between those sessions.
 | Key | View | What it shows |
 |---|---|---|
 | 1 | Inbox | Everyone waiting on you, oldest first |
-| 2 | Board | Your tickets and the reviews waiting on you as a kanban, by stage, with whose turn it is and what each cost |
-| 3 | Sessions | Live and recent Claude sessions with status, branch, ticket, model, and a line on where each stands |
-| 4 | Review | MRs where you are a reviewer and haven't approved yet |
-| 5 | My MRs | Your open MRs (reviewers, pipelines, review threads) and recently merged ones |
-| 6 | Jira | Your sprint, or the team's |
-| 7 | Mentions | Jira comments and Confluence pages that mention you |
-| 8 | Confluence | Pages you edited recently |
-| 9 | Notes | Your Obsidian vault as a folder tree, or recently edited first |
-| `tab` | Usage | Tokens and API-equivalent cost per day or per ticket, plan limits |
+| 2 | Sessions | Live and recent Claude sessions with status, branch, ticket, model, and a line on where each stands |
+| 3 | Review | MRs where you are a reviewer and haven't approved yet |
+| 4 | My MRs | Your open MRs (reviewers, pipelines, review threads) and recently merged ones |
+| 5 | Jira | Your sprint, or the team's |
+| 6 | Mentions | Jira comments and Confluence pages that mention you |
+| 7 | Confluence | Pages you edited recently |
+| 8 | Notes | Your Obsidian vault as a folder tree, or recently edited first |
+| 9 | Usage | Tokens and API-equivalent cost per day or per ticket, plan limits |
 | `tab` | Standup | What you did since the last standup, what's on today, what's blocked |
 
 Every view lists its keys in the footer, and every key can be rebound (see
 `keys` under [Configuration](#configuration)).
-
-## Board
-
-<img src="assets/board.svg" width="860" alt="Board: tickets in columns by stage, each saying whose turn it is">
-
-Your sprint's tickets in columns: Up next, Plan, Building, Review, Merge and QA.
-Each card says whose turn it is: `◆ needs you` (a session asks, or the Inbox has
-something for the ticket; these go first), Claude at work with its activity, or
-`⧗ waiting` on reviewers, someone a session named, a ticket it's blocked by, or
-a status on hold. Otherwise it's yours and the card shows the next step. Its
-last line has the ticket's cost so far, its sessions, MRs and that step.
-
-On arrival `←`/`→` switch tabs as anywhere else; `↓` steps into the board, and
-`↑` on a column's top card (or `esc`) steps back out.
-
-| Key | On a ticket card |
-|---|---|
-| `h`/`l`, `←`/`→` | move between columns |
-| `enter` | the session that waits on you, else the ticket's sessions, else start one |
-| `c` / `C` | start Claude on it (in the background with `C`); a session that waits on you comes first |
-| `s` / `S` | start the next step (in the background with `S`), see [Steps](#steps) |
-| `v` / `p` | go to the session that planned it / OK the plan, see [Plans and blockers](#plans-and-blockers) |
-| `*` / `K` / `J` | pin it into the agreed order or take it out / move it up / down, see [Agreed order](#agreed-order) |
-| `A` / `P` | this card's autopilot modes / pause the autopilot, see [The autopilot](#the-autopilot) |
-| `o` / `M` / `t` | open it in Jira / its MR / the MR's review threads |
-| `m` / `y` | move it in Jira / copy its key |
-| `a` / `d` / `f` / `r` | the team's sprint / show Done / step through the coming sprints / tickets, reviews or all |
-| `T` | note a todo that isn't in Jira, see [Todos](#todos) |
-
-### Stages
-
-No stage is stored; each refresh works it out from Jira, your MRs and sessions,
-first match from the right:
-
-- **QA**: a merged MR and no open one.
-- **Merge**: an approved MR with a green pipeline and no open threads.
-- **Review**: an open MR.
-- **Building**: a draft MR, an implementation, fix or test session, or Claude
-  working on the ticket's branch.
-- **Plan**: an analysis session or a plan.
-
-The Jira status counts too, since merged MRs drop out of GitLab's list after a
-few days: a ticket goes to the further of the two, so one in testing sits in QA.
-`board.statuses` can pin a Jira status to a column. Done tickets join as a last
-column with `d`. Tickets planned for a future sprint are folded under Up next,
-and `f` steps the board through the coming sprints and back (the subtitle names
-the sprint shown).
-
-### Review cards
-
-Reviews are a second kind of card, tinted apart: one per open, non-draft MR
-where you're a reviewer, with stages of their own:
-
-- **Requested**: no review yet, or a push since Claude reviewed it (for a review
-  `s` didn't start, any change to the MR counts).
-- **Reviewing**: a review session is at work.
-- **Check findings**: the session stopped; the card shows the first line of what
-  it found and needs you.
-- **Waiting on author**: you reviewed without approving.
-- **Done** once you approve, shown with `d`.
-
-`r` cycles the board between Tickets, Reviews (those columns) and All (review
-cards in the ticket columns: Requested under Up next, Reviewing under Building,
-Check findings under Review, Waiting on author under Merge), and remembers the
-choice. On Tickets a ticket whose MR waits on your review needs you; on Reviews
-and All the review card says so instead. On a review card `enter` and `c` go to
-the review session that waits on you, else `enter` lists its review sessions and
-`c` reviews it with Claude (`C` starts a fresh review in the background); `o`
-opens the MR, `t` its threads and `y` copies its link. `f` steps through sprints
-for tickets only. Mentions, Teams posts and mail stay in the Inbox and never
-make cards.
-
-### Steps
-
-Each card's last line is its step strip, one segment per step: readiness, plan,
-implement, open MR, feedback, merge and QA notes for a ticket; review and
-findings for a review. Green is done, blue running, yellow needs you, red
-failed, dim not run yet, and the end of the strip says what happens next.
-
-`s` starts the card's next step now, skipping steps already done; `S` starts it
-in the background; on a step that's running or waiting on you it jumps to the
-session instead. A ticket's step runs in the repo on the ticket's branch, the
-one you picked for it before, or the only clone of its MR, and asks only when
-that's unclear.
-
-- **Readiness** checks the ticket is specified well enough and, if not, posts its
-  questions on the ticket (or its Confluence page) through the Atlassian MCP,
-  mentioning whoever last wrote the description (or a colleague it credits,
-  while their account is active). The card then waits for answers; when the
-  ticket changes, the same session is resumed to check again.
-- **Plan** and **implement** are the analysis and implementation sessions.
-- **Open MR** pushes and runs `glab mr create`.
-- **Feedback** addresses the threads on your MR.
-- **Merge** is the one step without a session: it merges the ready MR through
-  GitLab, after a second press.
-- **QA notes** comments for the tester.
-- **Review** is the review session.
-
-The prompts are `analysis_prompt`, `implementation_prompt`, `review_prompt`,
-`readiness_prompt`, `mr_prompt` and `qa_prompt`. Whatever a run posts to Jira or
-Confluence starts with `autopilot.comment_note` in an info panel when you set
-one, and on GitLab with it as a quote; by default posts go out as written.
-
-A run is told to end with a line `CLAUDIA_RESULT: ok|needs-you|waiting|failed — reason`
-(a plan adds `size: simple|medium|large`, a review `no findings` when clean).
-Waiting means it asked someone else and can't go on until they answer, which
-shows a dim `⧗` and stays out of the Inbox. Without a result line the session's
-summary decides, and a session that exits with neither failed. A run whose
-context fills up waits on you as `context full`, since nothing compacts it on
-its own; its card shows `ctx 82%` while it runs and the watcher pings you once
-at 90%. The detail panel shows the run now under way, the one before, what's
-next and each step's mode.
-
-Runs, the cost ledger and the autopilot's state are kept in `state.db` in the
-state dir, which the watcher keeps current with claudia closed. A review run
-remembers the commit it read, so only a push sends the card back to Requested.
-
-### Plans and blockers
-
-A ticket in Plan by its Jira status alone gets planned first: `p` with no plan
-yet says so rather than letting implement start. The plan step keeps its plan in
-`plans/<KEY>.md` in the state dir, and implement follows that file. `v` on a
-card goes to the session that planned it (resumed if its window was closed), to
-read the plan and iterate on it there; the file stays up to date as you do. `p`
-then OKs it; an OK given before the latest plan was written doesn't count.
-
-When Jira says a ticket "is blocked by" one that isn't done, readiness and plan
-still run, but implement and everything after it wait: the card shows
-`⧗ waits on ABC-1`, the autopilot leaves it, and `s` says why. It picks up on
-its own once the blocker is done.
-
-### Todos
-
-Some work never reaches Jira: someone stops by and asks. `T` notes it as a
-todo, with who asked, and it joins Up next with a tint of its own. On a todo
-card, `s` (or `enter`, `c`) starts a Claude session that drafts a ticket for it
-and creates it in Jira only after your OK in that session; the ticket then
-takes the todo's place, its spot in the agreed order included. The project is
-the todo's own, the only one in `todos.projects` (default: `jira_project`), or
-one you pick with the first preselected. `x` ticks off a todo that needs no
-ticket, and `*` pins it into the agreed order like any card.
-
-```sh
-claudia ctl todo add "rotate the staging certs" --from Zdeněk --project OPS
-claudia ctl todo                  # open todos and the ones done lately, as JSON
-claudia ctl todo ticket 3 OPS-12  # the session does this once the ticket exists
-claudia ctl todo done 3
-```
-
-### Agreed order
-
-Priorities get agreed out loud, at standup or grooming, more often than in Jira.
-`*` pins a card into that agreed order (last), or takes it out; `K`/`J` move it
-up and down. Pinned cards show their place (`①`, `②`, …) and go first in their
-column, and the autopilot takes them first within each tier of its queue. The
-detail panel says when it was agreed (and by whom, when a note was given). It's
-kept in `state.db`, never written to Jira, and an agreement lapses when the
-sprint it was agreed in closes.
-
-A Claude session can set the whole order from meeting notes:
-
-```sh
-claudia ctl prio ABC-12 payments!231 ABC-9 --note "Zdeněk, grooming"
-claudia ctl prio            # the order now, as JSON
-claudia ctl prio --clear
-```
-
-Cards are ticket keys, MR links or `!IID` (`repo!IID` when two repos have it).
-
-### The autopilot
-
-The autopilot starts steps without you, from the watcher, so it works with
-claudia closed. It's off unless `autopilot.enabled` is set. Each step has a
-mode, set per step in `autopilot.steps`:
-
-| Mode | What happens | The card says |
-|---|---|---|
-| `auto` | the autopilot starts it when the limits allow | `◷ plan queued` |
-| `after-plan-ok` (implement) | auto once `p` OKs the plan, or right away when the plan run called the change simple | `◆ plan OK? · p` |
-| `ask` | waits for `s` | `◆ go ahead with merge? · s` |
-| `off` | never offered | nothing |
-
-Readiness, plan, open MR, feedback, QA notes and review are `auto` by default,
-implement `after-plan-ok`, merge `ask`; merge is never `auto` without
-`autopilot.allow_auto_merge`. `A` on a card overrides the modes for that card
-only (all auto, ask before every step, off, or step by step), shown as `⚙ ask`
-on the card. The most blocking step goes first: merge, feedback, review, QA
-notes, readiness, plan, open MR, implement; within each, the
-[agreed order](#agreed-order), then Jira's rank.
-
-Before anything starts, the limits apply:
-
-- **Hours**: `autopilot.hours` and `days` (Monday to Friday, 9 to 6).
-- **Runs**: `max_running` at once (1, yours included, and never two on one card).
-- **Plan usage**: under `max_five_hour` (60%, or `max_five_hour_after_hours`,
-  90%, for a window that resets after hours) and `max_seven_day` (80%). When the
-  status line hasn't saved the plan usage lately it's unknown, and only one run
-  goes at a time.
-- **Cost**: at most `max_ticket_usd` ($50) per ticket and `max_day_usd` ($30) a
-  day of the autopilot's runs.
-- **Reviews**: one per `review_every` (1h), most recently active MR first; a
-  review request whose MR saw no activity for `review_stale_after` (720h, 30
-  days) isn't reviewed on its own.
-
-When a limit hits, nothing running is stopped; the header pill says why
-(`⏸ autopilot: 5h window 64%`) and a notification says when it pauses and
-resumes. `P` pauses it by hand, and the pause holds across restarts until you
-press `P` again. A step that failed twice on its own waits for `s`.
-
-A clean review on a green pipeline and the head it read is approved, and the
-MR's Teams post gets ✅ (`autopilot.review_approve`, `autopilot.review_react`);
-findings ping you. Runs the autopilot starts get `--permission-mode` from
-`autopilot.permission_mode` (`auto` by default; `bypassPermissions` has no
-sandbox behind it), and it stays off a card while someone works it in a session
-of their own. A run it started that ended ok or waits on someone closes its
-window after two idle minutes (never one sharing its window, and never one that
-needs you or failed); the transcript stays, so `enter` on the card resumes it.
-The autopilot's runs sit apart in Sessions, in a folded **autopilot runs**
-group at the bottom; one that needs you still shows in the Inbox and on the
-Board.
 
 ## Sessions
 
@@ -338,10 +117,10 @@ cheap headless run on Haiku, and `r` rewrites them, `y` copies them.
 Yesterday covers the time since the last standup: the latest meeting in your
 calendar whose title has `standup.meeting` (default "standup", through
 [Teams](#teams-setup)), else the previous working day at `standup.time`
-(default 09:30). It takes in the Board's runs, MRs you opened, merged and
-approved, todos ticked off and the sessions you worked in. Today is the
-[agreed order](#agreed-order), tickets in progress, open todos and today's
-meetings; Blocked is every card waiting on someone else, and for how long. The
+(default 09:30). It takes in MRs you opened, merged and approved and the
+sessions you worked in. Today is your tickets in progress and today's meetings;
+Blocked is your open MRs waiting on review and your tickets in a blocked or
+waiting status, and for how long. The
 points are in `standup.language` (default English). `claudia standup` prints
 fresh ones from a shell.
 
@@ -461,8 +240,6 @@ claudia ctl here            # this session's MRs, ticket and inbox items, as JSO
 claudia ctl inbox           # the whole inbox
 claudia ctl dismiss --here  # snooze this session's inbox items until they change
 claudia ctl home [--close]  # back to claudia; --close also ends the session
-claudia ctl prio <ref>...   # set the agreed order, see Agreed order above
-claudia ctl todo add <title> # note a todo, see Todos above
 ```
 
 ## Commands
@@ -574,12 +351,10 @@ by an environment variable are shown but can't be changed there.
 - `vault`: an Obsidian vault, e.g. `"~/Documents/Notes"`; `vault_projects` is its
   folder with one subfolder per ticket (default `01 - Projects`).
 - `remote_control`: profiles whose sessions start with Remote Control, e.g. `["work"]`.
-- `review_prompt`, `analysis_prompt`, `implementation_prompt`, and the Board's
-  `readiness_prompt`, `mr_prompt` and `qa_prompt` let you point at your own
-  skills; the defaults are plain prompts.
+- `review_prompt`, `analysis_prompt` and `implementation_prompt` let you point
+  at your own skills; the defaults are plain prompts.
 - `session_names` names sessions per intent: `analysis`, `implementation`,
-  `general`, `continue`, `test`, `review`, `fix`, `reply`, `readiness`, `mr`,
-  `qa`. `{key}`, `{summary}`
+  `general`, `continue`, `test`, `review`, `fix`, `reply`. `{key}`, `{summary}`
   and `{verb}` are filled in. Without it, sessions are named `<verb>: <summary>`.
 - `brief_every` is how often the Inbox brief is rewritten (default `2h`, `off`
   to disable).
@@ -599,12 +374,6 @@ by an environment variable are shown but can't be changed there.
 - `standup.meeting`, `standup.time` and `standup.language`: a word in your
   standup's calendar title, when it is for when the calendar can't tell, and
   the language of the talking points; see [Standup](#standup).
-- `todos.projects` lists the Jira projects a todo can become a ticket in, the
-  first one preselected, e.g. `["ABC", "OPS"]` (default: `jira_project`).
-- `board.statuses` pins tickets in a Jira status to a Board column, e.g.
-  `{"Ready for QA": "QA", "Blocked": "Up next"}`, over the column claudia works out.
-- `autopilot` turns the autopilot on (`enabled`, off by default) and sets its
-  step modes and limits; see [The autopilot](#the-autopilot).
 - `keys` rebinds any key outside text input: an action name to a key or a list
   of keys. `claudia keys` lists every action with its current keys and points out
   clashes. claudia also flags clashes when it starts.
