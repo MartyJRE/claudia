@@ -10,7 +10,9 @@ import (
 
 	"github.com/MartyJRE/claudia/internal/atlassian"
 	"github.com/MartyJRE/claudia/internal/brief"
+	"github.com/MartyJRE/claudia/internal/claude"
 	"github.com/MartyJRE/claudia/internal/gitlab"
+	"github.com/MartyJRE/claudia/internal/repos"
 	"github.com/MartyJRE/claudia/internal/state"
 )
 
@@ -320,5 +322,60 @@ func TestWaitingShell(t *testing.T) {
 		if plainShell(kindStyle(k).Render("x")) != "x" || kindLabel[k] == "" {
 			t.Errorf("kind %d has no label", k)
 		}
+	}
+}
+
+func TestInboxShowsItsSessionShell(t *testing.T) {
+	m := newModelShell(t)
+	m.switchView(vInbox)
+	started := fakeStart(t, "work:5", nil)
+	fakeSwitch(t, nil)
+	pick := func(k inboxKind) inboxItem {
+		for i, it := range m.vis.inbox {
+			if it.kind == k {
+				m.cur[vInbox].pos = i
+				return it
+			}
+		}
+		t.Fatalf("no %s item", kindLabel[k])
+		return inboxItem{}
+	}
+
+	ment := pick(kMention)
+	pressShell(m, "c")
+	pressShell(m, "esc")
+	if m.forItem != "" {
+		t.Error("esc forgets the item")
+	}
+
+	m.switchView(vInbox)
+	m.repos = []repos.Repo{{Dir: "/code/payments", Branch: "main"}}
+	ment = pick(kMention)
+	pressShell(m, "C")
+	cmd := pressShell(m, "enter")
+	if cmd == nil {
+		t.Fatal("picking a repo starts the session")
+	}
+	m.Update(findMsg[startMsg](cmd))
+	if len(*started) != 1 {
+		t.Fatalf("started %d", len(*started))
+	}
+	id := (*started)[0].ID
+	if got := m.links.Items(id); len(got) != 1 || got[0] != ment.key() || m.forItem != "" {
+		t.Fatalf("items %v, pending %q", got, m.forItem)
+	}
+
+	busy := row{Session: claude.Session{ID: id, Transcript: &claude.Transcript{Cwd: "/code/payments", AITitle: "reply to Eve"},
+		Live: &claude.Live{SessionID: id, Status: claude.StatusBusy}}}
+	m.Update(sessionsMsg(append(sessionsShell(), busy)))
+	m.switchView(vInbox)
+	pick(kMention)
+	s := screenShell(m)
+	containsAllShell(t, "inbox", s, "thinking  can you check?", "session: reply to Eve")
+	if !m.animates() {
+		t.Error("a working session's glyph moves")
+	}
+	if _, ok := m.handling(pick(kClaude)); ok {
+		t.Error("a session's own item isn't handled by another")
 	}
 }

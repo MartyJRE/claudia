@@ -96,7 +96,7 @@ func (m *Model) updateChooser(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	c := m.chooser
 	switch msg.String() {
 	case "esc", "ctrl+c":
-		m.chooser = nil
+		m.chooser, m.forItem = nil, ""
 		return m, nil
 	case "up", "ctrl+p", "ctrl+k":
 		c.cur.pos = max(0, c.cur.pos-1)

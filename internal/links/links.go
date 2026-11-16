@@ -16,6 +16,8 @@ type Links struct {
 	SessionMRs map[string][]string `json:"session_mrs"`
 	// SessionTickets: session id → ticket key; "-" means explicitly none.
 	SessionTickets map[string]string `json:"session_tickets"`
+	// SessionItems: session id → the Inbox items it was started for.
+	SessionItems map[string][]string `json:"session_items"`
 }
 
 func Load() *Links {
@@ -25,13 +27,16 @@ func Load() *Links {
 }
 
 func (l *Links) load() {
-	l.SessionMRs, l.SessionTickets = nil, nil
+	l.SessionMRs, l.SessionTickets, l.SessionItems = nil, nil, nil
 	state.Load(file, l)
 	if l.SessionMRs == nil {
 		l.SessionMRs = map[string][]string{}
 	}
 	if l.SessionTickets == nil {
 		l.SessionTickets = map[string]string{}
+	}
+	if l.SessionItems == nil {
+		l.SessionItems = map[string][]string{}
 	}
 }
 
@@ -56,6 +61,10 @@ func (l *Links) AddMRs(session string, urls []string) error {
 	return l.update(func() { l.SessionMRs[session] = append(l.SessionMRs[session], urls...) })
 }
 
+func (l *Links) AddItem(session, item string) error {
+	return l.update(func() { l.SessionItems[session] = append(l.SessionItems[session], item) })
+}
+
 func (l *Links) SetTicket(session, key string) error {
 	return l.update(func() {
 		if key == "" {
@@ -77,4 +86,10 @@ func (l *Links) MRs(session string) []string {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	return l.SessionMRs[session]
+}
+
+func (l *Links) Items(session string) []string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.SessionItems[session]
 }

@@ -128,6 +128,7 @@ type Model struct {
 	atlErr     error
 	visual     *visualSel // rows picked with V
 	background bool       // the action being run was C: start claude without switching to it
+	forItem    string     // the Inbox item the next session started is for
 
 	sessions     []row
 	workers      []row // claudia's own runs, only ever shown in the Sessions tab
@@ -579,6 +580,7 @@ func (m *Model) switchView(v view) {
 		return
 	}
 	m.view = v
+	m.forItem = ""
 	m.visual = nil
 	m.filter.SetValue("")
 	m.refilter()
@@ -1062,6 +1064,12 @@ func (m *Model) start(sp launch.Spec) (tea.Model, tea.Cmd) {
 	if err != nil {
 		m.setFlash(err.Error(), true)
 		return m, nil
+	}
+	if item := m.forItem; item != "" && sp.ID != "" {
+		m.forItem = ""
+		if err := m.links.AddItem(sp.ID, item); err != nil {
+			m.setFlash(err.Error(), true)
+		}
 	}
 	if m.background {
 		m.background = false

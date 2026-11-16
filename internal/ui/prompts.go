@@ -297,6 +297,7 @@ func (m *Model) inClone(mr gitlab.MR, verb, name, prompt string, urls []string) 
 
 // claudeForInbox: the session each kind of waiting item needs.
 func (m *Model) claudeForInbox(it inboxItem) (tea.Model, tea.Cmd) {
+	m.forItem = it.key()
 	switch it.kind {
 	case kReview:
 		return m.reviewWithClaude(it.mr)
