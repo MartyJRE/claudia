@@ -233,10 +233,16 @@ func TestLoginFetchReplyReact(t *testing.T) {
 	if got := f.bodies[len(f.bodies)-1]["reactionType"]; got != "👍" {
 		t.Errorf("reaction = %v", got)
 	}
+	if err := c.Unreact("1730650000000", "💬"); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.bodies[len(f.bodies)-1]["reactionType"]; got != "💬" {
+		t.Errorf("unreaction = %v", got)
+	}
 	if err := c.Reply("bad", "x"); err == nil || !strings.Contains(err.Error(), "403") {
 		t.Errorf("rejected reply: %v", err)
 	}
-	want := []string{"POST /graph/teams/T/channels/C/messages/1730650000000/replies", "POST /graph/teams/T/channels/C/messages/1730650000000/setReaction"}
+	want := []string{"POST /graph/teams/T/channels/C/messages/1730650000000/replies", "POST /graph/teams/T/channels/C/messages/1730650000000/setReaction", "POST /graph/teams/T/channels/C/messages/1730650000000/unsetReaction"}
 	for _, w := range want {
 		if !slices.Contains(f.requests, w) {
 			t.Errorf("missing %s in %v", w, f.requests)
@@ -386,12 +392,16 @@ func TestRefsShowAndChatReply(t *testing.T) {
 	if err := c.React("chat/19:a@unq.gbl.spaces/m1", "👍"); err != nil {
 		t.Fatal(err)
 	}
+	if err := c.Unreact("chat/19:a@unq.gbl.spaces/m1", "👍"); err != nil {
+		t.Fatal(err)
+	}
 	if err := c.Reply("T/C/r1", "on it"); err != nil {
 		t.Fatal(err)
 	}
 	for _, w := range []string{
 		"POST /graph/chats/19:a@unq.gbl.spaces/messages",
 		"POST /graph/chats/19:a@unq.gbl.spaces/messages/m1/setReaction",
+		"POST /graph/chats/19:a@unq.gbl.spaces/messages/m1/unsetReaction",
 		"POST /graph/teams/T/channels/C/messages/r1/replies",
 	} {
 		if !slices.Contains(f.requests, w) {
@@ -522,6 +532,9 @@ func TestErrors(t *testing.T) {
 		t.Error("an unreachable Graph fails")
 	}
 	if err := c.React("a/b", "x"); err == nil {
+		t.Error("bad ref")
+	}
+	if err := c.Unreact("a/b", "x"); err == nil {
 		t.Error("bad ref")
 	}
 	c = failingClient(t, map[string]int{"/graph/me/chats": 200}, "not json")

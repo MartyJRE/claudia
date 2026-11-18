@@ -34,6 +34,9 @@ type Post struct {
 	Replies []Reply   `json:"replies"`
 	// ReactedBy are the user ids that reacted to the post itself.
 	ReactedBy []string `json:"reacted_by,omitempty"`
+	// MyReactions is filled by `claudia teams posts`, which knows who you are.
+	MyReactions []string `json:"my_reactions,omitempty"`
+	reactions   []reaction
 }
 
 type Reply struct {
@@ -44,6 +47,17 @@ type Reply struct {
 
 // Reacted tells whether the user with this id reacted to the post.
 func (p Post) Reacted(id string) bool { return id != "" && slices.Contains(p.ReactedBy, id) }
+
+// ReactionsBy are the reactions the user with this id put on the post.
+func (p Post) ReactionsBy(id string) []string {
+	var out []string
+	for _, r := range p.reactions {
+		if r.By.User != nil && r.By.User.ID == id && !slices.Contains(out, r.Type) {
+			out = append(out, r.Type)
+		}
+	}
+	return out
+}
 
 // RepliedBy tells whether name has answered in the thread.
 func (p Post) RepliedBy(name string) bool {
@@ -428,6 +442,16 @@ func (c *Client) React(s, emoji string) error {
 	return err
 }
 
+// Unreact takes your emoji reaction off the message.
+func (c *Client) Unreact(s, emoji string) error {
+	r, err := c.parseRef(s)
+	if err != nil {
+		return err
+	}
+	_, err = c.do("POST", r.messages()+"/"+url.PathEscape(r.msg)+"/unsetReaction", map[string]string{"reactionType": emoji})
+	return err
+}
+
 type identity struct {
 	User *struct {
 		ID          string `json:"id"`
@@ -451,7 +475,8 @@ func (i *identity) name() string {
 }
 
 type reaction struct {
-	By identity `json:"user"`
+	Type string   `json:"reactionType"`
+	By   identity `json:"user"`
 }
 
 // reactors are the ids of the users who reacted (Graph leaves their names out).
@@ -504,7 +529,7 @@ func Parse(b []byte, gitlabHost string) ([]Post, error) {
 		if m.Deleted != nil {
 			continue
 		}
-		p := Post{ID: m.ID, From: m.From.name(), At: m.Created, WebURL: m.WebURL, Text: plain(m.Body.Content), ReactedBy: reactors(m.Reactions)}
+		p := Post{ID: m.ID, From: m.From.name(), At: m.Created, WebURL: m.WebURL, Text: plain(m.Body.Content), ReactedBy: reactors(m.Reactions), reactions: m.Reactions}
 		hay := m.Body.Content
 		for _, a := range m.Attachments {
 			if a.Content != nil {

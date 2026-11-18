@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -367,6 +368,9 @@ func TestReactionsAnswer(t *testing.T) {
 	posts, _ := Parse([]byte(body), "gitlab.example.com")
 	if !posts[0].Reacted("me") || posts[2].Reacted("me") || posts[0].Reacted("") || len(posts[1].ReactedBy) != 1 {
 		t.Errorf("reactors, once each, bots left out: %+v", posts)
+	}
+	if got := posts[1].ReactionsBy("me"); !slices.Equal(got, []string{"like"}) || posts[2].ReactionsBy("me") != nil {
+		t.Errorf("my reactions, once each: %v", got)
 	}
 }
 
