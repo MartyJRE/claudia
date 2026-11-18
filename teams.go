@@ -17,10 +17,12 @@ const teamsHelp = `claudia teams: Microsoft Teams and your calendar, as you.
   channels                        JSON: your teams' channels
   waiting                         JSON: chats, @mentions, invites and mail where it's your turn
   show <ref>                      the conversation a ref points into, oldest first, with files
-  posts [--mr <url>]              JSON: review-channel posts, or the ones about an MR
+  posts [--mr <url>]              JSON: review-channel posts, or the ones about an MR;
+                                  my_reactions are the reactions you left on each
 
   reply <ref|mr-url> <text>       send into the chat, or reply in the thread
   react <ref|mr-url> <emoji>      react to the message, e.g. ✅ or 👍
+  unreact <ref|mr-url> <emoji>    take your reaction off the message
   chat <who>[,<who>…] <text>      write to people (name or email); several make a group chat
   post <Team/Channel> <text>      start a new thread in a channel
   reply, chat and post take --file <path> to attach a file and --image <path> to show
@@ -47,6 +49,8 @@ type teamsClient interface {
 	Show(ref string) ([]teams.Line, error)
 	Reply(ref, text string, files ...string) error
 	React(ref, emoji string) error
+	Unreact(ref, emoji string) error
+	MeID() (string, error)
 	Chat(who []string, text string, files ...string) (string, error)
 	Post(channel, text string, files ...string) (string, error)
 	Person(who string) (teams.Person, error)
@@ -148,19 +152,35 @@ func teamsCmd(args []string) error {
 		if posts == nil {
 			posts = []teams.Post{}
 		}
+		me, err := c.MeID()
+		if err != nil {
+			return err
+		}
+		for i := range posts {
+			posts[i].MyReactions = posts[i].ReactionsBy(me)
+		}
 		return printJSON(posts)
-	case "reply", "react":
-		if err := need(3, args[0]+" <ref|mr-url> <"+map[string]string{"reply": "text", "react": "emoji"}[args[0]]+">"); err != nil {
+	case "reply", "react", "unreact":
+		if err := need(3, args[0]+" <ref|mr-url> <"+map[string]string{"reply": "text", "react": "emoji", "unreact": "emoji"}[args[0]]+">"); err != nil {
 			return err
 		}
 		id, err := postID(c, args[1])
 		if err != nil {
 			return err
 		}
-		if args[0] == "react" {
-			return c.React(id, args[2])
+		switch args[0] {
+		case "react":
+			err = c.React(id, args[2])
+		case "unreact":
+			err = c.Unreact(id, args[2])
+		default:
+			err = c.Reply(id, strings.Join(args[2:], " "), files...)
 		}
-		return c.Reply(id, strings.Join(args[2:], " "), files...)
+		if err != nil {
+			return err
+		}
+		fmt.Println(map[string]string{"reply": "replied to ", "react": "reacted " + args[2] + " to ", "unreact": "removed " + args[2] + " from "}[args[0]] + id)
+		return nil
 	case "chat", "post":
 		if err := need(3, args[0]+" <"+map[string]string{"chat": "who", "post": "Team/Channel"}[args[0]]+"> <text>"); err != nil {
 			return err
@@ -220,7 +240,11 @@ func teamsCmd(args []string) error {
 		if err := need(3, "respond <event-ref> accept|tentative|decline [comment]"); err != nil {
 			return err
 		}
-		return c.Respond(args[1], args[2], strings.Join(args[3:], " "))
+		if err := c.Respond(args[1], args[2], strings.Join(args[3:], " ")); err != nil {
+			return err
+		}
+		fmt.Println("answered " + args[2] + " to " + args[1])
+		return nil
 	}
 	return fmt.Errorf("unknown command %q\n\n%s", args[0], teamsHelp)
 }

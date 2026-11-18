@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -12,6 +13,7 @@ import (
 
 type fakeTeams struct {
 	snap     teams.Snapshot
+	meErr    error
 	fetchErr error
 	did      []string
 }
@@ -62,6 +64,11 @@ func (f *fakeTeams) React(id, emoji string) error {
 	f.did = append(f.did, "react "+id+" "+emoji)
 	return nil
 }
+func (f *fakeTeams) Unreact(id, emoji string) error {
+	f.did = append(f.did, "unreact "+id+" "+emoji)
+	return nil
+}
+func (f *fakeTeams) MeID() (string, error) { return "me", f.meErr }
 
 const mrURL = "https://gitlab.example.com/a/b/-/merge_requests/1"
 
@@ -109,9 +116,17 @@ func TestTeamsCmd(t *testing.T) {
 	if r := claudia(t, "teams", "show", "chat/x/1"); !strings.Contains(r.out, "Lukas: got a sec?") || !strings.Contains(r.out, "📎 a.pdf  https://sp/a.pdf") {
 		t.Errorf("show: %q", r.out)
 	}
-	claudia(t, "teams", "reply", mrURL, "looks", "good")
-	claudia(t, "teams", "react", "other", "✅")
-	if got := strings.Join(f.did, "|"); got != "reply new looks good|react other ✅" {
+	for args, want := range map[string]string{
+		"reply " + mrURL + " looks good": "replied to new",
+		"react other ✅":                  "reacted ✅ to other",
+		"unreact " + mrURL + " 💬":        "removed 💬 from new",
+	} {
+		if r := claudia(t, append([]string{"teams"}, strings.Fields(args)...)...); strings.TrimSpace(r.out) != want {
+			t.Errorf("%s says %q, want %q", args, r.out, want)
+		}
+	}
+	slices.Sort(f.did)
+	if got := strings.Join(f.did, "|"); got != "react other ✅|reply new looks good|unreact new 💬" {
 		t.Errorf("did %q", got)
 	}
 	f.did = nil
@@ -142,7 +157,7 @@ func TestTeamsCmd(t *testing.T) {
 		t.Errorf("did\n%s\nwant\n%s", got, strings.Join(want, "|"))
 	}
 	if !strings.Contains(outs["chat"], "chat/c/1") || !strings.Contains(outs["post"], "T/C/1") || !strings.Contains(outs["who"], "lukas@x.com") ||
-		!strings.Contains(outs["download"], "/tmp/d/a.pdf") || !strings.Contains(outs["calendar"], "Tue 3 Nov 09:00–09:15  Standup  (Vaclav, accepted)  event/e1") {
+		!strings.Contains(outs["download"], "/tmp/d/a.pdf") || outs["respond"] != "answered decline to event/e1\n" || !strings.Contains(outs["calendar"], "Tue 3 Nov 09:00–09:15  Standup  (Vaclav, accepted)  event/e1") {
 		t.Errorf("outputs %+v", outs)
 	}
 	for _, args := range [][]string{{"reply", "x"}, {"bogus"}, {"reply", "https://nope", "hi"}, {"show"}, {"show", "bad"},
@@ -166,5 +181,22 @@ func TestTeamsCmd(t *testing.T) {
 	swap(t, &newTeams, teamsDefault)
 	if r := claudia(t, "teams", "posts"); r.code != 1 || !strings.Contains(r.err, "isn't set up") {
 		t.Errorf("unconfigured: %+v", r)
+	}
+}
+
+func TestTeamsPostsMyReactions(t *testing.T) {
+	f := withTeams(t)
+	posts, err := teams.Parse([]byte(`{"value":[{"id":"p","body":{"content":"`+mrURL+`"},"reactions":[
+	  {"reactionType":"💬","user":{"user":{"id":"me"}}},{"reactionType":"✅","user":{"user":{"id":"lukas"}}}]}]}`), "gitlab.example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.snap.Posts = posts
+	if r := claudia(t, "teams", "posts", "--mr", mrURL); !strings.Contains(r.out, `"my_reactions": [`) || !strings.Contains(r.out, "💬") || strings.Contains(r.out, "✅") {
+		t.Errorf("only my reactions: %q", r.out)
+	}
+	f.meErr = errors.New("signed out")
+	if r := claudia(t, "teams", "posts"); r.code == -1 {
+		t.Errorf("posts without knowing who you are fails: %+v", r)
 	}
 }
