@@ -58,6 +58,24 @@ const (
 
 var viewNames = [nViews]string{"Inbox", "Sessions", "Review", "My MRs", "Jira", "Mentions", "Confluence", "Notes", "Usage", "Standup"}
 
+// tabs are the views shown, in the order config's tabs lists them; all of them
+// when it lists none.
+func tabs() []view {
+	var out []view
+	for _, t := range getConfig().Tabs {
+		i := slices.IndexFunc(viewNames[:], func(n string) bool { return strings.EqualFold(n, strings.TrimSpace(t)) })
+		if i >= 0 && !slices.Contains(out, view(i)) {
+			out = append(out, view(i))
+		}
+	}
+	if len(out) == 0 {
+		for v := view(0); v < nViews; v++ {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
 const detailHeight = 8
 
 type row struct {
@@ -289,6 +307,9 @@ func (m *Model) reindex() {
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	model, cmd := m.update(msg)
+	if ts := tabs(); !slices.Contains(ts, m.view) {
+		m.switchView(ts[0])
+	}
 	if m.view == vStandup && m.standupDue() {
 		cmd = tea.Batch(cmd, m.startStandup())
 	}
@@ -517,11 +538,13 @@ func (m *Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "global.bottom":
 		c.pos = m.count() - 1
 		return m, nil
-	case "global.next_view":
-		m.switchView((m.view + 1) % nViews)
-		return m, nil
-	case "global.prev_view":
-		m.switchView((m.view + nViews - 1) % nViews)
+	case "global.next_view", "global.prev_view":
+		ts := tabs()
+		step := 1
+		if m.action(k) == "global.prev_view" {
+			step = len(ts) - 1
+		}
+		m.switchView(ts[(max(0, slices.Index(ts, m.view))+step)%len(ts)])
 		return m, nil
 	case "global.assistant":
 		return m.openAssistant()
@@ -550,8 +573,8 @@ func (m *Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.setFlash("refreshing…", false)
 		return m, m.refreshAll()
 	}
-	if len(k) == 1 && k[0] >= '1' && k[0] <= '9' && int(k[0]-'1') < int(nViews) {
-		m.switchView(view(k[0] - '1'))
+	if ts := tabs(); len(k) == 1 && k[0] >= '1' && k[0] <= '9' && int(k[0]-'1') < len(ts) {
+		m.switchView(ts[k[0]-'1'])
 		return m, nil
 	}
 	switch m.view {
@@ -730,23 +753,19 @@ func (m *Model) viewHeader() string {
 	gap := max(1, m.width-lipgloss.Width(title)-lipgloss.Width(right)-1)
 	top := ansi.Truncate(title+strings.Repeat(" ", gap)+right, m.width, "")
 
-	var tabs []string
-	for v := view(0); v < nViews; v++ {
+	var bar []string
+	for i, v := range tabs() {
 		// Only nine views have a digit; the rest are a tab away.
 		label := viewNames[v]
-		if v < 9 {
-			label = fmt.Sprintf("%d %s", v+1, label)
+		if i < 9 {
+			label = fmt.Sprintf("%d %s", i+1, label)
 		}
 		if b := m.badge(v); b != "" {
 			label += " " + b
 		}
-		if v == m.view {
-			tabs = append(tabs, tab(label, true))
-		} else {
-			tabs = append(tabs, tab(label, false))
-		}
+		bar = append(bar, tab(label, v == m.view))
 	}
-	line := " " + strings.Join(tabs, " ")
+	line := " " + strings.Join(bar, " ")
 	status := m.sourceStatus()
 	if m.filtering || m.filter.Value() != "" {
 		status = m.filter.View()

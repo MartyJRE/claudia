@@ -95,6 +95,9 @@ var Fields = []Field{
 		Default: "on", Help: "off keeps the session status glyphs and loading spinners still"},
 	{Key: "workers", Group: "UI", Label: "workers", Kind: KindString, Env: "CLAUDIA_WORKERS",
 		Default: "hidden", Help: "claudia's own background claude runs (brief, summaries) in the Sessions tab: hidden, top or bottom"},
+	{Key: "tabs", Group: "UI", Label: "tabs", Kind: KindJSON,
+		Default: "all of them", Help: "the tabs shown, in order: Inbox, Sessions, Review, My MRs, Jira, Mentions, Confluence, Notes, Usage, Standup",
+		Example: `["Inbox", "Sessions", "Review", "My MRs", "Jira", "Usage"]`},
 	{Key: "keys", Group: "UI", Label: "keys", Kind: KindJSON,
 		Help: "rebinds actions to a key or a list of keys; claudia keys lists the actions", Example: `{"sessions.close": "ctrl+w"}`},
 }

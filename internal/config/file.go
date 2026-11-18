@@ -125,8 +125,8 @@ func Encode(v any, indent string) ([]byte, error) {
 }
 
 // Check reports whether claudia would read the file as meant: every known
-// field of the right type, brief_every a duration or "off" and workers a
-// known place.
+// field of the right type, brief_every a duration or "off", workers a
+// known place and tabs known tabs.
 func Check(f File) error {
 	b, err := Encode(f.top, "")
 	if err != nil {
@@ -143,7 +143,22 @@ func Check(f File) error {
 	if err := CheckBriefEvery(c.BriefEveryRaw); err != nil {
 		return err
 	}
-	return CheckWorkers(c.WorkersRaw)
+	if err := CheckWorkers(c.WorkersRaw); err != nil {
+		return err
+	}
+	return CheckTabs(c.Tabs)
+}
+
+// TabNames are the tabs claudia has, in their default order.
+var TabNames = []string{"Inbox", "Sessions", "Review", "My MRs", "Jira", "Mentions", "Confluence", "Notes", "Usage", "Standup"}
+
+func CheckTabs(tabs []string) error {
+	for _, t := range tabs {
+		if !slices.ContainsFunc(TabNames, func(n string) bool { return strings.EqualFold(n, strings.TrimSpace(t)) }) {
+			return fmt.Errorf("tabs: %q isn't one of %s", t, strings.Join(TabNames, ", "))
+		}
+	}
+	return nil
 }
 
 func CheckWorkers(v string) error {
