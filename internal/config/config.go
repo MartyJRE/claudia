@@ -79,6 +79,8 @@ type Config struct {
 	// WorkersRaw places claudia's own headless claude runs (brief, summaries)
 	// in the Sessions tab: "hidden" (the default), "top" or "bottom".
 	WorkersRaw string `json:"workers"`
+	// Tabs are the tabs shown, in order, by name; empty shows them all.
+	Tabs []string `json:"tabs"`
 	// Teams links review requests posted in a Teams channel to their MRs.
 	Teams   Teams   `json:"teams"`
 	Standup Standup `json:"standup"`

@@ -100,6 +100,12 @@ func TestSaveRejects(t *testing.T) {
 			t.Errorf("%q: %v", ok, err)
 		}
 	}
+	if err := CheckTabs([]string{"inbox", " My MRs "}); err != nil {
+		t.Errorf("tabs any case: %v", err)
+	}
+	if err := CheckTabs([]string{"Inbox", "Board"}); err == nil || !strings.Contains(err.Error(), `"Board"`) {
+		t.Errorf("an unknown tab: %v", err)
+	}
 }
 
 func TestWithout(t *testing.T) {

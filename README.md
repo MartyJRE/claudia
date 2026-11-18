@@ -358,6 +358,8 @@ by an environment variable are shown but can't be changed there.
 - `session_names` names sessions per intent: `analysis`, `implementation`,
   `general`, `continue`, `test`, `review`, `fix`, `reply`. `{key}`, `{summary}`
   and `{verb}` are filled in. Without it, sessions are named `<verb>: <summary>`.
+- `tabs` lists the tabs shown, in order, e.g. `["Inbox", "Sessions", "Review",
+  "My MRs", "Usage"]`; digits follow that order. Without it, every tab shows.
 - `brief_every` is how often the Inbox brief is rewritten (default `2h`, `off`
   to disable).
 - `rounded_pills: false` draws pills and tabs square, for fonts without the Nerd

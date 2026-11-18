@@ -2,6 +2,7 @@ package ui
 
 import (
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/MartyJRE/claudia/internal/atlassian"
 	"github.com/MartyJRE/claudia/internal/claude"
+	"github.com/MartyJRE/claudia/internal/config"
 	"github.com/MartyJRE/claudia/internal/gitlab"
 	"github.com/MartyJRE/claudia/internal/repos"
 )
@@ -531,5 +533,31 @@ func TestViewSourceShell(t *testing.T) {
 		if got := viewSource(s); got != want {
 			t.Errorf("%d: %q", s, got)
 		}
+	}
+}
+
+func TestTabsConfigShell(t *testing.T) {
+	m := newModelShell(t)
+	if !slices.Equal(config.TabNames, viewNames[:]) {
+		t.Errorf("config.TabNames %v drifted from viewNames %v", config.TabNames, viewNames)
+	}
+	m.switchView(vJira)
+	withConfig(t, func(c *config.Config) { c.Tabs = []string{"usage", "Inbox", "Board", "inbox", "My MRs"} })
+	pressShell(m, "x")
+	if m.view != vUsage {
+		t.Fatalf("a hidden tab gives way to the first one shown, got %s", viewNames[m.view])
+	}
+	for _, c := range []struct {
+		key  string
+		want view
+	}{{"tab", vInbox}, {"tab", vMine}, {"tab", vUsage}, {"shift+tab", vMine}, {"1", vUsage}, {"3", vMine}, {"4", vMine}} {
+		pressShell(m, c.key)
+		if m.view != c.want {
+			t.Fatalf("after %q: view %s, want %s", c.key, viewNames[m.view], viewNames[c.want])
+		}
+	}
+	head := m.View()
+	if !strings.Contains(head, "1 Usage") || !strings.Contains(head, "2 Inbox") || !strings.Contains(head, "3 My MRs") || strings.Contains(head, "Jira") {
+		t.Errorf("the tab bar lists only the configured tabs, numbered in order:\n%s", head)
 	}
 }
